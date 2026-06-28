@@ -76,6 +76,10 @@ export interface RendererDiagnostics {
   diffuserDomain?: string;
   averageOpacity?: number;
   rejectedByInfluence?: number;
+  rejectedFarFieldCandidates?: number;
+  averageRingStrength?: number;
+  averageFalloff?: number;
+  acceptedCrestDots?: number;
   diffuserComposition?: string;
   glyphFieldEnabled?: boolean;
   glyphFieldMode?: string;

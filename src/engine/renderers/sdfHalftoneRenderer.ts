@@ -30,10 +30,6 @@ function fallbackDiagnostics(warning: string): RendererDiagnostics {
   };
 }
 
-function cellKey(x: number, y: number, cellSize: number) {
-  return `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
-}
-
 export const sdfHalftoneRenderer: VectorRenderer = {
   id: "sdf-halftone",
   label: "SDF Halftone",
@@ -77,8 +73,15 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
     const geometries: CircleMark[] = [];
-    const occupancy = new Map<string, OccupiedDot[]>();
+    // Numeric occupancy grid, keyed as `(cellY + OFFSET) * SPAN + (cellX + OFFSET)`.
+    // Avoids string-key allocation per accepted dot while preserving identical spacing
+    // behaviour. Offset/Span are large enough that physically adjacent cells always
+    // map to adjacent numeric keys (no false collisions even when displacement pushes
+    // candidates outside the viewport before acceptance filtering).
+    const occupancy = new Map<number, OccupiedDot[]>();
     const occupancyCellSize = Math.max(2, maxRadius * 2);
+    const occupancyKeyOffset = 65_536;
+    const occupancyKeySpan = 131_072;
     let rejectedOutsideMask = 0;
     let rejectedBySpacing = 0;
     let rejectedByInfluence = 0;
@@ -91,6 +94,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     let displacementTotal = 0;
     let rejectedDisplacedCandidates = 0;
     let fieldInfluencedAcceptanceCount = 0;
+    let ringStrengthTotal = 0;
+    let ringSamples = 0;
+    let acceptedCrestDots = 0;
 
     outer:
     for (let row = 0; row < rows; row += 1) {
@@ -118,39 +124,49 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           continue;
         }
 
-        const fieldValue = glyph.value(x, y);
-        const fieldGradient = glyph.gradient(x, y);
-        if (glyph.enabled && fieldGradient.finite && fieldGradient.magnitude > 1e-6) {
-          const displacement = state.glyphFieldDisplacement * glyph.strength * (0.3 + Math.abs(fieldValue) * 0.7);
-          const direction = fieldValue >= 0 ? 1 : -1;
-          const candidateX = x + fieldGradient.x / fieldGradient.magnitude * displacement * direction;
-          const candidateY = y + fieldGradient.y / fieldGradient.magnitude * displacement * direction;
-          if (sampleMask(substrate, candidateX, candidateY) >= 0.55 && sampleDistance(substrate, candidateX, candidateY) > 0) {
-            x = candidateX;
-            y = candidateY;
-            mask = sampleMask(substrate, x, y);
-            distance = sampleDistance(substrate, x, y);
-            displacementTotal += displacement;
-          } else rejectedDisplacedCandidates += 1;
+        const fieldValue = glyph.enabled ? glyph.value(x, y) : 0;
+        if (glyph.displacementEnabled) {
+          const fieldGradient = glyph.gradient(x, y);
+          if (fieldGradient.finite && fieldGradient.magnitude > 1e-6) {
+            const displacement = state.glyphFieldDisplacement * glyph.strength * (0.3 + Math.abs(fieldValue) * 0.7);
+            const direction = fieldValue >= 0 ? 1 : -1;
+            const candidateX = x + fieldGradient.x / fieldGradient.magnitude * displacement * direction;
+            const candidateY = y + fieldGradient.y / fieldGradient.magnitude * displacement * direction;
+            if (sampleMask(substrate, candidateX, candidateY) >= 0.55 && sampleDistance(substrate, candidateX, candidateY) > 0) {
+              x = candidateX;
+              y = candidateY;
+              mask = sampleMask(substrate, x, y);
+              distance = sampleDistance(substrate, x, y);
+              displacementTotal += displacement;
+            } else rejectedDisplacedCandidates += 1;
+          }
         }
 
         const edge = sampleEdge(substrate, x, y);
         const gradient = sampleDistanceGradient(substrate, x, y);
         const edgeProximity = Math.exp(-distance / edgeBand);
         const edgeSignal = Math.min(1, edgeProximity * 0.82 + edge * 0.38);
-        const fieldDensity = Math.abs(fieldValue) * state.glyphFieldDensity / 100 * glyph.strength;
-        const acceptance = Math.min(1, (1 - influence * 0.78 + influence * 0.78 * edgeSignal) * (1 + fieldDensity * 0.72));
+        const fieldDensity = glyph.densityEnabled ? Math.abs(fieldValue) * state.glyphFieldDensity / 100 * glyph.strength : 0;
+        const bandPosition = Math.max(0, Math.min(1, (Math.abs(fieldValue) - (1 - state.bandWidth)) / Math.max(0.001, state.bandWidth)));
+        const ringStrength = glyph.densityEnabled ? Math.pow(bandPosition * bandPosition * (3 - 2 * bandPosition), state.ringSharpness) : 0;
+        if (glyph.densityEnabled) {
+          ringStrengthTotal += ringStrength;
+          ringSamples += 1;
+        }
+        const structuredDensity = glyph.densityEnabled ? 0.42 + ringStrength * 0.98 + fieldDensity * 0.52 : 1;
+        const acceptance = Math.min(1, (1 - influence * 0.78 + influence * 0.78 * edgeSignal) * structuredDensity);
         if (random() > acceptance) {
           rejectedByInfluence += 1;
           continue;
         }
         if (glyph.enabled && fieldDensity > 0.01) fieldInfluencedAcceptanceCount += 1;
+        if (ringStrength >= 0.5) acceptedCrestDots += 1;
 
         const interiorRatio = Math.max(0, Math.min(1, distance / Math.max(maxRadius * 2.4, spacing * 0.7)));
         const edgeWeightedRatio = (1 - influence * 0.42) * interiorRatio + influence * 0.42 * edgeSignal;
         const radiusNoise = 1 + (random() * 2 - 1) * Math.min(0.18, state.turbulence / 700);
         const gradientSafety = Number.isFinite(gradient.magnitude) ? 1 : 0.85;
-        const radiusModulation = 1 + fieldValue * state.glyphFieldRadius / 100 * glyph.strength * 0.75;
+        const radiusModulation = glyph.radiusEnabled ? 1 + fieldValue * state.glyphFieldRadius / 100 * glyph.strength * 0.75 : 1;
         const radius = Math.max(minRadius, Math.min(maxRadius * 1.35, (minRadius + (maxRadius - minRadius) * edgeWeightedRatio) * radiusNoise * gradientSafety * radiusModulation));
 
         const cellX = Math.floor(x / occupancyCellSize);
@@ -158,8 +174,13 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         let overlaps = false;
         for (let oy = -1; oy <= 1 && !overlaps; oy += 1) {
           for (let ox = -1; ox <= 1 && !overlaps; ox += 1) {
-            const nearby = occupancy.get(`${cellX + ox},${cellY + oy}`) ?? [];
-            overlaps = nearby.some((dot) => Math.hypot(x - dot.x, y - dot.y) < (radius + dot.radius) * 0.86);
+            const nearby = occupancy.get((cellY + oy + occupancyKeyOffset) * occupancyKeySpan + (cellX + ox + occupancyKeyOffset)) ?? null;
+            if (nearby) {
+              for (let k = 0; k < nearby.length && !overlaps; k += 1) {
+                const dot = nearby[k];
+                if (Math.hypot(x - dot.x, y - dot.y) < (radius + dot.radius) * 0.86) overlaps = true;
+              }
+            }
           }
         }
         if (overlaps) {
@@ -167,12 +188,12 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           continue;
         }
 
-        const opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength)));
+        const opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
         geometries.push({ type: "circle", center: { x, y }, radius, opacity });
-        const key = cellKey(x, y, occupancyCellSize);
-        const occupied = occupancy.get(key) ?? [];
+        const occupiedKey = (cellY + occupancyKeyOffset) * occupancyKeySpan + (cellX + occupancyKeyOffset);
+        const occupied = occupancy.get(occupiedKey) ?? [];
         occupied.push({ x, y, radius });
-        occupancy.set(key, occupied);
+        occupancy.set(occupiedKey, occupied);
         sampledDistanceTotal += distance;
         radiusTotal += radius;
         actualMinRadius = Math.min(actualMinRadius, radius);
@@ -206,6 +227,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         averageGlyphFieldDisplacement: geometries.length ? displacementTotal / geometries.length : 0,
         rejectedDisplacedCandidates,
         fieldInfluencedAcceptanceCount,
+        averageRingStrength: ringSamples ? ringStrengthTotal / ringSamples : 0,
+        acceptedCrestDots,
         warning: clipped ? `Dot output clipped at the ${state.maxNodes} node budget.` : undefined,
       },
     };

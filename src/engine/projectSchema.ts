@@ -26,7 +26,7 @@ export interface ProjectValidationResult {
 export function migrateProject(input: unknown): UnknownRecord {
   if (!isRecord(input)) throw new Error("Project must be a JSON object.");
   const version = typeof input.version === "number" ? input.version : 1;
-  if (version > 4) throw new Error(`Project version ${version} is newer than this app supports.`);
+  if (version > 5) throw new Error(`Project version ${version} is newer than this app supports.`);
   if (version <= 3) {
     return {
       ...input,
@@ -38,6 +38,22 @@ export function migrateProject(input: unknown): UnknownRecord {
       waveContourMode: "continuous",
       waveDotSpacing: 11,
       waveDotRadius: 1.8,
+    };
+  }
+  if (version <= 4) {
+    // v4 → v5: add multi-emitter fields. The old single `emitter` is kept intact
+    // (shared params + single source). `emitterMode` defaults to "single" so old
+    // projects render identically. One emitter instance is derived from the old
+    // emitter's glyphId so switching to "multiple" mode immediately has one entry.
+    const oldEmitter = isRecord(input.emitter) ? input.emitter : {};
+    const oldGlyphId = typeof oldEmitter.glyphId === "string" ? oldEmitter.glyphId : null;
+    const oldBlendMode = typeof oldEmitter.blendMode === "string" ? oldEmitter.blendMode : baseState.emitter.blendMode;
+    return {
+      ...input,
+      version: 5,
+      emitterMode: "single",
+      emitters: [{ id: "emitter-1", glyphId: oldGlyphId, enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Emitter 1" }],
+      fieldBlendMode: oldBlendMode === "max" ? "max" : "add",
     };
   }
   return input;
@@ -75,7 +91,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 4,
+    version: 5,
     text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
     fontSize: clamp(source.fontSize, baseState.fontSize, 64, 220),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
@@ -109,6 +125,19 @@ export function validateProject(input: unknown): ProjectValidationResult {
       customX: clamp(emitterSource.customX, baseState.emitter.customX, 0, 1200),
       customY: clamp(emitterSource.customY, baseState.emitter.customY, 0, 720),
     },
+    emitterMode: enumValue(source.emitterMode, ["single", "multiple"], baseState.emitterMode),
+    emitters: Array.isArray(source.emitters) && source.emitters.length <= 8
+      ? (source.emitters as unknown[]).filter(isRecord).slice(0, 8).map((instance, index) => ({
+          id: typeof instance.id === "string" ? instance.id.slice(0, 64) : `emitter-${index + 1}`,
+          glyphId: typeof instance.glyphId === "string" ? instance.glyphId.slice(0, 128) : null,
+          enabled: typeof instance.enabled === "boolean" ? instance.enabled : true,
+          weight: clamp(instance.weight, 1, 0, 2),
+          phaseOffset: clamp(instance.phaseOffset, 0, -Math.PI * 4, Math.PI * 4),
+          radiusMultiplier: clamp(instance.radiusMultiplier, 1, 0.25, 2),
+          label: typeof instance.label === "string" ? instance.label.slice(0, 32) : `Emitter ${index + 1}`,
+        }))
+      : baseState.emitters,
+    fieldBlendMode: enumValue(source.fieldBlendMode, ["add", "max"], baseState.fieldBlendMode),
     waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
     waveDotSpacing: clamp(source.waveDotSpacing, baseState.waveDotSpacing, 3, 40),
     waveDotRadius: clamp(source.waveDotRadius, baseState.waveDotRadius, 0.4, 8),
@@ -116,7 +145,21 @@ export function validateProject(input: unknown): ProjectValidationResult {
     diffuserComposition: enumValue(source.diffuserComposition, ["clipped", "behind-text", "through-text", "text-reactive", "edge-eroded"], baseState.diffuserComposition),
     diffuserDotRadius: clamp(source.diffuserDotRadius, baseState.diffuserDotRadius, 0.4, 8),
     diffuserRingContrast: clamp(source.diffuserRingContrast, baseState.diffuserRingContrast, 0, 1),
+    ringSharpness: clamp(source.ringSharpness, baseState.ringSharpness, 0.5, 8),
+    bandWidth: clamp(source.bandWidth, baseState.bandWidth, 0.05, 0.8),
     diffuserHaloPadding: clamp(source.diffuserHaloPadding, baseState.diffuserHaloPadding, 0, 400),
+    textOverlayOpacity: clamp(source.textOverlayOpacity, baseState.textOverlayOpacity, 0, 1),
+    edgeErosionAmount: clamp(source.edgeErosionAmount, baseState.edgeErosionAmount, 0, 1),
+    edgeErosionWidth: clamp(source.edgeErosionWidth, baseState.edgeErosionWidth, 0, 64),
+    interiorProtection: clamp(source.interiorProtection, baseState.interiorProtection, 0, 1),
+    overlayMode: enumValue(source.overlayMode, ["solid", "outline", "knockout", "hidden", "warped-outline"], baseState.overlayMode),
+    outlineStrokeWidth: clamp(source.outlineStrokeWidth, baseState.outlineStrokeWidth, 0.25, 16),
+    outlineWarpAmount: clamp(source.outlineWarpAmount, baseState.outlineWarpAmount, 0, 60),
+    outlineWarpScale: clamp(source.outlineWarpScale, baseState.outlineWarpScale, 0.25, 3),
+    outlineWarpSmoothing: clamp(source.outlineWarpSmoothing, baseState.outlineWarpSmoothing, 0, 1),
+    outlineWarpEdgeBias: clamp(source.outlineWarpEdgeBias, baseState.outlineWarpEdgeBias, 0, 1),
+    outlineWarpMaxDisplacement: clamp(source.outlineWarpMaxDisplacement, baseState.outlineWarpMaxDisplacement, 0, 80),
+    preserveCounters: typeof source.preserveCounters === "boolean" ? source.preserveCounters : baseState.preserveCounters,
     glyphFieldMode: enumValue(source.glyphFieldMode, ["off", "subtle", "strong"], baseState.glyphFieldMode),
     glyphFieldInfluence: clamp(source.glyphFieldInfluence, baseState.glyphFieldInfluence, 0, 100),
     glyphFieldDisplacement: clamp(source.glyphFieldDisplacement, baseState.glyphFieldDisplacement, 0, 40),
@@ -140,7 +183,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     font,
   };
 
-  if (originalVersion !== 4) warnings.push("Project was migrated to schema version 4.");
+  if (originalVersion < 5) warnings.push("Project was migrated to schema version 5.");
   if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
   return { project, warnings };
 }

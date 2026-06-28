@@ -8,6 +8,17 @@ export interface GlyphBounds {
 export interface GlyphPath {
   d: string;
   bounds: GlyphBounds | null;
+  commands: GlyphPathCommand[];
+}
+
+export interface GlyphPathCommand {
+  type: "M" | "L" | "Q" | "C" | "Z";
+  x?: number;
+  y?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
 }
 
 export interface PositionedGlyph {

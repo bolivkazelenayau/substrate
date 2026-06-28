@@ -110,6 +110,22 @@ describe("SDF Halftone renderer", () => {
     expect(modulated.geometries.every((geometry) => geometry.type === "circle" && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) >= 0.5)).toBe(true);
   });
 
+  it("uses ring sharpness and band width to structure field-reactive density", () => {
+    const renderer = getRenderer("sdf-halftone");
+    const enabled = {
+      ...state,
+      emitter: { ...state.emitter, enabled: true },
+      glyphFieldMode: "strong" as const,
+      glyphFieldInfluence: 100,
+      glyphFieldDensity: 100,
+    };
+    const broad = renderer.generateGeometry({ ...enabled, ringSharpness: 0.7, bandWidth: 0.7 }, context);
+    const sharp = renderer.generateGeometry({ ...enabled, ringSharpness: 6, bandWidth: 0.12 }, context);
+    expect(sharp.geometries).not.toEqual(broad.geometries);
+    expect(sharp.diagnostics?.averageRingStrength).not.toBe(broad.diagnostics?.averageRingStrength);
+    expect(sharp.diagnostics?.acceptedCrestDots).not.toBe(broad.diagnostics?.acceptedCrestDots);
+  });
+
   it("enforces maxNodes as a circle budget", () => {
     const group = getRenderer("sdf-halftone").generateGeometry({ ...state, density: 80, maxNodes: 20 }, context);
     expect(group.geometries.length).toBeLessThanOrEqual(20);

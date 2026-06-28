@@ -34,8 +34,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
   usesSubstrate: true,
   usesGlyphEmitterField: true,
   clipPreviewToText: (state) => state.diffuserComposition === "clipped",
-  showTextOverlay: (state) => state.diffuserComposition === "behind-text" || state.diffuserComposition === "edge-eroded",
-  textOverlayOpacity: (state) => state.diffuserComposition === "edge-eroded" ? 0.38 : 1,
+  showTextOverlay: (state) => state.overlayMode !== "hidden" && (state.overlayMode === "warped-outline" || state.diffuserComposition === "behind-text" || state.diffuserComposition === "edge-eroded"),
+  textOverlayOpacity: (state) => state.textOverlayOpacity,
   estimateCost: (state) => ({ marks: state.maxNodes, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} circles` }),
   generateGeometry(state, context) {
     const substrate = context.substrateData;
@@ -67,6 +67,11 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     let minRadius = Infinity;
     let maxRadius = 0;
     let clipped = false;
+    let ringStrengthTotal = 0;
+    let falloffTotal = 0;
+    let fieldSamples = 0;
+    let rejectedFarFieldCandidates = 0;
+    let acceptedCrestDots = 0;
 
     outer:
     for (let row = 0; row < rows; row += 1) {
@@ -92,9 +97,17 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         }
 
         const contribution = getEmitterContributionAtPoint(samplingState, field.sourceGlyph, field.anchor, x, y);
-        const normalizedStrength = Math.min(1, Math.abs(contribution) / Math.max(0.001, state.emitter.amplitude * state.amplitude / 22));
         const falloff = getFalloffWeight(distance / Math.max(1, haloRadius), state.emitter.falloff);
-        const ringSignal = Math.min(1, normalizedStrength * (0.45 + state.diffuserRingContrast * 1.35));
+        const rendererFrequency = state.frequency / 18;
+        const wave = Math.abs(Math.sin(distance * state.emitter.frequency * rendererFrequency + state.emitter.phase));
+        const bandThreshold = 1 - state.bandWidth;
+        const bandPosition = Math.max(0, Math.min(1, (wave - bandThreshold) / Math.max(0.001, state.bandWidth)));
+        const ringStrength = Math.pow(bandPosition * bandPosition * (3 - 2 * bandPosition), state.ringSharpness);
+        const contributionStrength = Math.min(1, Math.abs(contribution) / Math.max(0.001, state.emitter.amplitude * state.amplitude / 22));
+        const ringSignal = Math.min(1, ringStrength * (0.55 + state.diffuserRingContrast * 0.95) + contributionStrength * 0.12);
+        ringStrengthTotal += ringStrength;
+        falloffTotal += falloff;
+        fieldSamples += 1;
         const grain = 0.72 + random() * 0.56;
         const readability = insideText && state.diffuserComposition === "behind-text"
           ? 1 - state.edgeInfluence / 100 * 0.72
@@ -103,11 +116,15 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         const reactive = state.diffuserComposition === "text-reactive"
           ? 0.35 + Math.min(1, edge * 1.8) * (0.65 + state.edgeInfluence / 100 * 0.55)
           : 1;
-        const acceptance = Math.min(0.98, (0.05 + densityRatio * 0.18 + ringSignal * 0.7) * falloff * grain * readability * reactive);
+        const farField = distance / Math.max(1, haloRadius);
+        const falloffShape = Math.pow(falloff, 1.45);
+        const acceptance = Math.min(0.98, (0.012 + densityRatio * 0.08 + ringSignal * 0.88) * falloffShape * grain * readability * reactive);
         if (random() > acceptance) {
           rejectedByInfluence += 1;
+          if (farField > 0.62) rejectedFarFieldCandidates += 1;
           continue;
         }
+        if (ringStrength >= 0.5) acceptedCrestDots += 1;
 
         const radiusNoise = 0.82 + random() * 0.36;
         const reactiveRadius = state.diffuserComposition === "text-reactive" ? 0.72 + edge * 0.7 : 1;
@@ -135,6 +152,10 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         rejectedOutsideMask,
         rejectedBySpacing: 0,
         rejectedByInfluence,
+        rejectedFarFieldCandidates,
+        averageRingStrength: fieldSamples ? ringStrengthTotal / fieldSamples : 0,
+        averageFalloff: fieldSamples ? falloffTotal / fieldSamples : 0,
+        acceptedCrestDots,
         averageRadius: geometries.length ? radiusTotal / geometries.length : 0,
         minRadius: geometries.length ? minRadius : 0,
         maxRadius,

@@ -1,6 +1,6 @@
 # SUBSTRATE - Implementation Status
 
-Updated for Shared Glyph Field Modulation. Current app version: `0.14.0`. Current project schema remains version `4`.
+Updated for Sonic Outline Warp. Current app version: `0.16.0`. Current project schema remains version `4`.
 
 # 1. Project Overview
 
@@ -28,6 +28,44 @@ Existing visual renderers remain unchanged:
 
 No reaction-diffusion or persistent simulation system has been added.
 
+## v0.16 Sonic Outline Warp
+
+Final Artwork now supports a `warped-outline` overlay for parsed OpenType fonts. Glyph layout preserves normalized path commands; the warp pipeline samples closed contours, reads the shared glyph field value/gradient, optionally blends the SDF edge normal, smooths displacement, protects smaller counter contours, clamps every point, and emits filled vector paths.
+
+Controls are `outlineWarpAmount`, `outlineWarpScale`, `outlineWarpSmoothing`, `outlineWarpEdgeBias`, `outlineWarpMaxDisplacement`, and `preserveCounters`. The new **Sonic Warp** preset combines readable outline deformation with subtle edge bites and radial diffuser dots.
+
+Native text fallback remains solid native SVG text and reports the parsed-outline limitation. Editable Text export is unchanged and contains no warped paths. Final Artwork remains vector-only.
+
+Diagnostics report overlay mode, warped glyph count, sampled points, average/max displacement, clamp count, counter warnings, strong-warp warning, and native fallback limitation. Details are in `SONIC_OUTLINE_WARP_NOTES.md`.
+
+Warp controls use a dedicated overlay cache key. Amount, scale, smoothing, edge bias, maximum displacement, and counter preservation invalidate the warped outline; unrelated debug/preview settings do not. Native fallback labels and disables the inactive controls. Diagnostics now expose active state, parsed/native source, and overlay cache hit/miss.
+
+Control ownership is mode-aware and documented in `CONTROL_OWNERSHIP.md`. Glyph Modulation remains exclusive to SDF Halftone, SDF Contours, and SDF Streamlines; Glyph Diffuser uses its own Diffuser, Edge Erosion, and Outline Warp controls. Inactive modulation values no longer invalidate Glyph Diffuser geometry.
+
+Sonic Warp art direction uses emitter-centered analytic radial crests combined with the shared field and falloff. Field-gradient motion is stabilized radially before Edge Bias blends toward the SDF normal. Scale controls wavelength, smoothing applies repeated contour filtering, Amount has a progressive full-range response, and Max Displacement remains an independent clamp. The preset emphasizes readable warped letterforms over erosion noise.
+
+Validation: 143 tests across 15 files pass. TypeScript and the production build pass.
+
+### v0.16 Overlay bugfix — regular Outline
+
+A bugfix pass corrected the rendering of regular `Text Overlay = Outline`. The regular Outline mode had been reusing `state.edgeErosionWidth` (default 16) as its stroke width in both the React preview and the SVG export, producing over-thick (8 SVG units per side) strokes that visually collapsed and merged 148px glyph fills. The fix adds a dedicated `outlineStrokeWidth` control (default `1.5`, clamped to `[0.25, 16]`) so each positioned glyph path renders as a clean stroke-only outline (`fill="none"`, `stroke` = artwork color) instead. Glyph positions, advances, tracking, baseline, and per-glyph path separation are preserved; the path data is unchanged.
+
+The fix keeps regular Outline fully separate from Edge Erosion (which continues to skip outline mode and only applies its mask to filled overlays) and from `warped-outline` (which continues to require parsed font paths, native-falls-back to solid with a warning, and emits `data-warped-glyph` filled paths with `fill-rule="evenodd"`). Editable Text export remains native SVG text. Final Artwork export remains vector-only. No WebGPU, no reaction-diffusion, no persistent simulation, no worker cancellation, no export-semantics changes. Details are in `OVERLAY_MODE_FIX_NOTES.md`.
+
+Diagnostics now surface the requested and effective overlay mode, overlay source (parsed-font / native-fallback / none), outline active flag, warp active flag, erosion inactive/active flag, and the outline stroke width. A new "Outline width" slider and an updated erosion-controls hint appear in the controls panel.
+
+Validation: **156 tests across 16 files pass** (13 new overlay-mode tests added in `tests/overlayMode.test.ts`). TypeScript and the production build pass. The app version remains `0.16.0`.
+
+## v0.15 Sonic Visual Quality / Composition
+
+Sonic Diffuser now separates analytic radial crest strength from global emitter falloff. `ringSharpness` and `bandWidth` concentrate accepted vector dots around readable wave crests, while steeper falloff shaping reduces weak far-field dust. Diagnostics include average ring strength, average falloff, far-field rejection, and crest-dot counts.
+
+Sonic Halftone uses the same band controls to bias field-reactive density inside the text mask. Sonic Diffuser, Sonic Halftone, Sonic Contours, and Sonic Stream presets were retuned for clearer structure, more restrained neighbor influence, readable contour deformation, and gentler streamline bending.
+
+Text composition is solid by default. `textOverlayOpacity`, `edgeErosionAmount`, `edgeErosionWidth`, `interiorProtection`, and `overlayMode` control a vector-only overlay. Edge erosion uses deterministic, field-biased subtractive circles near SDF glyph edges; no continuous erosion stroke or global glyph opacity reduction is used.
+
+Detailed behavior, preset notes, limitations, and deferred work are recorded in `SONIC_VISUAL_QUALITY_NOTES.md`.
+
 ## v0.14 Shared Glyph Field Modulation
 
 `RenderContext` now exposes the memoized composite glyph field, safe scalar and central-difference gradient samplers, and field diagnostics. The field build is isolated from animation time/frame changes. Missing or disabled emitters remain a zero-safe no-op.
@@ -37,8 +75,6 @@ SDF Halftone now supports mask-safe candidate displacement plus field-driven den
 The compact shared controls are mode, influence, displacement, density, radius, and opacity. New presets are **Sonic Halftone**, **Sonic Contours**, and **Sonic Stream**. **Sonic Diffuser** remains the halo/cloud preset; Wave Contours remains available for isolines.
 
 Glyph Diffuser composition now includes through-text, text-reactive edge behavior, and an edge-eroded lighter vector overlay in addition to existing behind-text and clipped modes.
-
-Validation: 122 tests across 15 files pass after modulation coverage was added. TypeScript passes; the production Vite bundle was blocked by the local sandbox/esbuild access restriction and needs one unrestricted rerun. SVG remains vector-only and Editable Text remains native SVG text.
 
 Known limitations: modulation deforms generated marks rather than font outlines; narrow strokes can clamp strong displacement; one emitter is active; native glyph cells and emitter membership remain approximate.
 
@@ -632,8 +668,8 @@ Debug raster images are cached by substrate object and debug mode. Toggling unre
 Current result:
 
 ```text
-Test Files  11 passed (11)
-Tests       85 passed (85)
+Test Files  15 passed (15)
+Tests       143 passed (143)
 ```
 
 Coverage includes:
@@ -769,11 +805,44 @@ Preview-only controls provide Auto/Canvas 2D/SVG DOM selection, 24/30/60 FPS cap
 
 The stabilized default for dense Flow Lines is Auto + Canvas 2D at 30 FPS. The 60 FPS cap remains available as an experimental/high-load option, and dense SVG DOM preview is explicitly labeled debug/slow. Standalone Chrome observations put Canvas 2D around 25–40 FPS at the 60 cap with only 1–1.5 ms canvas draw time, versus roughly 5 FPS for dense SVG DOM. Pacing diagnostics now distinguish the selected cap, average FPS, frame interval, draw cost, and stable/unstable cadence.
 
-Focused animation, glyph-emitter, composite-field, Wave Contours, schema, compatibility, and export tests are included. The current verified count is recorded after the latest validation run below.
-
-Latest v0.13 validation: **118 tests across 15 test files pass**. The production build passes. Vector-only compatibility coverage includes Wave Contours and Glyph Diffuser, and the existing CPU worker backend tests remain green.
+Focused animation, glyph-emitter, composite-field, Wave Contours, schema, compatibility, and export tests are included. The current verified count is recorded in the Automated Validation section.
 
 External compatibility status is recorded in `VECTOR_COMPATIBILITY_RESULTS.md`. Browser behavior is tested; Figma, Illustrator, Inkscape, and Affinity Designer remain honestly marked **Not tested**.
+
+## Performance audit
+
+A read-only audit pass identified the largest current bottlenecks after v0.14 Shared Glyph Field Modulation; no code was changed. Detailed evidence, ranking, and DevTools measurement guidance live in `PERFORMANCE_AUDIT.md`.
+
+Top findings, in likely impact order:
+
+1. Worker round-trip backlog during rapid text/quality scrubbing (observed 596.2 ms round trip vs 25.8 ms final compute); `LatestOnlyScheduler` coalesces pending requests but cannot cancel in-flight worker builds.
+2. Substrate debug-image generation still on the main thread (117.8–167.9 ms for edge views; 101.3 ms for Ultra glyph distance) despite deferred idle scheduling.
+3. `useWaveFieldDebugImage` rebuilds the composite wave field and runs a second pixel-walk, ignoring `RenderContext.glyphField`.
+4. `rendererRuntime.cacheKey` builds a `JSON.stringify` key on every static geometry request, including the full `state.emitter` object.
+5. Composite wave field rebuilds whenever `amplitude`/`frequency`/emitter identity change; per-cell `Math.hypot`/`Math.sin`/`Math.exp` with no hoisted factors.
+6. Redundant `buildCompositeWaveField` fallbacks in Wave Contours and Glyph Diffuser despite the field already being on the context.
+7. SDF Streamlines per-step redundancy: distance-gradient (16 reads) plus glyph gradient (16 reads) plus post-loop `reduce` re-sampling every emitted point.
+8. SDF Contours allocation storm (`corners`/`crossings` objects per Marching Squares cell × substrate × level count) and double `sampleDistanceGradient` calls per contour point; Wave Contours shares the same pattern.
+9. Export-diagnostics panel re-serializes the full SVG + runs `DOMParser.parseFromString` + `querySelectorAll("*")` on every parameter tweak while `costEstimate` is enabled.
+10. SDF Halftone string-keyed `Map` occupancy + 5-sample candidate path.
+
+Suggested quick wins (no visual changes, no large refactors): gate `costEstimate` recompute to export/idle, pack the renderer cache key from primitives only, reuse `context.glyphField` in `useWaveFieldDebugImage`, hoist Marching Squares corner allocations out of inner loops, skip disabled modulation gradients, replace string occupancy keys with numeric ones, and round coordinates manually in `serializeGeometry`. Risky options (worker cancellation, worker-side debug images, exact Euclidean distance, outline deformation) are deferred and documented in the audit.
+
+## Performance quick wins
+
+A focused pass applied the seven low-risk quick wins from `PERFORMANCE_AUDIT.md`; full details live in `PERFORMANCE_QUICK_WINS.md`. No new visual features, no visual-output changes, and no changes to SVG export semantics. WebGPU, reaction-diffusion, persistent simulation, worker cancellation, and worker-side debug images remain intentionally NOT implemented.
+
+Implemented changes:
+
+1. **Cost-estimate gating (`src/App.tsx`)** — `createTimedSvg` + `DOMParser` validation now only runs when the cached estimate geometry identity actually changes, not on every slider/animation-tick while `debug.costEstimate` is on.
+2. **Reuse shared glyph field (`src/hooks/useWaveFieldDebugImage.ts`)** — the wave-field debug hook now prefers `context.glyphField` (built once by `App`) and falls back to `buildCompositeWaveField` only for tests/non-App callers.
+3. **Packed primitive cache key (`src/engine/rendererRuntime.ts`)** — replaced `JSON.stringify` with a `|`-joined packed string of renderer-relevant scalars plus a packed emitter sub-key. Debug/preview-only changes no longer invalidate static geometry.
+4. **Skip disabled modulation gradients (`src/engine/field/glyphFieldModulation.ts` + Halftone/Contours/Streamlines)** — `getGlyphFieldSampler` exposes per-effect flags; `glyph.gradient` short-circuits to a zero gradient when displacement is disabled; renderers gate their modulation math on the relevant flag.
+5. **Reduce Marching Squares allocation (`src/engine/renderers/sdfContoursRenderer.ts`, `waveContoursRenderer.ts`)** — eliminated per-cell `corners`/`edgePairs`/`crossings` allocations by reading corner values directly and inlining the interpolation; stitcher adjacency Maps now use numeric keys (preserved quantization).
+6. **Numeric halftone occupancy keys (`src/engine/renderers/sdfHalftoneRenderer.ts`)** — `Map<string, …>` → `Map<number, …>` with a packed `(cellY + offset) * span + (cellX + offset)` key; spacing behaviour unchanged.
+7. **Streamlines in-line distance accumulation (`src/engine/renderers/sdfStreamlinesRenderer.ts`)** — the per-step `sampleDistance` already sampled for the finite-distance check is now accumulated into a `distanceAccumulator`; the post-integration `points.reduce` re-sampling loop is removed.
+
+Remaining bottlenecks: **worker round-trip backlog during rapid text/quality scrubbing** remains the top responsive risk; it requires actual worker cancellation, which **remains deferred** in this pass. Main-thread debug-image generation (Deferred/idle-bound but still 100–170 ms for High/Ultra edge views), composite wave field rebuild on amplitude/frequency change, redundant `buildCompositeWaveField` fallbacks in Wave/Diffuser, post-stitch per-point `sampleDistanceGradient` in Contours, dense SVG-DOM preview reconciliation, and large `<metadata>` project serialization in export remain unchanged and visible in `PERFORMANCE_AUDIT.md`.
 
 # 9. Known Issues / Limitations
 

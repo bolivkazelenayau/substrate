@@ -17,6 +17,9 @@ import { CanvasFlowPreview, type CanvasPreviewSample } from "./CanvasFlowPreview
 import type { PreviewBackend } from "../engine/previewBackend";
 import { formatFps, getFramePacingStatus } from "../engine/animationTiming";
 import { useWaveFieldDebugImage } from "../hooks/useWaveFieldDebugImage";
+import { generateEdgeErosionMarks } from "../engine/edgeErosion";
+import { generateWarpedOutline, outlineWarpCacheKey } from "../engine/outlineWarp";
+import { getControlActivity } from "../engine/controlOwnership";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -33,19 +36,40 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
   const bounds = textGeometry?.bounds ?? getTextBounds(state);
   const hasGlyphPaths = Boolean(textGeometry?.hasOutlines);
+  const controlActivity = getControlActivity(state, hasGlyphPaths);
   const substrate = context.substrateData ?? null;
   const debugImage = useDeferredDebugImage(substrate, state.debug.substrateMode);
   const waveFieldDebugUrl = useWaveFieldDebugImage(state, context, state.debug.waveField);
   const rendererTiming = getRendererTiming(geometry);
+  const showOverlay = renderer.showTextOverlay?.(state) ?? false;
+  const erodeOverlay = showOverlay && state.diffuserComposition === "edge-eroded" && state.edgeErosionAmount > 0 && state.edgeErosionWidth > 0;
+  const overlayFill = state.overlayMode === "knockout" ? COLORS.background : COLORS.artwork;
+  // Regular Outline renderings use the dedicated `outlineStrokeWidth` control,
+  // NOT the erosion-width setting (which defaults to 16 and visually collapses
+  // glyph fills).  The mask/erosion path stays fully disabled for outline.
+  const outlineStrokeWidth = Number.isFinite(state.outlineStrokeWidth) ? Math.max(0.25, state.outlineStrokeWidth) : 1.5;
+  const erosionMarks = useMemo(() => generateEdgeErosionMarks(state, context), [state, context]);
+  const warpCacheKey = outlineWarpCacheKey(state);
+  const warpedOutline = useMemo(
+    () => generateWarpedOutline(state, context),
+    // Warp output is isolated from debug/preview-only state. Field, substrate, and
+    // parsed path identities cover emitter/text changes; the packed key covers controls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [warpCacheKey, context.glyphField, context.substrateData, context.textGeometry],
+  );
+  const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
   const previousFrame = useRef({
     geometry,
+    warpedOutline,
+    warpCacheKey,
     substrate,
     debugGenerationId: debugImage.generationId,
   });
   const geometryRegenerated = previousFrame.current.geometry !== geometry;
+  const warpRegenerated = previousFrame.current.warpedOutline !== warpedOutline;
   const substrateRebuilt = previousFrame.current.substrate !== substrate;
   const debugRegenerated = previousFrame.current.debugGenerationId !== debugImage.generationId;
-  previousFrame.current = { geometry, substrate, debugGenerationId: debugImage.generationId };
+  previousFrame.current = { geometry, warpedOutline, warpCacheKey, substrate, debugGenerationId: debugImage.generationId };
   const gradientVectors = useMemo(() => {
     if (!substrate || state.debug.substrateMode !== "gradient") return [];
     const vectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
@@ -89,6 +113,23 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
                 : <text {...textAttributes(layout)} fill="white">{layout.text}</text>}
             </g>
           </mask>
+          {erodeOverlay && (
+            <mask id="diffuser-overlay-mask">
+              <rect width={VIEWPORT.width} height={VIEWPORT.height} fill="black" />
+              {hasGlyphPaths
+                ? <>
+                    <g fill="white" stroke="none" fillRule="evenodd">{hasWarpedOutline
+                      ? warpedOutline.paths.map((path) => <path key={`warp-mask-${path.textIndex}`} d={path.d} />)
+                      : textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={`fill-${glyph.textIndex}`} d={glyph.path.d} />)}</g>
+                  </>
+                : <>
+                    <text {...textAttributes(layout)} fill="white" stroke="none">{layout.text}</text>
+                  </>}
+              <g id="diffuser-erosion-marks" fill="black" stroke="none">
+                {erosionMarks.map((mark, index) => <circle key={index} cx={mark.x} cy={mark.y} r={mark.radius} opacity={mark.opacity} />)}
+              </g>
+            </mask>
+          )}
         </defs>
         <g id={SVG_IDS.artwork} mask={(renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks">
           {state.renderer === "flow" && previewBackend === "svg-dom"
@@ -97,9 +138,13 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
               ? geometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)
               : null}
         </g>
-        {renderer.showTextOverlay?.(state) && (hasGlyphPaths
-          ? <g className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1}>{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
-          : <text className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1} {...textAttributes(layout)}>{layout.text}</text>)}
+        {showOverlay && <g className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1}>
+          {hasGlyphPaths
+            ? <g style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? COLORS.artwork : "none" }} fillRule={hasWarpedOutline ? "evenodd" : undefined} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined}>{hasWarpedOutline
+                ? warpedOutline.paths.map((path) => <path key={`warp-${path.textIndex}`} d={path.d} data-warped-glyph={path.glyphIndex} />)
+                : textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
+            : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? COLORS.artwork : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{layout.text}</text>}
+        </g>}
         {hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
           : <text className="ghost-text" {...textAttributes(layout)}>{layout.text}</text>}
@@ -245,6 +290,40 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {geometry.diagnostics?.waveOutputCount !== undefined && <span>OUTPUT {geometry.diagnostics.waveOutputCount}</span>}
         {geometry.diagnostics?.diffuserDomain && <span>DOMAIN {geometry.diagnostics.diffuserDomain.toUpperCase()}</span>}
         {geometry.diagnostics?.diffuserComposition && <span>COMPOSE {geometry.diagnostics.diffuserComposition.toUpperCase()}</span>}
+        {state.overlayMode === "warped-outline" && <span>OVERLAY WARPED-OUTLINE</span>}
+        {state.overlayMode === "warped-outline" && <span>REQUESTED {warpedOutline.diagnostics.requestedOverlay.toUpperCase()}</span>}
+        {state.overlayMode === "warped-outline" && <span>EFFECTIVE {warpedOutline.diagnostics.effectiveOverlay.toUpperCase()}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP ACTIVE {warpedOutline.diagnostics.active ? "YES" : "NO"}</span>}
+        {state.overlayMode === "warped-outline" && <span>PATH SOURCE {warpedOutline.diagnostics.glyphPathSource.replace("-", " ").toUpperCase()}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP GLYPHS {warpedOutline.diagnostics.warpedGlyphCount}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP PTS {warpedOutline.diagnostics.sampledOutlinePoints}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP AVG {warpedOutline.diagnostics.averageDisplacement.toFixed(2)}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP MAX {warpedOutline.diagnostics.maxDisplacement.toFixed(2)}</span>}
+        {state.overlayMode === "warped-outline" && <span>CLAMPED {warpedOutline.diagnostics.clampedPoints}</span>}
+        {warpedOutline.diagnostics.activeEmitterGlyph && <span>WARP EMITTER {warpedOutline.diagnostics.activeEmitterGlyph}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP STRENGTH {warpedOutline.diagnostics.effectiveWarpStrength.toFixed(2)}</span>}
+        {state.overlayMode === "warped-outline" && <span>WARP CACHE {warpRegenerated ? "MISS" : "HIT"}</span>}
+        {warpedOutline.diagnostics.warning && <span>WARP WARNING</span>}
+        {warpedOutline.diagnostics.inactiveReason && <span>REASON {warpedOutline.diagnostics.inactiveReason.toUpperCase()}</span>}
+      </div>
+      <div className="renderer-diagnostics control-diagnostics">
+        <strong>ACTIVE CONTROLS</strong>
+        <span>RENDERER {controlActivity.renderer.toUpperCase()}</span>
+        <span>OVERLAY {controlActivity.overlayMode.toUpperCase()}</span>
+        <span>PARSED PATHS {controlActivity.parsedFontPaths ? "YES" : "NO"}</span>
+        <span>DIFFUSER {controlActivity.diffuser ? "ACTIVE" : "N/A"}</span>
+        <span>OVERLAY CONTROLS {controlActivity.overlay ? "ACTIVE" : "N/A"}</span>
+        <span>OVERLAY SOURCE {controlActivity.overlaySource === "none" ? "N/A" : controlActivity.overlaySource.replace("-", " ").toUpperCase()}</span>
+        <span>GLYPH MODULATION {controlActivity.glyphModulation ? "ACTIVE" : "N/A"}</span>
+        <span>EFFECTIVE OVERLAY {controlActivity.effectiveOverlay.toUpperCase()}</span>
+        <span>OUTLINE Active {controlActivity.outlineActive ? "YES" : "NO"}</span>
+        <span>WARP {controlActivity.warp ? "ENABLED" : "DISABLED"}</span>
+        <span>EROSION {controlActivity.edgeErosion ? "ACTIVE" : "INACTIVE"}</span>
+        <span>OUTLINE WIDTH {controlActivity.outlineStrokeWidth.toFixed(2)}</span>
+        <span>AFFECTING {controlActivity.affectingOutput.length ? controlActivity.affectingOutput.join(", ").toUpperCase() : "NONE"}</span>
+        {controlActivity.disabledReason && <span>REASON {controlActivity.disabledReason.toUpperCase()}</span>}
+        {state.overlayMode === "outline" && state.diffuserComposition === "edge-eroded" && <span>NOTE EROSION IGNORED FOR OUTLINE</span>}
+        {controlActivity.outlineActive && !controlActivity.parsedFontPaths && <span>FALLBACK NATIVE TEXT OUTLINE</span>}
       </div>
       <div className="renderer-diagnostics animation-diagnostics">
         <strong>ANIMATION</strong>

@@ -3,56 +3,132 @@ import { buildCompositeWaveField, type CompositeWaveField } from "../field/compo
 import type { VectorRenderer } from "./types";
 
 interface Segment { a: Point; b: Point }
-const key = (point: Point) => `${Math.round(point.x * 10)},${Math.round(point.y * 10)}`;
 
-function interpolate(field: CompositeWaveField, x1: number, y1: number, v1: number, x2: number, y2: number, v2: number, level: number): Point {
-  const amount = Math.abs(v2 - v1) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v1) / (v2 - v1)));
-  return {
-    x: (x1 + (x2 - x1) * amount) / (field.width - 1) * field.viewportWidth,
-    y: (y1 + (y2 - y1) * amount) / (field.height - 1) * field.viewportHeight,
-  };
+// Numeric hash for a quantized point coordinate. Same quantization as the previous
+// `${Math.round(point.x*10)},${Math.round(point.y*10)}` string key, packed into a
+// single integer so adjacency Maps use numeric keys.
+const POINT_KEY_OFFSET = 1_000_000;
+const POINT_KEY_SPAN = 2_000_000;
+function key(point: Point): number {
+  return (Math.round(point.y * 10) + POINT_KEY_OFFSET) * POINT_KEY_SPAN
+    + (Math.round(point.x * 10) + POINT_KEY_OFFSET);
 }
 
-function segments(field: CompositeWaveField, level: number) {
+function segments(field: CompositeWaveField, level: number): Segment[] {
   const result: Segment[] = [];
-  for (let y = 0; y < field.height - 1; y += 1) for (let x = 0; x < field.width - 1; x += 1) {
-    const corners = [
-      [x, y, field.data[y * field.width + x]],
-      [x + 1, y, field.data[y * field.width + x + 1]],
-      [x + 1, y + 1, field.data[(y + 1) * field.width + x + 1]],
-      [x, y + 1, field.data[(y + 1) * field.width + x]],
-    ] as const;
-    const crossings: Point[] = [];
-    for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0]] as const) {
-      if ((corners[a][2] >= level) !== (corners[b][2] >= level)) {
-        crossings.push(interpolate(field, corners[a][0], corners[a][1], corners[a][2], corners[b][0], corners[b][1], corners[b][2], level));
+  const width = field.width;
+  const height = field.height;
+  if (width <= 1 || height <= 1) return result;
+  const data = field.data;
+  const invWidthMinusOne = 1 / (width - 1);
+  const invHeightMinusOne = 1 / (height - 1);
+  for (let y = 0; y < height - 1; y += 1) {
+    for (let x = 0; x < width - 1; x += 1) {
+      const idx = y * width + x;
+      // Read the four corner field values directly. Avoids allocating a `corners`
+      // array of [x, y, value] tuples per cell across the whole field sweep.
+      const v00 = data[idx];
+      const v10 = data[idx + 1];
+      const v11 = data[idx + width + 1];
+      const v01 = data[idx + width];
+      const above00 = v00 >= level;
+      const above10 = v10 >= level;
+      const above11 = v11 >= level;
+      const above01 = v01 >= level;
+      // Same four edges as [[0,1],[1,2],[2,3],[3,0]], walked inline so the
+      // `edgePairs` array and intermediate crossings array are not allocated per
+      // cell. Wave Contours does not use the center-value disambiguation used by
+      // SDF Contours, so the 4-crossing case mirrors the original pairing.
+      let crossingCount = 0;
+      let c0x = 0, c0y = 0, c1x = 0, c1y = 0, c2x = 0, c2y = 0, c3x = 0, c3y = 0;
+      if (above00 !== above10) {
+        const denom = v10 - v00;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v00) / denom));
+        c0x = (x + amount) * invWidthMinusOne * field.viewportWidth;
+        c0y = y * invHeightMinusOne * field.viewportHeight;
+        crossingCount = 1;
+      }
+      if (above10 !== above11) {
+        const denom = v11 - v10;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v10) / denom));
+        const px = (x + 1) * invWidthMinusOne * field.viewportWidth;
+        const py = (y + amount) * invHeightMinusOne * field.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else { c1x = px; c1y = py; crossingCount = 2; }
+      }
+      if (above11 !== above01) {
+        const denom = v01 - v11;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v11) / denom));
+        // Edge goes from corner2=(x+1, y+1) toward corner3=(x, y+1); the along-edge
+        // position is (x+1) - amount, with y fixed at y+1.
+        const px = (x + 1 - amount) * invWidthMinusOne * field.viewportWidth;
+        const py = (y + 1) * invHeightMinusOne * field.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
+        else { c2x = px; c2y = py; crossingCount = 3; }
+      }
+      if (above01 !== above00) {
+        const denom = v00 - v01;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v01) / denom));
+        // Edge goes from corner3=(x, y+1) toward corner0=(x, y); the along-edge
+        // position is (y+1) - amount, with x fixed at x.
+        const px = x * invWidthMinusOne * field.viewportWidth;
+        const py = (y + 1 - amount) * invHeightMinusOne * field.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
+        else if (crossingCount === 2) { c2x = px; c2y = py; crossingCount = 3; }
+        else { c3x = px; c3y = py; crossingCount = 4; }
+      }
+      if (crossingCount === 2) {
+        result.push({ a: { x: c0x, y: c0y }, b: { x: c1x, y: c1y } });
+      } else if (crossingCount === 4) {
+        result.push(
+          { a: { x: c0x, y: c0y }, b: { x: c1x, y: c1y } },
+          { a: { x: c2x, y: c2y }, b: { x: c3x, y: c3y } },
+        );
       }
     }
-    if (crossings.length === 2) result.push({ a: crossings[0], b: crossings[1] });
-    if (crossings.length === 4) result.push({ a: crossings[0], b: crossings[1] }, { a: crossings[2], b: crossings[3] });
   }
   return result;
 }
 
-function stitch(input: Segment[]) {
-  const adjacency = new Map<string, number[]>();
-  input.forEach((segment, index) => [segment.a, segment.b].forEach((point) => adjacency.set(key(point), [...(adjacency.get(key(point)) ?? []), index])));
+function stitch(input: Segment[]): Point[][] {
+  const adjacency = new Map<number, number[]>();
+  for (let index = 0; index < input.length; index += 1) {
+    const segment = input[index];
+    const keyA = key(segment.a);
+    const keyB = key(segment.b);
+    const entriesA = adjacency.get(keyA);
+    if (entriesA) entriesA.push(index);
+    else adjacency.set(keyA, [index]);
+    const entriesB = adjacency.get(keyB);
+    if (entriesB) entriesB.push(index);
+    else adjacency.set(keyB, [index]);
+  }
   const used = new Uint8Array(input.length);
   const fragments: Point[][] = [];
-  input.forEach((segment, index) => {
-    if (used[index]) return;
+  for (let index = 0; index < input.length; index += 1) {
+    if (used[index]) continue;
     used[index] = 1;
-    const points = [segment.a, segment.b];
+    const segment = input[index];
+    const points: Point[] = [segment.a, segment.b];
     while (true) {
       const endpoint = points[points.length - 1];
-      const nextIndex = (adjacency.get(key(endpoint)) ?? []).find((candidate) => !used[candidate]);
-      if (nextIndex === undefined) break;
+      const entries = adjacency.get(key(endpoint));
+      let nextIndex = -1;
+      if (entries) {
+        for (let k = 0; k < entries.length; k += 1) {
+          if (!used[entries[k]]) { nextIndex = entries[k]; break; }
+        }
+      }
+      if (nextIndex < 0) break;
       used[nextIndex] = 1;
       const next = input[nextIndex];
-      points.push(key(next.a) === key(endpoint) ? next.b : next.a);
+      const keyEndpoint = key(endpoint);
+      points.push(key(next.a) === keyEndpoint ? next.b : next.a);
     }
     fragments.push(points);
-  });
+  }
   return fragments;
 }
 

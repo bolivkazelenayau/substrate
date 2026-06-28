@@ -1,5 +1,5 @@
 export const APP_NAME = "SUBSTRATE";
-export const APP_VERSION = "0.14.0";
+export const APP_VERSION = "0.16.0";
 
 export const VIEWPORT = {
   width: 1200,

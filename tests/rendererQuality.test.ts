@@ -13,6 +13,7 @@ import { buildSubstrate } from "../src/engine/substrate/buildSubstrate";
 import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyphs";
 import { getTextLayout } from "../src/engine/textLayout";
 import type { ProjectState, RenderContext } from "../src/types";
+import { getControlActivity } from "../src/engine/controlOwnership";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
   const canvas = createCanvas(width, height);
@@ -106,6 +107,61 @@ describe("renderer quality contracts", () => {
     }, context);
     expect(debugChanged).toBe(first);
     expect(debugChanged).toEqual(first);
+  });
+
+  it("marks Glyph Modulation inactive for Glyph Diffuser and active for SDF consumers", () => {
+    const diffuser = getControlActivity({ ...baseState, renderer: "glyph-diffuser", overlayMode: "warped-outline" }, true);
+    expect(diffuser).toMatchObject({
+      glyphModulation: false,
+      diffuser: true,
+      warp: true,
+    });
+    const contours = getControlActivity({ ...baseState, renderer: "sdf-contours" }, true);
+    expect(contours).toMatchObject({
+      glyphModulation: true,
+      glyphDensityModulation: false,
+      glyphRadiusModulation: false,
+      glyphOpacityModulation: false,
+    });
+    const streamlines = getControlActivity({ ...baseState, renderer: "sdf-streamlines" }, true);
+    expect(streamlines).toMatchObject({ glyphModulation: true, glyphDensityModulation: true, glyphRadiusModulation: false });
+    const halftone = getControlActivity({ ...baseState, renderer: "sdf-halftone" }, true);
+    expect(halftone).toMatchObject({
+      glyphModulation: true,
+      glyphDensityModulation: true,
+      glyphRadiusModulation: true,
+      glyphOpacityModulation: true,
+    });
+  });
+
+  it("reports native warped-outline fallback as inactive and explicit", () => {
+    expect(getControlActivity({ ...baseState, renderer: "glyph-diffuser", overlayMode: "warped-outline" }, false)).toMatchObject({
+      parsedFontPaths: false,
+      warp: false,
+      effectiveOverlay: "solid fallback",
+      disabledReason: "warped outline requires parsed font paths",
+    });
+  });
+
+  it("does not regenerate Glyph Diffuser geometry for inactive modulation controls", () => {
+    clearRendererGeometryCache();
+    const state = {
+      ...baseState,
+      renderer: "glyph-diffuser" as const,
+      emitter: { ...baseState.emitter, enabled: true },
+      maxNodes: 120,
+    };
+    const first = generateRendererGeometry(state, context);
+    const inactiveChanged = generateRendererGeometry({
+      ...state,
+      glyphFieldMode: "strong",
+      glyphFieldInfluence: 100,
+      glyphFieldDisplacement: 40,
+      glyphFieldDensity: 100,
+      glyphFieldRadius: 100,
+      glyphFieldOpacity: 100,
+    }, context);
+    expect(inactiveChanged).toBe(first);
   });
 
   it("reports export budget risks without blocking export", () => {

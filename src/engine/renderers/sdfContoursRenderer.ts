@@ -8,55 +8,93 @@ interface Segment {
   b: Point;
 }
 
-function interpolatePoint(
-  x1: number,
-  y1: number,
-  value1: number,
-  x2: number,
-  y2: number,
-  value2: number,
-  level: number,
-  substrate: SubstrateData,
-): Point {
-  const denominator = value2 - value1;
-  const amount = Math.abs(denominator) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - value1) / denominator));
-  const rasterX = x1 + (x2 - x1) * amount;
-  const rasterY = y1 + (y2 - y1) * amount;
-  return {
-    x: rasterX / (substrate.width - 1) * substrate.viewportWidth,
-    y: rasterY / (substrate.height - 1) * substrate.viewportHeight,
-  };
+// Numeric hash for a quantized point coordinate. Same quantization as the previous
+// `${Math.round(point.x*100)},${Math.round(point.y*100)}` string key, packed into
+// a single integer so adjacency Maps use numeric keys.
+const POINT_KEY_OFFSET = 1_000_000;
+const POINT_KEY_SPAN = 2_000_000;
+function pointKey(point: Point): number {
+  return (Math.round(point.y * 100) + POINT_KEY_OFFSET) * POINT_KEY_SPAN
+    + (Math.round(point.x * 100) + POINT_KEY_OFFSET);
 }
 
 function extractSegments(substrate: SubstrateData, level: number): Segment[] {
   const segments: Segment[] = [];
-  const { width, height } = substrate;
+  const width = substrate.width;
+  const height = substrate.height;
   const values = substrate.distance.data;
+  const invWidthMinusOne = 1 / Math.max(1, width - 1);
+  const invHeightMinusOne = 1 / Math.max(1, height - 1);
   for (let y = 0; y < height - 1; y += 1) {
     for (let x = 0; x < width - 1; x += 1) {
-      const corners = [
-        { x, y, value: values[y * width + x] },
-        { x: x + 1, y, value: values[y * width + x + 1] },
-        { x: x + 1, y: y + 1, value: values[(y + 1) * width + x + 1] },
-        { x, y: y + 1, value: values[(y + 1) * width + x] },
-      ];
-      const edgePairs = [[0, 1], [1, 2], [2, 3], [3, 0]] as const;
-      const crossings: Point[] = [];
-      edgePairs.forEach(([start, end]) => {
-        const a = corners[start];
-        const b = corners[end];
-        if ((a.value >= level) !== (b.value >= level)) {
-          crossings.push(interpolatePoint(a.x, a.y, a.value, b.x, b.y, b.value, level, substrate));
-        }
-      });
-      if (crossings.length === 2) {
-        segments.push({ a: crossings[0], b: crossings[1] });
-      } else if (crossings.length === 4) {
-        const centerInside = corners.reduce((sum, corner) => sum + corner.value, 0) / 4 >= level;
+      const idx = y * width + x;
+      // Read the four corner values directly. Avoids allocating a `corners` array
+      // and a `{x, y, value}` object per cell across the whole raster sweep.
+      const v00 = values[idx];
+      const v10 = values[idx + 1];
+      const v11 = values[idx + width + 1];
+      const v01 = values[idx + width];
+      const above00 = v00 >= level;
+      const above10 = v10 >= level;
+      const above11 = v11 >= level;
+      const above01 = v01 >= level;
+      // Walk the four edges in the same order as [[0,1],[1,2],[2,3],[3,0]] but
+      // inlined so no `edgePairs` array is allocated per cell. Each crossing is
+      // emitted only when the above-flag differs across the edge — the same
+      // numerical behaviour as the previous `interpolatePoint` helper, just
+      // inlined here so no intermediate Point array is built per cell.
+      let crossingCount = 0;
+      let c0x = 0, c0y = 0, c1x = 0, c1y = 0, c2x = 0, c2y = 0, c3x = 0, c3y = 0;
+      if (above00 !== above10) {
+        const denom = v10 - v00;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v00) / denom));
+        c0x = (x + amount) * invWidthMinusOne * substrate.viewportWidth;
+        c0y = y * invHeightMinusOne * substrate.viewportHeight;
+        crossingCount = 1;
+      }
+      if (above10 !== above11) {
+        const denom = v11 - v10;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v10) / denom));
+        const px = (x + 1) * invWidthMinusOne * substrate.viewportWidth;
+        const py = (y + amount) * invHeightMinusOne * substrate.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else { c1x = px; c1y = py; crossingCount = 2; }
+      }
+      if (above11 !== above01) {
+        const denom = v01 - v11;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v11) / denom));
+        // Edge goes from corner2=(x+1, y+1) toward corner3=(x, y+1); the along-edge
+        // position is (x+1) - amount, with y fixed at y+1.
+        const px = (x + 1 - amount) * invWidthMinusOne * substrate.viewportWidth;
+        const py = (y + 1) * invHeightMinusOne * substrate.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
+        else { c2x = px; c2y = py; crossingCount = 3; }
+      }
+      if (above01 !== above00) {
+        const denom = v00 - v01;
+        const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v01) / denom));
+        // Edge goes from corner3=(x, y+1) toward corner0=(x, y); the along-edge
+        // position is (y+1) - amount, with x fixed at x.
+        const px = x * invWidthMinusOne * substrate.viewportWidth;
+        const py = (y + 1 - amount) * invHeightMinusOne * substrate.viewportHeight;
+        if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
+        else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
+        else if (crossingCount === 2) { c2x = px; c2y = py; crossingCount = 3; }
+        else { c3x = px; c3y = py; crossingCount = 4; }
+      }
+      if (crossingCount === 2) {
+        segments.push({ a: { x: c0x, y: c0y }, b: { x: c1x, y: c1y } });
+      } else if (crossingCount === 4) {
+        const centerInside = (v00 + v10 + v11 + v01) / 4 >= level;
+        const p0: Point = { x: c0x, y: c0y };
+        const p1: Point = { x: c1x, y: c1y };
+        const p2: Point = { x: c2x, y: c2y };
+        const p3: Point = { x: c3x, y: c3y };
         if (centerInside) {
-          segments.push({ a: crossings[0], b: crossings[1] }, { a: crossings[2], b: crossings[3] });
+          segments.push({ a: p0, b: p1 }, { a: p2, b: p3 });
         } else {
-          segments.push({ a: crossings[0], b: crossings[3] }, { a: crossings[1], b: crossings[2] });
+          segments.push({ a: p0, b: p3 }, { a: p1, b: p2 });
         }
       }
     }
@@ -64,42 +102,51 @@ function extractSegments(substrate: SubstrateData, level: number): Segment[] {
   return segments;
 }
 
-const pointKey = (point: Point) => `${Math.round(point.x * 100)},${Math.round(point.y * 100)}`;
-
 function stitchSegments(segments: Segment[]): Point[][] {
-  const adjacency = new Map<string, number[]>();
-  segments.forEach((segment, index) => {
-    [segment.a, segment.b].forEach((point) => {
-      const key = pointKey(point);
-      const entries = adjacency.get(key) ?? [];
-      entries.push(index);
-      adjacency.set(key, entries);
-    });
-  });
+  const adjacency = new Map<number, number[]>();
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const keyA = pointKey(segment.a);
+    const keyB = pointKey(segment.b);
+    const entriesA = adjacency.get(keyA);
+    if (entriesA) entriesA.push(index);
+    else adjacency.set(keyA, [index]);
+    const entriesB = adjacency.get(keyB);
+    if (entriesB) entriesB.push(index);
+    else adjacency.set(keyB, [index]);
+  }
   const used = new Uint8Array(segments.length);
   const fragments: Point[][] = [];
 
   const extend = (points: Point[], prepend: boolean) => {
     while (true) {
       const endpoint = prepend ? points[0] : points[points.length - 1];
-      const nextIndex = (adjacency.get(pointKey(endpoint)) ?? []).find((index) => used[index] === 0);
-      if (nextIndex === undefined) break;
+      const key = pointKey(endpoint);
+      const entries = adjacency.get(key);
+      let nextIndex = -1;
+      if (entries) {
+        for (let k = 0; k < entries.length; k += 1) {
+          if (used[entries[k]] === 0) { nextIndex = entries[k]; break; }
+        }
+      }
+      if (nextIndex < 0) break;
       used[nextIndex] = 1;
       const segment = segments[nextIndex];
-      const next = pointKey(segment.a) === pointKey(endpoint) ? segment.b : segment.a;
+      const next = pointKey(segment.a) === key ? segment.b : segment.a;
       if (prepend) points.unshift(next);
       else points.push(next);
     }
   };
 
-  segments.forEach((segment, index) => {
-    if (used[index]) return;
+  for (let index = 0; index < segments.length; index += 1) {
+    if (used[index]) continue;
     used[index] = 1;
-    const points = [segment.a, segment.b];
+    const segment = segments[index];
+    const points: Point[] = [segment.a, segment.b];
     extend(points, false);
     extend(points, true);
     fragments.push(points);
-  });
+  }
   return fragments;
 }
 
@@ -212,11 +259,12 @@ export const sdfContoursRenderer: VectorRenderer = {
         extractedFragments += 1;
         const cleaned = cleanFragment(rawFragment);
         const displaced = displaceFragment(cleaned, substrate, state.turbulence / 100, state.seed + levelIndex * 1009).map((point) => {
+          if (!glyph.enabled) return point;
           const value = glyph.value(point.x, point.y);
-          const fieldGradient = glyph.gradient(point.x, point.y);
           fieldValueTotal += Math.abs(value);
           fieldSamples += 1;
-          if (!glyph.enabled) return point;
+          if (!glyph.displacementEnabled) return point;
+          const fieldGradient = glyph.gradient(point.x, point.y);
           const sdfNormal = sampleDistanceGradient(substrate, point.x, point.y);
           const normalMagnitude = sdfNormal.magnitude;
           if (!Number.isFinite(normalMagnitude) || normalMagnitude < 0.01) return point;

@@ -2,15 +2,18 @@ export type RendererId = "flow" | "ripple" | "dots" | "sdf-flow" | "sdf-streamli
 export type ExportMode = "artwork" | "editable";
 export type ExportFrameMode = "current" | "time-zero";
 export type SubstrateQuality = "low" | "medium" | "high" | "ultra";
-export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Custom";
+export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Custom";
 export type FieldControlId = "density" | "amplitude" | "frequency" | "turbulence" | "edgeInfluence" | "maxNodes";
 export type PreviewFpsCap = 24 | 30 | 60;
 export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | "custom";
 export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
 export type WaveContourMode = "continuous" | "dotted";
+export type EmitterMode = "single" | "multiple";
+export type FieldBlendMode = "add" | "max";
 export type DiffuserDomainMode = "inside-text" | "halo" | "text-halo";
 export type DiffuserCompositionMode = "clipped" | "behind-text" | "through-text" | "text-reactive" | "edge-eroded";
+export type OverlayMode = "solid" | "outline" | "knockout" | "hidden" | "warped-outline";
 export type GlyphFieldModulationMode = "off" | "subtle" | "strong";
 
 export interface GlyphEmitter {
@@ -29,6 +32,16 @@ export interface GlyphEmitter {
   blendMode: GlyphEmitterBlendMode;
   customX: number;
   customY: number;
+}
+
+export interface GlyphEmitterInstance {
+  id: string;
+  glyphId: string | null;
+  enabled: boolean;
+  weight: number;
+  phaseOffset: number;
+  radiusMultiplier: number;
+  label: string;
 }
 export type PreviewBackendPreference = "auto" | "canvas-2d" | "svg-dom";
 
@@ -71,7 +84,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 4;
+  version: 5;
   text: string;
   fontSize: number;
   tracking: number;
@@ -89,6 +102,9 @@ export interface ProjectState {
   substrateQuality: SubstrateQuality;
   preset: PresetId;
   emitter: GlyphEmitter;
+  emitterMode: EmitterMode;
+  emitters: GlyphEmitterInstance[];
+  fieldBlendMode: FieldBlendMode;
   waveContourMode: WaveContourMode;
   waveDotSpacing: number;
   waveDotRadius: number;
@@ -96,7 +112,21 @@ export interface ProjectState {
   diffuserComposition: DiffuserCompositionMode;
   diffuserDotRadius: number;
   diffuserRingContrast: number;
+  ringSharpness: number;
+  bandWidth: number;
   diffuserHaloPadding: number;
+  textOverlayOpacity: number;
+  edgeErosionAmount: number;
+  edgeErosionWidth: number;
+  interiorProtection: number;
+  overlayMode: OverlayMode;
+  outlineStrokeWidth: number;
+  outlineWarpAmount: number;
+  outlineWarpScale: number;
+  outlineWarpSmoothing: number;
+  outlineWarpEdgeBias: number;
+  outlineWarpMaxDisplacement: number;
+  preserveCounters: boolean;
   glyphFieldMode: GlyphFieldModulationMode;
   glyphFieldInfluence: number;
   glyphFieldDisplacement: number;

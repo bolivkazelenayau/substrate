@@ -123,12 +123,35 @@ export default function App() {
     timeMs: 0,
     frame: 0,
   }), [renderContext.substrateData, renderContext.textGeometry, renderContext.viewport]);
+  // Compute the estimate geometry through the renderer cache (cheap, identity-stable
+  // across debug/preview-only changes); then derive byte-size diagnostics from it.
+  // The serialization + DOMParser only run when the cached geometry identity changes.
+  const estimateGeometry = useMemo(
+    () => generateRendererGeometry(state, estimateContext),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state, estimateContext],
+  );
+  const estimateExportKey = [
+    state.exportMode,
+    state.precision,
+    state.overlayMode,
+    state.textOverlayOpacity,
+    state.edgeErosionAmount,
+    state.edgeErosionWidth,
+    state.interiorProtection,
+    state.diffuserComposition,
+    state.outlineWarpAmount,
+    state.outlineWarpScale,
+    state.outlineWarpSmoothing,
+    state.outlineWarpEdgeBias,
+    state.outlineWarpMaxDisplacement,
+    state.preserveCounters,
+  ].join("|");
   const diagnostics: SvgDiagnostics | null = useMemo(() => {
     if (!state.debug.costEstimate) return null;
-    const estimateGeometry = generateRendererGeometry(state, estimateContext);
     const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry);
     return getSvgDiagnostics(timed.svg, timed.serializationTimeMs);
-  }, [state, estimateContext, textGeometry]);
+  }, [state.debug.costEstimate, estimateGeometry, estimateContext, textGeometry, estimateExportKey]);
   const previewDiagnostics: PreviewDiagnostics = useMemo(() => ({
     estimatedFps: canvasFlowActive && canvasSample ? canvasSample.estimatedFps : clockDiagnostics.estimatedFps,
     frameTimeMs: canvasFlowActive && canvasSample ? canvasSample.frameTimeMs : clockDiagnostics.frameTimeMs,
@@ -237,6 +260,7 @@ export default function App() {
           onFontUpload={uploadFont}
           onClearFont={clearFont}
           fontLoaded={Boolean(loadedFont)}
+          parsedFontPathsAvailable={Boolean(textGeometry?.hasOutlines)}
           previewSettings={previewSettings}
           onPreviewSettingsChange={setPreviewSettings}
           emitterGlyphs={emitterGlyphs}

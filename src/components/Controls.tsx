@@ -4,6 +4,8 @@ import { getRenderer, rendererList } from "../engine/renderers";
 import type { DebugSettings, FieldControlId, PreviewSettings, ProjectState } from "../types";
 import type { SubstrateDebugMode } from "../engine/substrate";
 import { getGlyphDisplayLabel, type GlyphEmitterMetadata } from "../engine/field/glyphEmitters";
+import { NATIVE_OUTLINE_WARP_WARNING } from "../engine/outlineWarp";
+import { getControlActivity } from "../engine/controlOwnership";
 
 interface Props {
   state: ProjectState;
@@ -14,6 +16,7 @@ interface Props {
   onFontUpload: (event: ChangeEvent<HTMLInputElement>) => void;
   onClearFont: () => void;
   fontLoaded: boolean;
+  parsedFontPathsAvailable: boolean;
   previewSettings: PreviewSettings;
   onPreviewSettingsChange: (settings: PreviewSettings) => void;
   emitterGlyphs: GlyphEmitterMetadata[];
@@ -42,8 +45,11 @@ const debugToggles: Array<{ id: BooleanDebugKey; label: string }> = [
   { id: "costEstimate", label: "Export estimate" },
 ];
 
-export const Controls = memo(function Controls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, previewSettings, onPreviewSettingsChange, emitterGlyphs }: Props) {
+export const Controls = memo(function Controls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs }: Props) {
   const renderer = getRenderer(state.renderer);
+  const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
+  const warpControlsActive = controlActivity.warp;
+  const glyphModulationEnabled = controlActivity.glyphModulation && state.glyphFieldMode !== "off";
   const patch = (next: Partial<ProjectState>) => setState({ ...state, ...next });
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const setDebug = <K extends keyof DebugSettings,>(id: K, value: DebugSettings[K]) =>
@@ -134,12 +140,14 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
           <label className="field compact-field"><span>Blend</span><select value={state.emitter.blendMode} onChange={(event) => patchEmitter({ blendMode: event.target.value as ProjectState["emitter"]["blendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
           {["sdf-halftone", "sdf-contours", "sdf-streamlines", "glyph-diffuser"].includes(state.renderer) && <>
             <div className="section-subheading">Glyph modulation</div>
-            <label className="field compact-field"><span>Mode</span><select value={state.glyphFieldMode} onChange={(event) => patchField({ glyphFieldMode: event.target.value as ProjectState["glyphFieldMode"] })}><option value="off">Off</option><option value="subtle">Subtle</option><option value="strong">Strong</option></select></label>
-            <Range label="Influence" value={state.glyphFieldInfluence} min={0} max={100} disabled={state.glyphFieldMode === "off"} onChange={(glyphFieldInfluence) => patchField({ glyphFieldInfluence })} />
-            <Range label="Displacement" value={state.glyphFieldDisplacement} min={0} max={40} disabled={state.glyphFieldMode === "off"} onChange={(glyphFieldDisplacement) => patchField({ glyphFieldDisplacement })} />
-            <Range label="Density modulation" value={state.glyphFieldDensity} min={0} max={100} disabled={state.glyphFieldMode === "off"} onChange={(glyphFieldDensity) => patchField({ glyphFieldDensity })} />
-            <Range label="Radius modulation" value={state.glyphFieldRadius} min={0} max={100} disabled={state.glyphFieldMode === "off"} onChange={(glyphFieldRadius) => patchField({ glyphFieldRadius })} />
-            <Range label="Opacity modulation" value={state.glyphFieldOpacity} min={0} max={100} disabled={state.glyphFieldMode === "off"} onChange={(glyphFieldOpacity) => patchField({ glyphFieldOpacity })} />
+            {!controlActivity.glyphModulation && <small>Inactive for Glyph Diffuser. Used by SDF Halftone, SDF Contours, and SDF Streamlines.</small>}
+            {controlActivity.glyphModulation && state.renderer !== "sdf-halftone" && <small>{state.renderer === "sdf-contours" ? "Contours use Mode, Influence, and Displacement." : "Streamlines use Mode, Influence, Displacement, and Density."}</small>}
+            <label className="field compact-field"><span>Mode</span><select disabled={!controlActivity.glyphModulation} value={state.glyphFieldMode} onChange={(event) => patchField({ glyphFieldMode: event.target.value as ProjectState["glyphFieldMode"] })}><option value="off">Off</option><option value="subtle">Subtle</option><option value="strong">Strong</option></select></label>
+            <Range label="Influence" value={state.glyphFieldInfluence} min={0} max={100} disabled={!glyphModulationEnabled} onChange={(glyphFieldInfluence) => patchField({ glyphFieldInfluence })} />
+            <Range label="Displacement" value={state.glyphFieldDisplacement} min={0} max={40} disabled={!glyphModulationEnabled} onChange={(glyphFieldDisplacement) => patchField({ glyphFieldDisplacement })} />
+            <Range label="Density modulation" value={state.glyphFieldDensity} min={0} max={100} disabled={!glyphModulationEnabled || !controlActivity.glyphDensityModulation} onChange={(glyphFieldDensity) => patchField({ glyphFieldDensity })} />
+            <Range label="Radius modulation" value={state.glyphFieldRadius} min={0} max={100} disabled={!glyphModulationEnabled || !controlActivity.glyphRadiusModulation} onChange={(glyphFieldRadius) => patchField({ glyphFieldRadius })} />
+            <Range label="Opacity modulation" value={state.glyphFieldOpacity} min={0} max={100} disabled={!glyphModulationEnabled || !controlActivity.glyphOpacityModulation} onChange={(glyphFieldOpacity) => patchField({ glyphFieldOpacity })} />
           </>}
           {state.renderer === "wave-contours" && <>
             <label className="field compact-field"><span>Contour mode</span><select value={state.waveContourMode} onChange={(event) => patchField({ waveContourMode: event.target.value as ProjectState["waveContourMode"] })}><option value="continuous">Continuous</option><option value="dotted">Dotted</option></select></label>
@@ -153,7 +161,25 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
             <label className="field compact-field"><span>Composition</span><select value={state.diffuserComposition} onChange={(event) => patchField({ diffuserComposition: event.target.value as ProjectState["diffuserComposition"] })}><option value="behind-text">Behind text</option><option value="through-text">Through text</option><option value="text-reactive">Text-reactive edges</option><option value="edge-eroded">Edge-eroded overlay</option><option value="clipped">Clipped to text</option></select></label>
             <Range label="Dot radius" value={state.diffuserDotRadius} min={0.4} max={8} step={0.1} onChange={(diffuserDotRadius) => patchField({ diffuserDotRadius })} />
             <Range label="Ring contrast" value={state.diffuserRingContrast} min={0} max={1} step={0.05} onChange={(diffuserRingContrast) => patchField({ diffuserRingContrast })} />
+            <Range label="Ring sharpness" value={state.ringSharpness} min={0.5} max={8} step={0.1} onChange={(ringSharpness) => patchField({ ringSharpness })} />
+            <Range label="Band width" value={state.bandWidth} min={0.05} max={0.8} step={0.01} onChange={(bandWidth) => patchField({ bandWidth })} />
             <Range label="Halo padding" value={state.diffuserHaloPadding} min={0} max={400} step={10} onChange={(diffuserHaloPadding) => patchField({ diffuserHaloPadding })} />
+            <label className="field compact-field"><span>Text overlay</span><select value={state.overlayMode} onChange={(event) => patchField({ overlayMode: event.target.value as ProjectState["overlayMode"] })}><option value="solid">Solid</option><option value="outline">Outline</option><option value="knockout">Knockout</option><option value="hidden">Hidden</option><option value="warped-outline">{parsedFontPathsAvailable ? "Warped outline" : "Warped outline · load font"}</option></select></label>
+            <Range disabled={!controlActivity.overlay || state.overlayMode !== "outline"} label="Outline width" value={state.outlineStrokeWidth} min={0.25} max={16} step={0.25} onChange={(outlineStrokeWidth) => patchField({ outlineStrokeWidth })} />
+            <Range disabled={!controlActivity.overlay} label="Overlay opacity" value={state.textOverlayOpacity} min={0} max={1} step={0.05} onChange={(textOverlayOpacity) => patchField({ textOverlayOpacity })} />
+            {!controlActivity.edgeErosion && <small>Edge erosion applies to filled overlays (Solid / Warped outline), not regular Outline. Switch composition to Edge-eroded overlay and use Solid overlay to enable erosion.</small>}
+            <Range disabled={!controlActivity.edgeErosion} label="Edge erosion" value={state.edgeErosionAmount} min={0} max={1} step={0.05} onChange={(edgeErosionAmount) => patchField({ edgeErosionAmount })} />
+            <Range disabled={!controlActivity.edgeErosion} label="Erosion width" value={state.edgeErosionWidth} min={0} max={64} step={1} onChange={(edgeErosionWidth) => patchField({ edgeErosionWidth })} />
+            <Range disabled={!controlActivity.edgeErosion} label="Interior protection" value={state.interiorProtection} min={0} max={1} step={0.05} onChange={(interiorProtection) => patchField({ interiorProtection })} />
+            {state.overlayMode === "warped-outline" && <>
+              {!warpControlsActive && <div className="control-warning"><strong>Effective overlay: Solid fallback</strong><small>{NATIVE_OUTLINE_WARP_WARNING}</small><small>Load font to enable.</small></div>}
+              <Range disabled={!warpControlsActive} label="Warp amount" value={state.outlineWarpAmount} min={0} max={60} step={1} onChange={(outlineWarpAmount) => patchField({ outlineWarpAmount })} />
+              <Range disabled={!warpControlsActive} label="Warp scale" value={state.outlineWarpScale} min={0.25} max={3} step={0.05} onChange={(outlineWarpScale) => patchField({ outlineWarpScale })} />
+              <Range disabled={!warpControlsActive} label="Warp smoothing" value={state.outlineWarpSmoothing} min={0} max={1} step={0.05} onChange={(outlineWarpSmoothing) => patchField({ outlineWarpSmoothing })} />
+              <Range disabled={!warpControlsActive} label="Warp edge bias" value={state.outlineWarpEdgeBias} min={0} max={1} step={0.05} onChange={(outlineWarpEdgeBias) => patchField({ outlineWarpEdgeBias })} />
+              <Range disabled={!warpControlsActive} label="Max displacement" value={state.outlineWarpMaxDisplacement} min={0} max={80} step={1} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
+              <label className="debug-toggle"><input disabled={!warpControlsActive} type="checkbox" checked={state.preserveCounters} onChange={(event) => patchField({ preserveCounters: event.target.checked })} /><span>Preserve counters</span></label>
+            </>}
           </>}
         </div>
       </section>
@@ -261,6 +287,7 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
 }, (previous, next) => (
   previous.state === next.state
   && previous.fontLoaded === next.fontLoaded
+  && previous.parsedFontPathsAvailable === next.parsedFontPathsAvailable
   && previous.previewSettings === next.previewSettings
   && previous.emitterGlyphs === next.emitterGlyphs
 ));

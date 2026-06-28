@@ -59,6 +59,7 @@ function traceHalf(
   glyph: ReturnType<typeof getGlyphFieldSampler>,
   glyphDisplacement: number,
   glyphStats: { valueTotal: number; displacementTotal: number; samples: number },
+  distanceAccumulator: { value: number },
 ) {
   const points: Point[] = [];
   let current = seedPoint;
@@ -72,10 +73,17 @@ function traceHalf(
     const tangentY = gradient.x / gradient.magnitude * directionSign;
     const perturbation = (deterministicNoise(seed + step * 131, current.x, current.y) - 0.5) * turbulence * 0.72;
     const baseAngle = Math.atan2(tangentY, tangentX);
-    const glyphValue = glyph.value(current.x, current.y);
-    const glyphGradient = glyph.gradient(current.x, current.y);
-    const glyphTurn = glyph.enabled ? glyphValue * glyphDisplacement * glyph.strength * 0.045
-      + (glyphGradient.finite ? Math.min(0.32, glyphGradient.magnitude * glyphDisplacement) : 0) : 0;
+    // Sample the modulation value every step (for diagnostics). Only fetch the
+    // gradient when the angular-displacement effect is enabled — `glyph.gradient`
+    // already returns a finite zero-gradient in the disabled path, so the math
+    // below reduces to glyphTurn = 0 exactly when disabled.
+    const glyphValue = glyph.enabled ? glyph.value(current.x, current.y) : 0;
+    let glyphTurn = 0;
+    if (glyph.displacementEnabled) {
+      const glyphGradient = glyph.gradient(current.x, current.y);
+      const gradientTerm = glyphGradient.finite ? Math.min(0.32, glyphGradient.magnitude * glyphDisplacement) : 0;
+      glyphTurn = glyphValue * glyphDisplacement * glyph.strength * 0.045 + gradientTerm;
+    }
     glyphStats.valueTotal += Math.abs(glyphValue);
     glyphStats.displacementTotal += Math.abs(glyphTurn);
     glyphStats.samples += 1;
@@ -97,6 +105,7 @@ function traceHalf(
       counters.occupancyRejections += 1;
       break;
     }
+    distanceAccumulator.value += nextDistance;
     points.push(next);
     current = next;
   }
@@ -185,7 +194,11 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
       }
       const edgeProximity = Math.exp(-distance / edgeBand);
       const edgeStrength = Math.min(1, edgeProximity * 0.82 + edge * 0.55);
-      const seedField = Math.abs(glyph.value(seedPoint.x, seedPoint.y));
+      // Density-driven seed acceptance only matters when the corresponding scalar
+      // is enabled; skip the field value sample entirely in the disabled path to
+      // avoid an extra 4 array reads per seed candidate. Determinism is preserved
+      // because the seeded `random()` call below is the sole acceptance gate.
+      const seedField = glyph.densityEnabled ? Math.abs(glyph.value(seedPoint.x, seedPoint.y)) : 0;
       const fieldAcceptance = seedField * state.glyphFieldDensity / 100 * glyph.strength;
       if (random() > Math.min(1, (1 - influence) + influence * edgeStrength + fieldAcceptance * 0.35)) {
         rejectedSeeds += 1;
@@ -196,9 +209,13 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
       const remaining = state.maxNodes - totalPoints;
       const halfBudget = Math.max(1, Math.floor((remaining - 1) / 2));
       const directionSign = polylines.length % 2 === 0 ? 1 : -1;
-      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, counters, halfBudget, glyph, state.glyphFieldDisplacement, glyphStats);
+      // Accumulate per-point distance during integration instead of re-sampling
+      // every emitted point after the streamline is accepted. The seed point's
+      // distance was sampled above and is added separately below.
+      const streamlineDistance = { value: 0 };
+      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, counters, halfBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance);
       const backwardBudget = Math.max(0, remaining - 1 - forward.length);
-      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, counters, backwardBudget, glyph, state.glyphFieldDisplacement, glyphStats);
+      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, counters, backwardBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance);
       const points = [...backward.reverse(), seedPoint, ...forward];
       if (points.length < MIN_POLYLINE_POINTS) {
         rejectedSeeds += 1;
@@ -206,8 +223,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
       }
 
       markOccupied(occupancy, points, occupancyWidth, occupancyHeight);
-      const lineDistance = points.reduce((sum, point) => sum + sampleDistance(substrate, point.x, point.y), 0);
-      sampledDistanceTotal += lineDistance;
+      sampledDistanceTotal += streamlineDistance.value + distance;
       totalPoints += points.length;
       polylines.push({
         type: "polyline",

@@ -75,6 +75,37 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
+  it("fills and validates warped-outline controls", () => {
+    const defaults = validateProject({ version: 4 }).project;
+    expect(defaults).toMatchObject({
+      outlineWarpAmount: baseState.outlineWarpAmount,
+      outlineWarpScale: baseState.outlineWarpScale,
+      outlineWarpSmoothing: baseState.outlineWarpSmoothing,
+      outlineWarpEdgeBias: baseState.outlineWarpEdgeBias,
+      outlineWarpMaxDisplacement: baseState.outlineWarpMaxDisplacement,
+      preserveCounters: baseState.preserveCounters,
+    });
+    const project = validateProject({
+      version: 4,
+      overlayMode: "warped-outline",
+      outlineWarpAmount: 999,
+      outlineWarpScale: 0,
+      outlineWarpSmoothing: 4,
+      outlineWarpEdgeBias: -2,
+      outlineWarpMaxDisplacement: 999,
+      preserveCounters: false,
+    }).project;
+    expect(project).toMatchObject({
+      overlayMode: "warped-outline",
+      outlineWarpAmount: 60,
+      outlineWarpScale: 0.25,
+      outlineWarpSmoothing: 1,
+      outlineWarpEdgeBias: 0,
+      outlineWarpMaxDisplacement: 80,
+      preserveCounters: false,
+    });
+  });
+
   it("validates imported font metadata safely", () => {
     expect(validateProject({ version: 3, font: { family: 42 } }).project.font).toBeNull();
     const font = validateProject({

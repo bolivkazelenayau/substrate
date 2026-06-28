@@ -1,8 +1,9 @@
 import type { GeometryGroup } from "./geometry";
 import { geometryNodeCost } from "./geometry";
 import { getRenderer } from "./renderers";
-import type { ProjectState, RenderContext } from "../types";
+import type { GlyphEmitter, ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
+import { glyphModulationCacheKey } from "./controlOwnership";
 
 const substrateIds = new WeakMap<object, number>();
 let nextSubstrateId = 1;
@@ -21,35 +22,64 @@ function substrateKey(context: RenderContext) {
   return `${id}:${substrate.width}x${substrate.height}:${substrate.substrateType}`;
 }
 
+// Compact-string cache key built from renderer-relevant scalar state plus substrate
+// identity. Avoids JSON.stringify on every request; debug toggles, preview settings,
+// and other non-geometry state must not appear here so they cannot invalidate static
+// geometry. Uses `|` as a separator and never recurses into objects except for the
+// (small, fixed-shape) emitter config, which is rendered as its own packed string.
+function emitterKey(e: GlyphEmitter) {
+  return [
+    e.enabled ? 1 : 0,
+    e.glyphId ?? "",
+    e.sourceMode,
+    e.amplitude,
+    e.frequency,
+    e.phase,
+    e.radius,
+    e.falloff,
+    e.selfInfluence,
+    e.neighborInfluence,
+    e.blendMode,
+    e.customX,
+    e.customY,
+  ].join("~");
+}
+
 function cacheKey(state: ProjectState, context: RenderContext) {
   const renderer = getRenderer(state.renderer);
-  return JSON.stringify({
-    renderer: state.renderer,
-    text: state.text,
-    font: state.font?.fileName ?? "native",
-    fontSize: state.fontSize,
-    tracking: state.tracking,
-    density: state.density,
-    amplitude: state.amplitude,
-    frequency: state.frequency,
-    turbulence: state.turbulence,
-    edgeInfluence: state.edgeInfluence,
-    maxNodes: state.maxNodes,
-    seed: state.seed,
-    substrateQuality: state.substrateQuality,
-    emitter: state.emitter,
-    waveContourMode: state.waveContourMode,
-    waveDotSpacing: state.waveDotSpacing,
-    waveDotRadius: state.waveDotRadius,
-    diffuserDomain: state.diffuserDomain,
-    diffuserComposition: state.diffuserComposition,
-    diffuserDotRadius: state.diffuserDotRadius,
-    diffuserRingContrast: state.diffuserRingContrast,
-    diffuserHaloPadding: state.diffuserHaloPadding,
-    substrate: renderer.usesSubstrate ? substrateKey(context) : "unused",
-    timeMs: renderer.usesTime ? context.timeMs : 0,
-    frame: renderer.usesTime ? context.frame : 0,
-  });
+  const substrate = renderer.usesSubstrate ? substrateKey(context) : "unused";
+  const time = renderer.usesTime ? `${context.timeMs}:${context.frame}` : "0:0";
+  // Use `|` between top-level fields and `~` within the emitter, plus separators
+  // that ensure adjacent numeric fields cannot collide. Field order matters.
+  return [
+    state.renderer,
+    substrate,
+    state.text,
+    state.font?.fileName ?? "native",
+    state.fontSize,
+    state.tracking,
+    state.density,
+    state.amplitude,
+    state.frequency,
+    state.turbulence,
+    state.edgeInfluence,
+    state.maxNodes,
+    state.seed,
+    state.substrateQuality,
+    emitterKey(state.emitter),
+    state.waveContourMode,
+    state.waveDotSpacing,
+    state.waveDotRadius,
+    state.diffuserDomain,
+    state.diffuserComposition,
+    state.diffuserDotRadius,
+    state.diffuserRingContrast,
+    state.ringSharpness,
+    state.bandWidth,
+    state.diffuserHaloPadding,
+    glyphModulationCacheKey(state),
+    time,
+  ].join("|");
 }
 
 export function generateRendererGeometry(state: ProjectState, context: RenderContext): GeometryGroup {

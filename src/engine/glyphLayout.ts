@@ -1,12 +1,29 @@
 import { TEXT_LAYOUT, VIEWPORT } from "./constants";
 import type { LoadedFont } from "./fontLoader";
-import type { GlyphBounds, PositionedGlyph, TextGeometry } from "./glyphGeometry";
+import type { GlyphBounds, GlyphPathCommand, PositionedGlyph, TextGeometry } from "./glyphGeometry";
 import { unionBounds } from "./glyphGeometry";
 import type { ProjectState } from "../types";
 
 function pathBounds(box: { x1: number; y1: number; x2: number; y2: number }, hasPath: boolean): GlyphBounds | null {
   if (!hasPath || ![box.x1, box.y1, box.x2, box.y2].every(Number.isFinite)) return null;
   return { x: box.x1, y: box.y1, width: box.x2 - box.x1, height: box.y2 - box.y1 };
+}
+
+function normalizeCommands(commands: Array<Record<string, unknown>>): GlyphPathCommand[] {
+  return commands.flatMap((command) => {
+    const type = command.type;
+    if (type !== "M" && type !== "L" && type !== "Q" && type !== "C" && type !== "Z") return [];
+    const number = (key: string) => typeof command[key] === "number" ? command[key] as number : undefined;
+    return [{
+      type,
+      x: number("x"),
+      y: number("y"),
+      x1: number("x1"),
+      y1: number("y1"),
+      x2: number("x2"),
+      y2: number("y2"),
+    }];
+  });
 }
 
 export function layoutGlyphs(state: ProjectState, loaded: LoadedFont): TextGeometry {
@@ -47,6 +64,7 @@ export function layoutGlyphs(state: ProjectState, loaded: LoadedFont): TextGeome
       path: {
         d,
         bounds,
+        commands: normalizeCommands(path.commands as unknown as Array<Record<string, unknown>>),
       },
       center,
       centroid: center,

@@ -59,6 +59,10 @@ input[type="range"] { width: 100%; height: 2px; margin: 5px 0; accent-color: var
 .font-loader span { color: var(--muted); text-transform: uppercase; font-size: 8px; }
 .font-loader strong { color: #f0eee4; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .font-loader small { color: var(--muted); font-size: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.control-warning { display: grid; gap: 4px; padding: 8px; color: #ffb38f; background: #181816; border: 1px solid #6b3a30; font-size: 8px; line-height: 1.45; }
+.control-warning strong { color: #ff8c72; text-transform: uppercase; }
+.control-warning small { color: inherit; font-size: inherit; }
+.control-grid > small { color: var(--muted); font-size: 8px; line-height: 1.45; }
 .font-actions { display: flex; gap: 5px; flex-shrink: 0; }
 .font-actions button { padding: 7px; font-size: 8px; }
 .compact-field { margin-top: 16px; margin-bottom: 0; }
@@ -91,6 +95,8 @@ input[type="range"] { width: 100%; height: 2px; margin: 5px 0; accent-color: var
 .renderer-diagnostics strong { color: var(--acid); }
 .renderer-diagnostics.warning { color: #ff8c72; border-color: #6b3a30; }
 .instrument-diagnostics { top: 62px; }
+.control-diagnostics { top: 96px; }
+.animation-diagnostics { top: 130px; }
 .export-warnings { position: absolute; right: 10px; bottom: 27px; z-index: 2; max-width: 520px; padding: 7px 9px; color: #ffb38f; background: #181816; border: 1px solid #6b3a30; font-size: 8px; pointer-events: none; }
 .export-warnings strong { color: #ff8c72; margin-right: 6px; }
 .performance-warnings { position: absolute; left: 10px; bottom: 27px; z-index: 2; max-width: 520px; padding: 7px 9px; color: #ffcf8a; background: #181816; border: 1px solid #70582e; font-size: 8px; pointer-events: none; }
