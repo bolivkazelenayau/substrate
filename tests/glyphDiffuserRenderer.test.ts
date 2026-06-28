@@ -59,6 +59,21 @@ describe("Glyph Diffuser renderer", () => {
     return { ...baseContext, ...createGlyphFieldContext(field) };
   }
 
+  it("returns fallback diagnostics when emitter is disabled", () => {
+    const noEmitterState = { ...state, emitter: { ...state.emitter, enabled: false } };
+    const renderer = getRenderer("glyph-diffuser");
+    const result = renderer.generateGeometry(noEmitterState, context);
+    expect(result.geometries).toHaveLength(0);
+    expect(result.diagnostics?.fallback).toBe(true);
+    expect(result.diagnostics?.warning).toBe("Glyph Diffuser requires an enabled glyph emitter.");
+  });
+
+  it("presets using glyph-diffuser enable an emitter by default", () => {
+    expect(presets["Sonic Diffuser"].emitter?.enabled).toBe(true);
+    expect(presets["Sonic Warp"].emitter?.enabled).toBe(true);
+    expect(presets["Sonic Interference"].emitter?.enabled).toBe(true);
+  });
+
   it("is registered, static, substrate-backed, and emitter-aware", () => {
     const renderer = renderers["glyph-diffuser"];
     expect(renderer).toBeDefined();
@@ -139,7 +154,7 @@ describe("Glyph Diffuser renderer", () => {
   it("exports vector-only halo dots and parsed text overlay", () => {
     const svg = createSvg(state, context, context.textGeometry);
     const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
     expect(parsed.querySelectorAll("#generated-artwork circle").length).toBeGreaterThan(0);
     expect(parsed.querySelector("#diffuser-text-overlay path")).not.toBeNull();
     expect(parsed.querySelector("#generated-artwork")?.hasAttribute("mask")).toBe(false);
@@ -197,7 +212,7 @@ describe("Glyph Diffuser renderer", () => {
   it.each(["Sonic Diffuser", "Sonic Halftone"] as const)("%s export remains vector-only", (preset) => {
     const presetState = { ...state, ...presets[preset], font: loaded.metadata };
     const svg = createSvg(presetState, context, context.textGeometry);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
     expect(svg).not.toMatch(/<image|<canvas|data:image|png|jpe?g/i);
     expect(svg).toMatch(/<(circle|polyline|path)\b/);
   });
@@ -304,7 +319,7 @@ describe("Glyph Diffuser renderer", () => {
     const warpContext = warpedContext(warpState);
     const artwork = createSvg(warpState, warpContext, context.textGeometry);
     const parsedArtwork = new DOMParser().parseFromString(artwork, "image/svg+xml");
-    expect(validateSvgReload(artwork).valid).toBe(true);
+    expect(validateSvgReload(artwork, true).valid).toBe(true);
     expect(parsedArtwork.querySelectorAll("#diffuser-text-overlay path[data-warped-glyph]").length).toBeGreaterThan(0);
     expect(artwork).not.toMatch(/<image|<canvas|data:image|png|jpe?g/i);
 
@@ -329,7 +344,7 @@ describe("Glyph Diffuser renderer", () => {
     expect(areOutlineWarpControlsActive("warped-outline", false)).toBe(false);
     expect(areOutlineWarpControlsActive("warped-outline", true)).toBe(true);
     const svg = createSvg(warpState, { ...warpedContext(warpState), textGeometry: null }, null);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, false).valid).toBe(true);
     const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
     expect(parsed.querySelector("#diffuser-text-overlay text")).not.toBeNull();
     const metadata = JSON.parse(parsed.querySelector("metadata")!.textContent!);

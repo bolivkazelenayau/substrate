@@ -1,6 +1,15 @@
 # SUBSTRATE - Implementation Status
 
-Updated for Sonic Outline Warp. Current app version: `0.16.0`. Current project schema remains version `4`.
+Updated for Sonic Outline Warp.## Current Version: 0.16.1
+
+### Changes in v0.16.1
+- **Visual Design System Pass**: Redesigned the SUBSTRATE UI with a refined dark brutalist/generative instrument aesthetic. Removed unnecessary borders, implemented a structured typography scale with tabular numbers for diagnostics, enforced a consistent 40px hit area for primary controls, and improved the active/hover states with subtle scaling (`scale(0.96)`) and snappy 150ms `ease-out` transitions.
+- **UI Polish: Control Panel Cleanup**: Reorganized the control panel for clarity. Implemented a fixed 100vh workbench layout so the canvas stays locked while controls scroll independently.
+- **Accordion Inspector**: Advanced controls are now cleanly hidden inside accordions, keeping the main flow compact. Inactive renderer-specific sections are delegated to an "Other controls" accordion.
+- **Glyph Diffuser UX**: Fixed the Glyph Diffuser empty state. When disabled, the Emitter accordion now presents a prominent warning callout and action button ("Enable first eligible emitter"), preventing hidden failures.
+
+### Active Priorities
+1.  **Multi-Emitter (v0.17)**: Introduce an array of glyph emitters to construct complex interference patterns within the distance field.
 
 # 1. Project Overview
 
@@ -45,6 +54,35 @@ Control ownership is mode-aware and documented in `CONTROL_OWNERSHIP.md`. Glyph 
 Sonic Warp art direction uses emitter-centered analytic radial crests combined with the shared field and falloff. Field-gradient motion is stabilized radially before Edge Bias blends toward the SDF normal. Scale controls wavelength, smoothing applies repeated contour filtering, Amount has a progressive full-range response, and Max Displacement remains an independent clamp. The preset emphasizes readable warped letterforms over erosion noise.
 
 Validation: 143 tests across 15 files pass. TypeScript and the production build pass.
+
+### v0.16.1 Control Panel Cleanup
+
+A UI polish pass was completed to make the control panel less confusing. The visual output, preset values, export semantics, and project schema remain unchanged. 
+
+- Grouped related controls into clear `.control-group` blocks: Text Overlay, Edge Erosion, Diffuser Field, Glyph Modulation, and Wave Contours.
+- Used the `controlActivity` state to conditionally apply a `.disabled-group` class to inactive blocks, keeping them in the DOM to avoid layout jumps while visually fading them.
+- Added brief inactive hints (e.g. `Inactive for current renderer`) to disabled groups.
+- Individual controls inside disabled groups remain functionally `disabled`.
+- Introduced a `diagnosticsExpanded` state to collapse the detailed numbers in the `Viewport` diagnostics panels.
+- Ensured critical diagnostics (native fallback, warped-outline unavailable, export warning, maxNodes clipping, worker fallback/error) remain visible even when the detailed panels are collapsed.
+- TypeScript and production build pass successfully. App version remains 0.16.0.
+
+### v0.16.1 UI Polish Regression Fix
+
+A targeted bugfix addressed layout and functionality regressions introduced in v0.16.1:
+- Restored editability of the `Outline width` slider when `Text Overlay = Outline` is active.
+- Ensured the `Overlay mode` select remains available to the Glyph Diffuser when set to `Hidden`, preventing lockouts.
+- Compressed inactive control groups by hiding all controls within them and displaying only the group header and a compact, one-line hint. This drastically reduces the vertical footprint of the control panel and returns dominance to the canvas/viewport.
+- Updated `styles.css` spacing (`.control-group`, `.nested-group`, `.inactive-hint`) to tighten the interface.
+- Updated tests and confirmed 156 tests pass with no build issues.
+### v0.16.1 Fixed Workbench Layout
+
+A structural CSS layout fix was applied to prevent the control panel from pushing the document height beyond `100vh` and creating a scrolling webpage:
+- Forced `html`, `body`, and `main` to `overflow: hidden; height: 100%`.
+- Reconfigured the `.workspace` grid and made the left `.controls` panel scroll independently (`overflow-y: auto`, `overscroll-behavior: contain`).
+- Bounded the `.viewport-shell` as a strict flex column.
+- Added a `.stage-frame` wrapper to center the SVG `.stage` and strictly enforce its aspect ratio without breaking boundaries.
+- Validated manually across small viewport sizes (1366x768, 1440x900, 1920x1080) and narrow browser widths, ensuring the transport bar, canvas, and controls remain visible and functional.
 
 ### v0.16 Overlay bugfix — regular Outline
 

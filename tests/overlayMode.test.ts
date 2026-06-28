@@ -158,7 +158,7 @@ describe("Text overlay modes", () => {
     };
     const svg = createSvg(nativeState, { ...context, textGeometry: null }, null);
     const document = parse(svg);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, false).valid).toBe(true);
     const overlayText = document.querySelector("#diffuser-text-overlay text");
     expect(overlayText).not.toBeNull();
     // The text element itself is filled "none"; stroke is set on the wrapping group
@@ -199,7 +199,7 @@ describe("Text overlay modes", () => {
     const wctx = warpedContext(warpState);
     const svg = createSvg(warpState, wctx, context.textGeometry);
     const document = parse(svg);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
     const warped = document.querySelectorAll("#diffuser-text-overlay path[data-warped-glyph]");
     expect(warped.length).toBeGreaterThan(0);
     // Warped outline is a fill-based overlay (not stroke-only).
@@ -212,7 +212,7 @@ describe("Text overlay modes", () => {
   it("final artwork export remains vector-only and DOMParser-validation passes", () => {
     const state: ProjectState = { ...baseDiffuserState, overlayMode: "outline" };
     const svg = createSvg(state, context, context.textGeometry);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
     expect(svg).not.toMatch(/<image|<canvas|data:image|png|jpe?g/i);
     expect(svg).toMatch(/<path\b/);
   });

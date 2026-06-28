@@ -28,9 +28,10 @@ interface ViewportProps {
   previewDiagnostics: PreviewDiagnostics; previewBackend: PreviewBackend; previewSettings: PreviewSettings;
   previewRunning: boolean; canvasSample: CanvasPreviewSample | null;
   onCanvasSample: (sample: CanvasPreviewSample) => void; onCanvasFailure: () => void;
+  diagnosticsExpanded: boolean;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsExpanded }: ViewportProps) {
   const renderer = getRenderer(state.renderer);
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
   const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
@@ -220,12 +221,12 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
       )}
       <div className={`backend-diagnostics ${substrateBackendStatus.phase}`}>
         <strong>BACKEND</strong>
-        {getBackendDiagnosticItems(substrateBackendStatus).map((item) => <span key={item}>{item}</span>)}
+        {(diagnosticsExpanded || substrateBackendStatus.phase !== "ready") && getBackendDiagnosticItems(substrateBackendStatus).map((item) => <span key={item}>{item}</span>)}
       </div>
       {geometry.diagnostics && (
         <div className={`renderer-diagnostics${geometry.diagnostics.fallback ? " warning" : ""}`}>
           <strong>{renderer.label.toUpperCase()}</strong>
-          {geometry.diagnostics.requestedDots !== undefined
+          {diagnosticsExpanded && geometry.diagnostics.requestedDots !== undefined
             ? <>
                 <span>DOTS {geometry.diagnostics.acceptedDots} / {geometry.diagnostics.requestedDots}</span>
                 <span>OUT {geometry.diagnostics.rejectedOutsideMask}</span>
@@ -236,7 +237,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
                 <span>R MIN/MAX {geometry.diagnostics.minRadius?.toFixed(2)} / {geometry.diagnostics.maxRadius?.toFixed(2)}</span>
                 <span>CLIPPED {geometry.diagnostics.maxNodesClipped ? "YES" : "NO"}</span>
               </>
-            : geometry.diagnostics.contourLevelCount !== undefined
+            : diagnosticsExpanded && geometry.diagnostics.contourLevelCount !== undefined
             ? <>
                 <span>LEVELS {geometry.diagnostics.contourLevelCount}</span>
                 <span>FRAG {geometry.diagnostics.extractedFragments}</span>
@@ -246,7 +247,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
                 <span>AVG LEN {geometry.diagnostics.averageFragmentLength?.toFixed(1)}</span>
                 <span>CLIPPED {geometry.diagnostics.maxNodesClipped ? "YES" : "NO"}</span>
               </>
-            : geometry.diagnostics.requestedStreamlines !== undefined
+            : diagnosticsExpanded && geometry.diagnostics.requestedStreamlines !== undefined
               ? <>
                 <span>LINES {geometry.diagnostics.acceptedStreamlines} / {geometry.diagnostics.requestedStreamlines}</span>
                 <span>REJECT {geometry.diagnostics.rejectedSeeds}</span>
@@ -256,98 +257,101 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
                 <span>GRAD {geometry.diagnostics.stoppedInvalidGradient}</span>
                 <span>OCC {geometry.diagnostics.occupancyRejections}</span>
                 </>
-              : <>
-                <span>A {geometry.diagnostics.acceptedCandidates}</span>
-                <span>R {geometry.diagnostics.rejectedCandidates}</span>
-                </>}
-          <span>AVG D {geometry.diagnostics.averageSampledDistance.toFixed(1)}</span>
-          <span>SUBSTRATE {geometry.diagnostics.substrateAvailable ? "YES" : "NO"}</span>
-          <span>FALLBACK {geometry.diagnostics.fallback ? "YES" : "NO"}</span>
-          {geometry.diagnostics.warning && <span>{geometry.diagnostics.warning}</span>}
+              : diagnosticsExpanded
+                ? <>
+                  <span>A {geometry.diagnostics.acceptedCandidates}</span>
+                  <span>R {geometry.diagnostics.rejectedCandidates}</span>
+                  </>
+                : null}
+          {!diagnosticsExpanded && geometry.diagnostics.maxNodesClipped && <span>CLIPPED YES</span>}
+          {diagnosticsExpanded && <span>AVG D {geometry.diagnostics.averageSampledDistance.toFixed(1)}</span>}
+          {diagnosticsExpanded && <span>SUBSTRATE {geometry.diagnostics.substrateAvailable ? "YES" : "NO"}</span>}
+          {(diagnosticsExpanded || geometry.diagnostics.fallback) && <span>FALLBACK {geometry.diagnostics.fallback ? "YES" : "NO"}</span>}
+          {(diagnosticsExpanded || geometry.diagnostics.warning) && geometry.diagnostics.warning && <span>{geometry.diagnostics.warning}</span>}
         </div>
       )}
       <div className="renderer-diagnostics instrument-diagnostics">
-        <strong>{renderer.label.toUpperCase()}</strong>
-        <span>TYPE {geometrySummary.geometryType.toUpperCase()}</span>
+        <strong>INSTRUMENTS</strong>
+        {diagnosticsExpanded && <span>TYPE {geometrySummary.geometryType.toUpperCase()}</span>}
         <span>EL {geometrySummary.elementCount}</span>
-        <span>PTS {geometrySummary.pointCount}</span>
-        <span>NODES ~{geometrySummary.estimatedSvgNodes}</span>
-        <span>SIZE ~{formatBytes(geometrySummary.estimatedByteSize)}</span>
+        {diagnosticsExpanded && <span>PTS {geometrySummary.pointCount}</span>}
+        {diagnosticsExpanded && <span>NODES ~{geometrySummary.estimatedSvgNodes}</span>}
+        {diagnosticsExpanded && <span>SIZE ~{formatBytes(geometrySummary.estimatedByteSize)}</span>}
         {exportDiagnostics && <span>EXACT {formatBytes(exportDiagnostics.byteSize)}</span>}
-        {exportDiagnostics && <span>SVG {exportDiagnostics.serializationTimeMs.toFixed(1)}MS</span>}
-        <span>GEN {rendererTiming.durationMs.toFixed(1)}MS{rendererTiming.cached ? " CACHED" : ""}</span>
-        <span>SUB {substrate?.substrateType ?? "NONE"}</span>
-        <span>CLIPPED {geometrySummary.maxNodesClipped ? "YES" : "NO"}</span>
-        {geometry.diagnostics?.selectedGlyph && <span>EMITTER {geometry.diagnostics.selectedGlyph}</span>}
-        {geometry.diagnostics?.emitterAnchorX !== undefined && <span>ANCHOR {geometry.diagnostics.emitterAnchorX.toFixed(1)}, {geometry.diagnostics.emitterAnchorY?.toFixed(1)}</span>}
-        {geometry.diagnostics?.emitterSourceMode && <span>SOURCE {geometry.diagnostics.emitterSourceMode.toUpperCase()}</span>}
-        {geometry.diagnostics?.fieldWidth && <span>FIELD {geometry.diagnostics.fieldWidth}×{geometry.diagnostics.fieldHeight}</span>}
-        {geometry.diagnostics?.fieldMin !== undefined && <span>RANGE {geometry.diagnostics.fieldMin.toFixed(2)} / {geometry.diagnostics.fieldMax?.toFixed(2)}</span>}
-        {geometry.diagnostics?.fieldBuildTimeMs !== undefined && <span>FIELD BUILD {geometry.diagnostics.fieldBuildTimeMs.toFixed(1)}MS</span>}
-        {geometry.diagnostics?.contourExtractionTimeMs !== undefined && <span>{state.renderer === "glyph-diffuser" ? "SAMPLE" : "CONTOUR"} {geometry.diagnostics.contourExtractionTimeMs.toFixed(1)}MS</span>}
-        {geometry.diagnostics?.fieldMembership && <span>MEMBERSHIP APPROX.</span>}
-        {geometry.diagnostics?.waveContourMode && <span>MODE {geometry.diagnostics.waveContourMode.toUpperCase()}</span>}
-        {geometry.diagnostics?.waveOutputCount !== undefined && <span>OUTPUT {geometry.diagnostics.waveOutputCount}</span>}
-        {geometry.diagnostics?.diffuserDomain && <span>DOMAIN {geometry.diagnostics.diffuserDomain.toUpperCase()}</span>}
-        {geometry.diagnostics?.diffuserComposition && <span>COMPOSE {geometry.diagnostics.diffuserComposition.toUpperCase()}</span>}
-        {state.overlayMode === "warped-outline" && <span>OVERLAY WARPED-OUTLINE</span>}
-        {state.overlayMode === "warped-outline" && <span>REQUESTED {warpedOutline.diagnostics.requestedOverlay.toUpperCase()}</span>}
-        {state.overlayMode === "warped-outline" && <span>EFFECTIVE {warpedOutline.diagnostics.effectiveOverlay.toUpperCase()}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP ACTIVE {warpedOutline.diagnostics.active ? "YES" : "NO"}</span>}
-        {state.overlayMode === "warped-outline" && <span>PATH SOURCE {warpedOutline.diagnostics.glyphPathSource.replace("-", " ").toUpperCase()}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP GLYPHS {warpedOutline.diagnostics.warpedGlyphCount}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP PTS {warpedOutline.diagnostics.sampledOutlinePoints}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP AVG {warpedOutline.diagnostics.averageDisplacement.toFixed(2)}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP MAX {warpedOutline.diagnostics.maxDisplacement.toFixed(2)}</span>}
-        {state.overlayMode === "warped-outline" && <span>CLAMPED {warpedOutline.diagnostics.clampedPoints}</span>}
-        {warpedOutline.diagnostics.activeEmitterGlyph && <span>WARP EMITTER {warpedOutline.diagnostics.activeEmitterGlyph}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP STRENGTH {warpedOutline.diagnostics.effectiveWarpStrength.toFixed(2)}</span>}
-        {state.overlayMode === "warped-outline" && <span>WARP CACHE {warpRegenerated ? "MISS" : "HIT"}</span>}
-        {warpedOutline.diagnostics.warning && <span>WARP WARNING</span>}
-        {warpedOutline.diagnostics.inactiveReason && <span>REASON {warpedOutline.diagnostics.inactiveReason.toUpperCase()}</span>}
+        {exportDiagnostics && diagnosticsExpanded && <span>SVG {exportDiagnostics.serializationTimeMs.toFixed(1)}MS</span>}
+        {diagnosticsExpanded && <span>GEN {rendererTiming.durationMs.toFixed(1)}MS{rendererTiming.cached ? " CACHED" : ""}</span>}
+        {diagnosticsExpanded && <span>SUB {substrate?.substrateType ?? "NONE"}</span>}
+        {(diagnosticsExpanded || geometrySummary.maxNodesClipped) && <span>CLIPPED {geometrySummary.maxNodesClipped ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.selectedGlyph && <span>EMITTER {geometry.diagnostics.selectedGlyph}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.emitterAnchorX !== undefined && <span>ANCHOR {geometry.diagnostics.emitterAnchorX.toFixed(1)}, {geometry.diagnostics.emitterAnchorY?.toFixed(1)}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.emitterSourceMode && <span>SOURCE {geometry.diagnostics.emitterSourceMode.toUpperCase()}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.fieldWidth && <span>FIELD {geometry.diagnostics.fieldWidth}×{geometry.diagnostics.fieldHeight}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.fieldMin !== undefined && <span>RANGE {geometry.diagnostics.fieldMin.toFixed(2)} / {geometry.diagnostics.fieldMax?.toFixed(2)}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.fieldBuildTimeMs !== undefined && <span>FIELD BUILD {geometry.diagnostics.fieldBuildTimeMs.toFixed(1)}MS</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.contourExtractionTimeMs !== undefined && <span>{state.renderer === "glyph-diffuser" ? "SAMPLE" : "CONTOUR"} {geometry.diagnostics.contourExtractionTimeMs.toFixed(1)}MS</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.fieldMembership && <span>MEMBERSHIP APPROX.</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.waveContourMode && <span>MODE {geometry.diagnostics.waveContourMode.toUpperCase()}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.waveOutputCount !== undefined && <span>OUTPUT {geometry.diagnostics.waveOutputCount}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.diffuserDomain && <span>DOMAIN {geometry.diagnostics.diffuserDomain.toUpperCase()}</span>}
+        {diagnosticsExpanded && geometry.diagnostics?.diffuserComposition && <span>COMPOSE {geometry.diagnostics.diffuserComposition.toUpperCase()}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>OVERLAY WARPED-OUTLINE</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>REQUESTED {warpedOutline.diagnostics.requestedOverlay.toUpperCase()}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>EFFECTIVE {warpedOutline.diagnostics.effectiveOverlay.toUpperCase()}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP ACTIVE {warpedOutline.diagnostics.active ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>PATH SOURCE {warpedOutline.diagnostics.glyphPathSource.replace("-", " ").toUpperCase()}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP GLYPHS {warpedOutline.diagnostics.warpedGlyphCount}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP PTS {warpedOutline.diagnostics.sampledOutlinePoints}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP AVG {warpedOutline.diagnostics.averageDisplacement.toFixed(2)}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP MAX {warpedOutline.diagnostics.maxDisplacement.toFixed(2)}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>CLAMPED {warpedOutline.diagnostics.clampedPoints}</span>}
+        {diagnosticsExpanded && warpedOutline.diagnostics.activeEmitterGlyph && <span>WARP EMITTER {warpedOutline.diagnostics.activeEmitterGlyph}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP STRENGTH {warpedOutline.diagnostics.effectiveWarpStrength.toFixed(2)}</span>}
+        {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP CACHE {warpRegenerated ? "MISS" : "HIT"}</span>}
+        {(diagnosticsExpanded || warpedOutline.diagnostics.warning) && warpedOutline.diagnostics.warning && <span>WARP WARNING</span>}
+        {(diagnosticsExpanded || warpedOutline.diagnostics.inactiveReason) && warpedOutline.diagnostics.inactiveReason && <span>REASON {warpedOutline.diagnostics.inactiveReason.toUpperCase()}</span>}
       </div>
       <div className="renderer-diagnostics control-diagnostics">
         <strong>ACTIVE CONTROLS</strong>
-        <span>RENDERER {controlActivity.renderer.toUpperCase()}</span>
+        {diagnosticsExpanded && <span>RENDERER {controlActivity.renderer.toUpperCase()}</span>}
         <span>OVERLAY {controlActivity.overlayMode.toUpperCase()}</span>
-        <span>PARSED PATHS {controlActivity.parsedFontPaths ? "YES" : "NO"}</span>
-        <span>DIFFUSER {controlActivity.diffuser ? "ACTIVE" : "N/A"}</span>
-        <span>OVERLAY CONTROLS {controlActivity.overlay ? "ACTIVE" : "N/A"}</span>
-        <span>OVERLAY SOURCE {controlActivity.overlaySource === "none" ? "N/A" : controlActivity.overlaySource.replace("-", " ").toUpperCase()}</span>
-        <span>GLYPH MODULATION {controlActivity.glyphModulation ? "ACTIVE" : "N/A"}</span>
-        <span>EFFECTIVE OVERLAY {controlActivity.effectiveOverlay.toUpperCase()}</span>
-        <span>OUTLINE Active {controlActivity.outlineActive ? "YES" : "NO"}</span>
-        <span>WARP {controlActivity.warp ? "ENABLED" : "DISABLED"}</span>
-        <span>EROSION {controlActivity.edgeErosion ? "ACTIVE" : "INACTIVE"}</span>
-        <span>OUTLINE WIDTH {controlActivity.outlineStrokeWidth.toFixed(2)}</span>
-        <span>AFFECTING {controlActivity.affectingOutput.length ? controlActivity.affectingOutput.join(", ").toUpperCase() : "NONE"}</span>
-        {controlActivity.disabledReason && <span>REASON {controlActivity.disabledReason.toUpperCase()}</span>}
-        {state.overlayMode === "outline" && state.diffuserComposition === "edge-eroded" && <span>NOTE EROSION IGNORED FOR OUTLINE</span>}
-        {controlActivity.outlineActive && !controlActivity.parsedFontPaths && <span>FALLBACK NATIVE TEXT OUTLINE</span>}
+        {diagnosticsExpanded && <span>PARSED PATHS {controlActivity.parsedFontPaths ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && <span>DIFFUSER {controlActivity.diffuser ? "ACTIVE" : "N/A"}</span>}
+        {diagnosticsExpanded && <span>OVERLAY CONTROLS {controlActivity.overlay ? "ACTIVE" : "N/A"}</span>}
+        {diagnosticsExpanded && <span>OVERLAY SOURCE {controlActivity.overlaySource === "none" ? "N/A" : controlActivity.overlaySource.replace("-", " ").toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>GLYPH MODULATION {controlActivity.glyphModulation ? "ACTIVE" : "N/A"}</span>}
+        {diagnosticsExpanded && <span>EFFECTIVE OVERLAY {controlActivity.effectiveOverlay.toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>OUTLINE Active {controlActivity.outlineActive ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && <span>WARP {controlActivity.warp ? "ENABLED" : "DISABLED"}</span>}
+        {diagnosticsExpanded && <span>EROSION {controlActivity.edgeErosion ? "ACTIVE" : "INACTIVE"}</span>}
+        {diagnosticsExpanded && <span>OUTLINE WIDTH {controlActivity.outlineStrokeWidth.toFixed(2)}</span>}
+        {diagnosticsExpanded && <span>AFFECTING {controlActivity.affectingOutput.length ? controlActivity.affectingOutput.join(", ").toUpperCase() : "NONE"}</span>}
+        {(diagnosticsExpanded || controlActivity.disabledReason) && controlActivity.disabledReason && <span>REASON {controlActivity.disabledReason.toUpperCase()}</span>}
+        {diagnosticsExpanded && state.overlayMode === "outline" && state.diffuserComposition === "edge-eroded" && <span>NOTE EROSION IGNORED FOR OUTLINE</span>}
+        {(diagnosticsExpanded || (!controlActivity.parsedFontPaths && controlActivity.outlineActive)) && controlActivity.outlineActive && !controlActivity.parsedFontPaths && <span>FALLBACK NATIVE TEXT OUTLINE</span>}
       </div>
       <div className="renderer-diagnostics animation-diagnostics">
         <strong>ANIMATION</strong>
         <span>{formatFps(previewDiagnostics.frameTimeMs, previewDiagnostics.timingValidity)}</span>
-        <span>CAP {previewSettings.fpsCap}</span>
-        <span>TARGET {(1000 / previewSettings.fpsCap).toFixed(1)}MS</span>
-        <span>DRAW INTERVAL {previewDiagnostics.frameTimeMs.toFixed(1)}MS</span>
-        <span>PACING {getFramePacingStatus(previewDiagnostics.frameTimeMs, 1000 / previewSettings.fpsCap, previewDiagnostics.timingValidity).toUpperCase()}</span>
-        <span>GEN {rendererTiming.durationMs.toFixed(1)}MS</span>
-        <span>EL {geometrySummary.elementCount}</span>
-        <span>PTS {geometrySummary.pointCount}</span>
-        <span>GEOMETRY {geometryRegenerated ? "YES" : "NO"}</span>
-        <span>SUBSTRATE {substrateRebuilt ? "YES" : "NO"}</span>
-        <span>DEBUG {debugRegenerated ? "YES" : "NO"}</span>
-        <span>CLOCK {previewDiagnostics.clockState.toUpperCase()}</span>
-        <span>BACKEND {previewBackend.toUpperCase()}</span>
-        <span>CANVAS {previewBackend === "canvas-2d" ? canvasSample?.drawTimeMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>
-        <span>DRAW ACTUAL {previewBackend === "canvas-2d" ? canvasSample?.actualDrawIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>
-        <span>DIAG UPDATE {previewBackend === "canvas-2d" ? canvasSample?.diagnosticsUpdateIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>
-        <span>SVG DOM {previewBackend === "svg-dom" ? geometrySummary.elementCount : 0}</span>
-        {previewBackend === "svg-dom" && geometrySummary.elementCount >= 500 && <span>SVG DEBUG / SLOW</span>}
-        <span>CLIP {previewBackend === "canvas-2d" && canvasSample?.clippingActive ? "ACTIVE" : "SVG"}</span>
-        <span>SVG FALLBACK {state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom" ? "ACTIVE" : "NO"}</span>
-        {previewDiagnostics.timingValidity !== "valid" && <span>TIMING {previewDiagnostics.timingValidity.toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>CAP {previewSettings.fpsCap}</span>}
+        {diagnosticsExpanded && <span>TARGET {(1000 / previewSettings.fpsCap).toFixed(1)}MS</span>}
+        {diagnosticsExpanded && <span>DRAW INTERVAL {previewDiagnostics.frameTimeMs.toFixed(1)}MS</span>}
+        {diagnosticsExpanded && <span>PACING {getFramePacingStatus(previewDiagnostics.frameTimeMs, 1000 / previewSettings.fpsCap, previewDiagnostics.timingValidity).toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>GEN {rendererTiming.durationMs.toFixed(1)}MS</span>}
+        {diagnosticsExpanded && <span>EL {geometrySummary.elementCount}</span>}
+        {diagnosticsExpanded && <span>PTS {geometrySummary.pointCount}</span>}
+        {diagnosticsExpanded && <span>GEOMETRY {geometryRegenerated ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && <span>SUBSTRATE {substrateRebuilt ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && <span>DEBUG {debugRegenerated ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && <span>CLOCK {previewDiagnostics.clockState.toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>BACKEND {previewBackend.toUpperCase()}</span>}
+        {diagnosticsExpanded && <span>CANVAS {previewBackend === "canvas-2d" ? canvasSample?.drawTimeMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>}
+        {diagnosticsExpanded && <span>DRAW ACTUAL {previewBackend === "canvas-2d" ? canvasSample?.actualDrawIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>}
+        {diagnosticsExpanded && <span>DIAG UPDATE {previewBackend === "canvas-2d" ? canvasSample?.diagnosticsUpdateIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>}
+        {diagnosticsExpanded && <span>SVG DOM {previewBackend === "svg-dom" ? geometrySummary.elementCount : 0}</span>}
+        {(diagnosticsExpanded || (previewBackend === "svg-dom" && geometrySummary.elementCount >= 500)) && previewBackend === "svg-dom" && geometrySummary.elementCount >= 500 && <span>SVG DEBUG / SLOW</span>}
+        {diagnosticsExpanded && <span>CLIP {previewBackend === "canvas-2d" && canvasSample?.clippingActive ? "ACTIVE" : "SVG"}</span>}
+        {(diagnosticsExpanded || (state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom")) && <span>SVG FALLBACK {state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom" ? "ACTIVE" : "NO"}</span>}
+        {(diagnosticsExpanded || previewDiagnostics.timingValidity !== "valid") && previewDiagnostics.timingValidity !== "valid" && <span>TIMING {previewDiagnostics.timingValidity.toUpperCase()}</span>}
       </div>
       {exportWarnings.length > 0 && <div className="export-warnings"><strong>EXPORT CHECK</strong> {exportWarnings.join(" ")}</div>}
       {performanceWarnings.length > 0 && <div className="performance-warnings"><strong>PERFORMANCE</strong> {performanceWarnings.join(" ")}</div>}

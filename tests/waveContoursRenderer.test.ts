@@ -184,7 +184,7 @@ describe("Wave Contours renderer", () => {
 
   it("exports parseable vector-only SVG", () => {
     const svg = createSvg(state, context, context.textGeometry);
-    expect(validateSvgReload(svg).valid).toBe(true);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
     expect(svg).toContain("<polyline");
     expect(svg).not.toMatch(/<image|<canvas|data:image/i);
   });

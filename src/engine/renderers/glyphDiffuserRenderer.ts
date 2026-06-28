@@ -40,8 +40,11 @@ export const glyphDiffuserRenderer: VectorRenderer = {
   generateGeometry(state, context) {
     const substrate = context.substrateData;
     const field = context.glyphField ?? buildCompositeWaveField(state, context);
+    if (!state.emitter.enabled) {
+      return { id: "glyph-diffuser", geometries: [], diagnostics: fallbackDiagnostics("Glyph Diffuser requires an enabled glyph emitter.") };
+    }
     if (!substrate || !field) {
-      return { id: "glyph-diffuser", geometries: [], diagnostics: fallbackDiagnostics("Glyph Diffuser requires an enabled glyph emitter and non-empty substrate.") };
+      return { id: "glyph-diffuser", geometries: [], diagnostics: fallbackDiagnostics("Glyph Diffuser requires a non-empty substrate.") };
     }
     const started = performance.now();
     const random = createSeededRandom(state.seed);

@@ -38,6 +38,7 @@ export default function App() {
   const [loadedFont, setLoadedFont] = useState<LoadedFont | null>(null);
   const [canvasSample, setCanvasSample] = useState<CanvasPreviewSample | null>(null);
   const [canvasFailed, setCanvasFailed] = useState(false);
+  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
@@ -264,9 +265,12 @@ export default function App() {
           previewSettings={previewSettings}
           onPreviewSettingsChange={setPreviewSettings}
           emitterGlyphs={emitterGlyphs}
+          diagnosticsExpanded={diagnosticsExpanded}
+          onDiagnosticsExpandedChange={setDiagnosticsExpanded}
         />
         <section className="viewport-shell">
-          <Viewport
+          <div className="stage-frame">
+            <Viewport
             state={state}
             context={renderContext}
             geometry={geometry}
@@ -284,7 +288,9 @@ export default function App() {
             canvasSample={canvasSample}
             onCanvasSample={setCanvasSample}
             onCanvasFailure={handleCanvasFailure}
+            diagnosticsExpanded={diagnosticsExpanded}
           />
+          </div>
           <div className="transport">
             <button className="play" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => setPlaying(!playing)}>{playing ? "Ⅱ" : "▶"}</button>
             <button onClick={reset}>Reset</button>

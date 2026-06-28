@@ -3,14 +3,14 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
-  it("migrates version 1 projects to version 4", () => {
+  it("migrates version 1 projects to version 5", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(4);
+    expect(result.project.version).toBe(5);
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 4.");
+    expect(result.warnings).toContain("Project was migrated to schema version 5.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -19,7 +19,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(4);
+    expect(result.project.version).toBe(5);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });

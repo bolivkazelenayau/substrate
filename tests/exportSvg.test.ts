@@ -63,7 +63,7 @@ describe("SVG export", () => {
       sourceText: "TYPE",
       substrateType: "glyph-paths",
       font: { family: "Basic-Regular", fileName: "Basic-Regular.ttf" },
-      project: { version: 4, text: "TYPE" },
+      project: { version: 5, text: "TYPE" },
     });
     expect(metadata.exportTimestamp).toBeTypeOf("string");
     expect(getSvgDiagnostics(svg)).toMatchObject({
