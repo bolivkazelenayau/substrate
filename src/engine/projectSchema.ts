@@ -1,0 +1,146 @@
+import { baseState, defaultDebugSettings, presetIds } from "./presets";
+import type { ExportFrameMode, ExportMode, FontMetadata, ProjectState, RendererId } from "../types";
+
+type UnknownRecord = Record<string, unknown>;
+
+const rendererIds: RendererId[] = ["flow", "ripple", "dots", "sdf-flow", "sdf-streamlines", "sdf-contours", "sdf-halftone", "wave-contours", "glyph-diffuser"];
+const exportModes: ExportMode[] = ["artwork", "editable"];
+const exportFrameModes: ExportFrameMode[] = ["current", "time-zero"];
+const substrateDebugModes = ["none", "glyph-outlines", "mask", "edge", "distance", "gradient"] as const;
+const substrateQualities = ["low", "medium", "high", "ultra"] as const;
+
+const isRecord = (value: unknown): value is UnknownRecord => typeof value === "object" && value !== null && !Array.isArray(value);
+const clamp = (value: unknown, fallback: number, min: number, max: number, integer = false) => {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+  const clamped = Math.min(max, Math.max(min, numeric));
+  return integer ? Math.round(clamped) : clamped;
+};
+const enumValue = <T extends string>(value: unknown, values: readonly T[], fallback: T): T =>
+  typeof value === "string" && values.includes(value as T) ? value as T : fallback;
+
+export interface ProjectValidationResult {
+  project: ProjectState;
+  warnings: string[];
+}
+
+export function migrateProject(input: unknown): UnknownRecord {
+  if (!isRecord(input)) throw new Error("Project must be a JSON object.");
+  const version = typeof input.version === "number" ? input.version : 1;
+  if (version > 4) throw new Error(`Project version ${version} is newer than this app supports.`);
+  if (version <= 3) {
+    return {
+      ...input,
+      version: 4,
+      exportFrameMode: input.exportFrameMode ?? "current",
+      debug: { ...defaultDebugSettings, ...(isRecord(input.debug) ? input.debug : {}) },
+      font: version <= 2 ? null : input.font,
+      emitter: baseState.emitter,
+      waveContourMode: "continuous",
+      waveDotSpacing: 11,
+      waveDotRadius: 1.8,
+    };
+  }
+  return input;
+}
+
+export function validateProject(input: unknown): ProjectValidationResult {
+  const originalVersion = isRecord(input) && typeof input.version === "number" ? input.version : 1;
+  const source = migrateProject(input);
+  const warnings: string[] = [];
+
+  if (source.renderer !== undefined && !rendererIds.includes(source.renderer as RendererId)) {
+    throw new Error(`Unknown renderer "${String(source.renderer)}".`);
+  }
+  if (source.exportMode !== undefined && !exportModes.includes(source.exportMode as ExportMode)) {
+    throw new Error(`Unknown export mode "${String(source.exportMode)}".`);
+  }
+
+  const debugSource = isRecord(source.debug) ? source.debug : {};
+  const emitterSource = isRecord(source.emitter) ? source.emitter : {};
+  const fontSource = isRecord(source.font) ? source.font : null;
+  const font: FontMetadata | null = fontSource
+    && typeof fontSource.family === "string"
+    && typeof fontSource.fileName === "string"
+    && typeof fontSource.unitsPerEm === "number"
+    ? {
+        family: fontSource.family,
+        fullName: typeof fontSource.fullName === "string" ? fontSource.fullName : fontSource.family,
+        fileName: fontSource.fileName,
+        unitsPerEm: clamp(fontSource.unitsPerEm, 1000, 16, 16384, true),
+        ascender: clamp(fontSource.ascender, 800, -32768, 32767),
+        descender: clamp(fontSource.descender, -200, -32768, 32767),
+      }
+    : null;
+  const preset = source.preset === undefined
+    ? baseState.preset
+    : enumValue(source.preset, presetIds, "Custom");
+  const project: ProjectState = {
+    version: 4,
+    text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
+    fontSize: clamp(source.fontSize, baseState.fontSize, 64, 220),
+    tracking: clamp(source.tracking, baseState.tracking, -10, 18),
+    renderer: enumValue(source.renderer, rendererIds, baseState.renderer),
+    seed: clamp(source.seed, baseState.seed, 0, 999999, true),
+    density: clamp(source.density, baseState.density, 10, 80),
+    amplitude: clamp(source.amplitude, baseState.amplitude, 2, 44),
+    frequency: clamp(source.frequency, baseState.frequency, 6, 34),
+    turbulence: clamp(source.turbulence, baseState.turbulence, 0, 100),
+    edgeInfluence: clamp(source.edgeInfluence, baseState.edgeInfluence, 0, 100),
+    exportMode: enumValue(source.exportMode, exportModes, baseState.exportMode),
+    exportFrameMode: enumValue(source.exportFrameMode, exportFrameModes, baseState.exportFrameMode),
+    precision: clamp(source.precision, baseState.precision, 0, 3, true),
+    maxNodes: clamp(source.maxNodes, baseState.maxNodes, 400, 5000, true),
+    substrateQuality: enumValue(source.substrateQuality, substrateQualities, baseState.substrateQuality),
+    preset,
+    emitter: {
+      id: typeof emitterSource.id === "string" ? emitterSource.id.slice(0, 64) : baseState.emitter.id,
+      glyphId: typeof emitterSource.glyphId === "string" ? emitterSource.glyphId.slice(0, 128) : null,
+      enabled: typeof emitterSource.enabled === "boolean" ? emitterSource.enabled : baseState.emitter.enabled,
+      sourceMode: enumValue(emitterSource.sourceMode, ["center", "centroid", "counter-center", "custom"], baseState.emitter.sourceMode),
+      fieldType: "radial-wave",
+      amplitude: clamp(emitterSource.amplitude, baseState.emitter.amplitude, 0, 4),
+      frequency: clamp(emitterSource.frequency, baseState.emitter.frequency, 0.005, 0.5),
+      phase: clamp(emitterSource.phase, baseState.emitter.phase, -Math.PI * 4, Math.PI * 4),
+      radius: clamp(emitterSource.radius, baseState.emitter.radius, 20, 1400),
+      falloff: enumValue(emitterSource.falloff, ["smoothstep", "gaussian", "linear"], baseState.emitter.falloff),
+      selfInfluence: clamp(emitterSource.selfInfluence, baseState.emitter.selfInfluence, 0, 3),
+      neighborInfluence: clamp(emitterSource.neighborInfluence, baseState.emitter.neighborInfluence, 0, 3),
+      blendMode: enumValue(emitterSource.blendMode, ["add", "max"], baseState.emitter.blendMode),
+      customX: clamp(emitterSource.customX, baseState.emitter.customX, 0, 1200),
+      customY: clamp(emitterSource.customY, baseState.emitter.customY, 0, 720),
+    },
+    waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
+    waveDotSpacing: clamp(source.waveDotSpacing, baseState.waveDotSpacing, 3, 40),
+    waveDotRadius: clamp(source.waveDotRadius, baseState.waveDotRadius, 0.4, 8),
+    diffuserDomain: enumValue(source.diffuserDomain, ["inside-text", "halo", "text-halo"], baseState.diffuserDomain),
+    diffuserComposition: enumValue(source.diffuserComposition, ["clipped", "behind-text", "through-text", "text-reactive", "edge-eroded"], baseState.diffuserComposition),
+    diffuserDotRadius: clamp(source.diffuserDotRadius, baseState.diffuserDotRadius, 0.4, 8),
+    diffuserRingContrast: clamp(source.diffuserRingContrast, baseState.diffuserRingContrast, 0, 1),
+    diffuserHaloPadding: clamp(source.diffuserHaloPadding, baseState.diffuserHaloPadding, 0, 400),
+    glyphFieldMode: enumValue(source.glyphFieldMode, ["off", "subtle", "strong"], baseState.glyphFieldMode),
+    glyphFieldInfluence: clamp(source.glyphFieldInfluence, baseState.glyphFieldInfluence, 0, 100),
+    glyphFieldDisplacement: clamp(source.glyphFieldDisplacement, baseState.glyphFieldDisplacement, 0, 40),
+    glyphFieldDensity: clamp(source.glyphFieldDensity, baseState.glyphFieldDensity, 0, 100),
+    glyphFieldRadius: clamp(source.glyphFieldRadius, baseState.glyphFieldRadius, 0, 100),
+    glyphFieldOpacity: clamp(source.glyphFieldOpacity, baseState.glyphFieldOpacity, 0, 100),
+    debug: {
+      substrateMode: enumValue(debugSource.substrateMode, substrateDebugModes, "none"),
+      maskBounds: typeof debugSource.maskBounds === "boolean" ? debugSource.maskBounds : defaultDebugSettings.maskBounds,
+      glyphOutlines: typeof debugSource.glyphOutlines === "boolean" ? debugSource.glyphOutlines : defaultDebugSettings.glyphOutlines,
+      glyphBounds: typeof debugSource.glyphBounds === "boolean" ? debugSource.glyphBounds : defaultDebugSettings.glyphBounds,
+      baseline: typeof debugSource.baseline === "boolean" ? debugSource.baseline : defaultDebugSettings.baseline,
+      glyphOrigins: typeof debugSource.glyphOrigins === "boolean" ? debugSource.glyphOrigins : defaultDebugSettings.glyphOrigins,
+      markOrigins: typeof debugSource.markOrigins === "boolean" ? debugSource.markOrigins : defaultDebugSettings.markOrigins,
+      emitter: typeof debugSource.emitter === "boolean" ? debugSource.emitter : defaultDebugSettings.emitter,
+      waveField: typeof debugSource.waveField === "boolean" ? debugSource.waveField : defaultDebugSettings.waveField,
+      markCount: typeof debugSource.markCount === "boolean" ? debugSource.markCount : defaultDebugSettings.markCount,
+      frameTime: typeof debugSource.frameTime === "boolean" ? debugSource.frameTime : defaultDebugSettings.frameTime,
+      costEstimate: typeof debugSource.costEstimate === "boolean" ? debugSource.costEstimate : defaultDebugSettings.costEstimate,
+    },
+    font,
+  };
+
+  if (originalVersion !== 4) warnings.push("Project was migrated to schema version 4.");
+  if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
+  return { project, warnings };
+}
