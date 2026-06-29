@@ -86,7 +86,7 @@ describe("SVG export", () => {
     const metadata = JSON.parse(document.querySelector("metadata")!.textContent!);
     expect(metadata).toMatchObject({
       appName: "SUBSTRATE",
-      appVersion: "0.16.0",
+      appVersion: "0.17.0",
       renderer: "Flow lines",
       exportMode: "artwork",
       seed: state.seed,

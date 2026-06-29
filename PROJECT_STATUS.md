@@ -1,12 +1,12 @@
 # SUBSTRATE - Implementation Status
 
-Updated for the v0.17 Multi-Emitter + Safe Typography release candidate.
+Updated for the v0.17 Multi-Emitter + Safe Typography release.
 
 ## Release state
 
-- Target release: `0.17.0`
+- Current release: `0.17.0`
 - Project schema: `6`
-- Package/app metadata remains `0.16.0` until final manual visual QA and release versioning.
+- Package, app, and exported SVG metadata report `0.17.0`.
 
 ## v0.17 Multi-Emitter + Safe Typography
 
