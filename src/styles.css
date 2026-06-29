@@ -94,6 +94,20 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .control-warning button:hover { background: #eaff70; }
 
 .emitter-controls, .control-group { margin-top: 24px; padding-top: 16px; border-top: 1px dashed var(--line); transition: opacity 150ms ease-out; }
+.emitter-editor { margin-top: 16px; padding-top: 12px; }
+.emitter-editor .accordion-content { display: grid; gap: 10px; }
+.emitter-list { display: grid; gap: 6px; }
+.emitter-row { border: 1px solid var(--line); padding: 7px; background: #151512; }
+.emitter-row.is-disabled { opacity: 0.52; }
+.emitter-row-head { display: grid; grid-template-columns: 34px minmax(0, 1fr) 28px; gap: 6px; align-items: center; }
+.emitter-row-head select { min-width: 0; width: 100%; }
+.emitter-enable { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.emitter-enable input { margin: 0; }
+.emitter-detail-toggle { min-width: 28px; padding: 5px; font-size: 13px; line-height: 1; }
+.emitter-row-details { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.emitter-row-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.emitter-row-actions button, .emitter-add { width: 100%; }
+.emitter-inline-warning { display: block; color: var(--accent); line-height: 1.35; }
 .control-group.nested-group { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
 .control-group.disabled-group { opacity: 0.35; }
 .control-group.disabled-group .section-subheading { color: var(--muted); }

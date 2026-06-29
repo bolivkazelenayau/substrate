@@ -100,6 +100,33 @@ describe("SDF Contours renderer", () => {
     expect(modulated.diagnostics).toMatchObject({ glyphFieldEnabled: true, glyphFieldMode: "strong" });
   });
 
+  it("preserves single-mode modulation and responds to multiple shared-field sources", () => {
+    const renderer = getRenderer("sdf-contours");
+    const enabled = {
+      ...state,
+      emitter: { ...state.emitter, enabled: true },
+      glyphFieldMode: "strong" as const,
+      glyphFieldInfluence: 100,
+      glyphFieldDisplacement: 28,
+    };
+    const legacy = renderer.generateGeometry(enabled, context);
+    expect(renderer.generateGeometry({
+      ...enabled,
+      emitterMode: "single",
+      emitters: [{ ...enabled.emitters[0], phaseOffset: 2, weight: 0.2 }],
+    }, context).geometries).toEqual(legacy.geometries);
+    const first = { ...enabled.emitters[0], id: "first", glyphId: "auto-first" };
+    const one = renderer.generateGeometry({ ...enabled, emitterMode: "multiple", emitters: [first] }, context);
+    const multipleState = {
+      ...enabled,
+      emitterMode: "multiple" as const,
+      emitters: [first, { ...first, id: "last", glyphId: "auto-last", phaseOffset: Math.PI / 2 }],
+    };
+    const multiple = renderer.generateGeometry(multipleState, context);
+    expect(multiple.geometries).not.toEqual(one.geometries);
+    expect(renderer.generateGeometry(multipleState, context).geometries).toEqual(multiple.geometries);
+  });
+
   it("enforces maxNodes against contour point output", () => {
     const group = getRenderer("sdf-contours").generateGeometry({ ...state, maxNodes: 75 }, context);
     expect(geometryNodeCost(group)).toBeLessThanOrEqual(75);

@@ -68,66 +68,72 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
 
   useEffect(() => {
     if (lastEnqueuedInput.current === input) return;
-    lastEnqueuedInput.current = input;
-    const requestId = ++latestRequest.current;
-    const schedule = scheduler.snapshot();
-    setBackendState((current) => ({
-      data: current.data,
-      error: null,
-      status: {
-        ...current.status,
-        phase: "building",
-        requestId,
-        requestedBackend: "cpu-worker",
-        activeBackend: workerBackend.available ? "cpu-worker" : "cpu-main",
-        workerCapability: workerBackend.capability,
-        fallbackCode: workerBackend.available ? null : workerBackend.capability?.failureCode ?? "worker-unavailable",
-        fallbackReason: workerBackend.available ? null : workerBackend.availabilityReason,
-        timing: null,
-        ...schedule,
-        latestRequestedId: requestId,
-      },
-    }));
+    
+    const executeSchedule = () => {
+      lastEnqueuedInput.current = input;
+      const requestId = ++latestRequest.current;
+      const schedule = scheduler.snapshot();
+      setBackendState((current) => ({
+        data: current.data,
+        error: null,
+        status: {
+          ...current.status,
+          phase: "building",
+          requestId,
+          requestedBackend: "cpu-worker",
+          activeBackend: workerBackend.available ? "cpu-worker" : "cpu-main",
+          workerCapability: workerBackend.capability,
+          fallbackCode: workerBackend.available ? null : workerBackend.capability?.failureCode ?? "worker-unavailable",
+          fallbackReason: workerBackend.available ? null : workerBackend.availabilityReason,
+          timing: null,
+          ...schedule,
+          latestRequestedId: requestId,
+        },
+      }));
 
-    scheduler.schedule({
-      id: requestId,
-      input,
-      run: (nextInput) => computeSubstrateWithFallback(workerBackend, cpuMainSubstrateBackend, nextInput),
-      complete: ({ result, fallbackCode, fallbackReason }, stale) => {
-        if (!mounted.current || stale || latestRequest.current !== requestId) return;
-        const latestSchedule = scheduler.snapshot();
-        setBackendState({
-          data: result.data,
-          error: result.error,
-          status: {
-            phase: result.error ? "error" : fallbackReason ? "fallback" : "ready",
-            requestId,
-            requestedBackend: "cpu-worker",
-            activeBackend: result.backend,
-            workerCapability: workerBackend.capability,
-            fallbackCode,
-            fallbackReason,
-            timing: result.timing,
-            ...latestSchedule,
-          },
-        });
-      },
-      fail: (error, stale) => {
-        if (!mounted.current || stale || latestRequest.current !== requestId) return;
-        const latestSchedule = scheduler.snapshot();
-        setBackendState((current) => ({
-          data: current.data,
-          error: error instanceof Error ? error.message : "Substrate build failed.",
-          status: {
-            ...current.status,
-            phase: "error",
-            requestId,
-            timing: null,
-            ...latestSchedule,
-          },
-        }));
-      },
-    });
+      scheduler.schedule({
+        id: requestId,
+        input,
+        run: (nextInput) => computeSubstrateWithFallback(workerBackend, cpuMainSubstrateBackend, nextInput),
+        complete: ({ result, fallbackCode, fallbackReason }, stale) => {
+          if (!mounted.current || stale || latestRequest.current !== requestId) return;
+          const latestSchedule = scheduler.snapshot();
+          setBackendState({
+            data: result.data,
+            error: result.error,
+            status: {
+              phase: result.error ? "error" : fallbackReason ? "fallback" : "ready",
+              requestId,
+              requestedBackend: "cpu-worker",
+              activeBackend: result.backend,
+              workerCapability: workerBackend.capability,
+              fallbackCode,
+              fallbackReason,
+              timing: result.timing,
+              ...latestSchedule,
+            },
+          });
+        },
+        fail: (error, stale) => {
+          if (!mounted.current || stale || latestRequest.current !== requestId) return;
+          const latestSchedule = scheduler.snapshot();
+          setBackendState((current) => ({
+            data: current.data,
+            error: error instanceof Error ? error.message : "Substrate build failed.",
+            status: {
+              ...current.status,
+              phase: "error",
+              requestId,
+              timing: null,
+              ...latestSchedule,
+            },
+          }));
+        },
+      });
+    };
+
+    const timerId = setTimeout(executeSchedule, 50);
+    return () => clearTimeout(timerId);
   }, [input, scheduler, workerBackend]);
 
   useEffect(() => {

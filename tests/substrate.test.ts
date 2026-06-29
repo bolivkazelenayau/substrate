@@ -123,6 +123,38 @@ describe("raster mask, edge map, and signed distance substrate", () => {
     expect(Array.from(result.data.distance.data).every(Number.isFinite)).toBe(true);
   });
 
+  it("moves native fallback rasterization through the shared text baseline", () => {
+    const buildNative = (textOffsetY: number) => {
+      const state = { ...baseState, text: "TYPE", textOffsetY };
+      const layout = getTextLayout(state, false);
+      return buildSubstrate({
+        sourceText: state.text,
+        textGeometry: null,
+        fontSize: state.fontSize,
+        tracking: state.tracking,
+        fontFamily: layout.fontFamily,
+        fontWeight: layout.fontWeight,
+        baselineY: layout.baselineY,
+        textX: layout.x,
+        kerningMode: state.kerningMode,
+        resolution,
+        bounds: null,
+      }, canvasFactory).data.mask;
+    };
+    const centerOfMassY = (data: Float32Array) => {
+      let weightedY = 0;
+      let total = 0;
+      data.forEach((value, index) => {
+        weightedY += Math.floor(index / resolution.width) * value;
+        total += value;
+      });
+      return weightedY / total;
+    };
+    const baseline = buildNative(0);
+    const shifted = buildNative(40);
+    expect(centerOfMassY(shifted.data)).toBeGreaterThan(centerOfMassY(baseline.data));
+  });
+
   it("defers and caches debug images across animation-only reads", async () => {
     const { data } = glyphSubstrate();
     let canvasCreations = 0;

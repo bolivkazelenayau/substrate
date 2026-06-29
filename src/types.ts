@@ -2,7 +2,7 @@ export type RendererId = "flow" | "ripple" | "dots" | "sdf-flow" | "sdf-streamli
 export type ExportMode = "artwork" | "editable";
 export type ExportFrameMode = "current" | "time-zero";
 export type SubstrateQuality = "low" | "medium" | "high" | "ultra";
-export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Custom";
+export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Custom";
 export type FieldControlId = "density" | "amplitude" | "frequency" | "turbulence" | "edgeInfluence" | "maxNodes";
 export type PreviewFpsCap = 24 | 30 | 60;
 export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | "custom";
@@ -15,6 +15,8 @@ export type DiffuserDomainMode = "inside-text" | "halo" | "text-halo";
 export type DiffuserCompositionMode = "clipped" | "behind-text" | "through-text" | "text-reactive" | "edge-eroded";
 export type OverlayMode = "solid" | "outline" | "knockout" | "hidden" | "warped-outline";
 export type GlyphFieldModulationMode = "off" | "subtle" | "strong";
+export type KerningMode = "font" | "none";
+export type TextAlign = "left" | "center" | "right";
 
 export interface GlyphEmitter {
   id: string;
@@ -84,10 +86,16 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 5;
+  version: 6;
   text: string;
   fontSize: number;
   tracking: number;
+  kerningMode: KerningMode;
+  kerningStrength: number;
+  opticalSpacing: boolean;
+  opticalSpacingStrength: number;
+  textAlign: TextAlign;
+  textOffsetY: number;
   renderer: RendererId;
   seed: number;
   density: number;

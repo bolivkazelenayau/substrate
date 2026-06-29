@@ -1,15 +1,47 @@
 # SUBSTRATE - Implementation Status
 
-Updated for Sonic Outline Warp.## Current Version: 0.16.1
+Updated for the v0.17 Multi-Emitter + Safe Typography release candidate.
+
+## Release state
+
+- Target release: `0.17.0`
+- Project schema: `6`
+- Package/app metadata remains `0.16.0` until final manual visual QA and release versioning.
+
+## v0.17 Multi-Emitter + Safe Typography
+
+The legacy `emitter` object remains the shared field configuration and the source used by `emitterMode: "single"`. Every pre-v0.17 preset explicitly selects single mode, so applying it after a multi-emitter preset restores its historical effective state. `emitterMode: "multiple"` is opt-in and accepts at most eight rows, resolving enabled valid rows into glyph, anchor, weight, phase offset, and radius multiplier data.
+
+The memoized shared field is consumed by Glyph Diffuser, Wave Contours, SDF Halftone/Contours/Streamlines glyph modulation, and Glyph Diffuser warped outlines where those modes apply. Multi-source composition is deterministic and bounded; disabled or invalid explicit rows are skipped.
+
+The multi-emitter presets are:
+
+- **Sonic Interference**: middle, first, and last automatic sources with phase-separated weights.
+- **Counter Resonance**: prefers a counter-bearing glyph and adds a middle response.
+- **Split Field**: asymmetric first/last sources with different weights, phases, and radii.
+
+Automatic selectors degrade without throwing. Short text may resolve multiple rows to the same available glyph. Empty or whitespace-only text produces no active sources and a zero-safe field. Counter selection falls back to the middle eligible glyph when no supported counter glyph exists. Without a parsed font, deterministic approximate native character cells provide anchors; they do not perform font shaping or topology analysis.
+
+Typography state now includes font/disabled kerning, kerning strength, optional optical spacing, left/center/right alignment, and bounded vertical offset. Parsed OpenType layout supports scaled kerning and optical compensation. Native fallback and Editable Text SVG preserve only attributes representable by one native `<text>` element.
+
+Export limitations:
+
+- Editable Text SVG remains one native `<text>` element.
+- True glyph deformation, outline warp, and falloff-deformed outline geometry are available only in Final Artwork SVG with parsed outlines.
+- Scaled kerning and optical spacing cannot be represented faithfully in native Editable Text and may not be preserved.
+- `.substrate.json` is the procedural source of truth. Editable Text SVG is an interoperable text export, not a lossless project format.
+- Final Artwork remains vector-only; no field raster, canvas, PNG, or JPEG is serialized.
 
 ### Changes in v0.16.1
+- **Performance Quick Wins (Phase 1)**: Debounced synchronous `costEstimate` generation during slider scrubs, hoisted invariant math out of `glyphDiffuserRenderer` inner loops, and added a 50ms debounce to `SubstrateBuildInput` to prevent stale Web Worker queueing during rapid text edits. Visual output, export semantics, and deterministic seeds remain unchanged.
 - **Visual Design System Pass**: Redesigned the SUBSTRATE UI with a refined dark brutalist/generative instrument aesthetic. Removed unnecessary borders, implemented a structured typography scale with tabular numbers for diagnostics, enforced a consistent 40px hit area for primary controls, and improved the active/hover states with subtle scaling (`scale(0.96)`) and snappy 150ms `ease-out` transitions.
 - **UI Polish: Control Panel Cleanup**: Reorganized the control panel for clarity. Implemented a fixed 100vh workbench layout so the canvas stays locked while controls scroll independently.
 - **Accordion Inspector**: Advanced controls are now cleanly hidden inside accordions, keeping the main flow compact. Inactive renderer-specific sections are delegated to an "Other controls" accordion.
 - **Glyph Diffuser UX**: Fixed the Glyph Diffuser empty state. When disabled, the Emitter accordion now presents a prominent warning callout and action button ("Enable first eligible emitter"), preventing hidden failures.
 
 ### Active Priorities
-1.  **Multi-Emitter (v0.17)**: Introduce an array of glyph emitters to construct complex interference patterns within the distance field.
+
+1. Final manual visual QA for v0.17 across parsed fonts and native fallback.
 
 # 1. Project Overview
 
@@ -114,7 +146,7 @@ The compact shared controls are mode, influence, displacement, density, radius, 
 
 Glyph Diffuser composition now includes through-text, text-reactive edge behavior, and an edge-eroded lighter vector overlay in addition to existing behind-text and clipped modes.
 
-Known limitations: modulation deforms generated marks rather than font outlines; narrow strokes can clamp strong displacement; one emitter is active; native glyph cells and emitter membership remain approximate.
+Known limitations: modulation deforms generated marks rather than font outlines; narrow strokes can clamp strong displacement; native glyph cells and emitter membership remain approximate.
 
 ## v0.13 Glyph Diffuser
 
@@ -134,7 +166,7 @@ The Glyph Ripple and Dotted Diffuser presets demonstrate continuous and dotted o
 
 Final Artwork remains mask-clipped vector SVG; Editable Text remains native SVG text. No field preview raster or canvas is serialized.
 
-Known limitations: centroid and counter centers are bounds-based approximations; source-glyph membership uses glyph bounds; native-text glyph cells do not perform font shaping; contour stitching uses quantized endpoints; blend mode is present for future multiple emitters but has no visible difference with one active emitter.
+Known limitations: centroid and counter centers are bounds-based approximations; source-glyph membership uses glyph bounds; native-text glyph cells do not perform font shaping; contour stitching uses quantized endpoints. The legacy single-emitter path remains available and unchanged.
 
 This remains deterministic static scalar-field rendering. It is not reaction-diffusion, does not retain simulation state, and does not add a persistent particle system. Detailed validation status is recorded in `WAVE_CONTOURS_QA.md`.
 

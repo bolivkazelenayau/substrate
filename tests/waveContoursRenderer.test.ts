@@ -14,6 +14,7 @@ import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyp
 import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
 import type { ProjectState, RenderContext } from "../src/types";
+import { validateProject } from "../src/engine/projectSchema";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
   const canvas = createCanvas(width, height);
@@ -86,6 +87,147 @@ describe("Wave Contours renderer", () => {
     const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
     const other = buildCompositeWaveField({ ...state, emitter: { ...state.emitter, glyphId: glyphs[1].glyphId } }, context)!;
     expect(Array.from(other.data)).not.toEqual(Array.from(first.data));
+  });
+
+  it("keeps legacy single-mode samples and migrated renderer geometry equivalent", () => {
+    const field = buildCompositeWaveField(state, context)!;
+    const representative = Array.from(field.data.keys())
+      .filter((index) => context.substrateData!.mask.data[index] >= 0.45)
+      .filter((_, index, values) => index % Math.max(1, Math.floor(values.length / 12)) === 0)
+      .slice(0, 12);
+    representative.forEach((index) => {
+      const x = index % field.width;
+      const y = Math.floor(index / field.width);
+      const worldX = x / Math.max(1, field.width - 1) * field.viewportWidth;
+      const worldY = y / Math.max(1, field.height - 1) * field.viewportHeight;
+      expect(field.data[index]).toBeCloseTo(
+        getEmitterContributionAtPoint(state, field.sourceGlyph, field.anchor, worldX, worldY),
+        6,
+      );
+    });
+    const migrated = validateProject({ ...state, version: 4 }).project;
+    expect(migrated.emitterMode).toBe("single");
+    expect(Array.from(buildCompositeWaveField(migrated, context)!.data)).toEqual(Array.from(field.data));
+    expect(getRenderer("wave-contours").generateGeometry(migrated, context).geometries)
+      .toEqual(getRenderer("wave-contours").generateGeometry(state, context).geometries);
+  });
+
+  it("matches legacy samples exactly for one unit multi emitter", () => {
+    const legacy = buildCompositeWaveField(state, context)!;
+    const multiple = buildCompositeWaveField({
+      ...state,
+      emitterMode: "multiple",
+      emitters: [{
+        id: "unit",
+        glyphId: legacy.sourceGlyph.glyphId,
+        enabled: true,
+        weight: 1,
+        phaseOffset: 0,
+        radiusMultiplier: 1,
+        label: "Unit",
+      }],
+    }, context)!;
+    expect(Array.from(multiple.data)).toEqual(Array.from(legacy.data));
+    expect(multiple.compositionMode).toBe("add");
+  });
+
+  it("composes multiple emitters and responds deterministically to phase, weight, and radius", () => {
+    const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
+    const unit = {
+      id: "first",
+      glyphId: glyphs[0].glyphId,
+      enabled: true,
+      weight: 1,
+      phaseOffset: 0,
+      radiusMultiplier: 1,
+      label: "First",
+    };
+    const second = { ...unit, id: "last", glyphId: glyphs[glyphs.length - 1].glyphId, label: "Last" };
+    const multiState = { ...state, emitterMode: "multiple" as const, emitters: [unit, second] };
+    const one = buildCompositeWaveField({ ...multiState, emitters: [unit] }, context)!;
+    const two = buildCompositeWaveField(multiState, context)!;
+    const phased = buildCompositeWaveField({
+      ...multiState,
+      emitters: [unit, { ...second, phaseOffset: Math.PI / 2 }],
+    }, context)!;
+    const weighted = buildCompositeWaveField({
+      ...multiState,
+      emitters: [unit, { ...second, weight: 0.5 }],
+    }, context)!;
+    const tighter = buildCompositeWaveField({
+      ...multiState,
+      emitters: [unit, { ...second, radiusMultiplier: 0.5 }],
+    }, context)!;
+    expect(Array.from(two.data)).not.toEqual(Array.from(one.data));
+    expect(Array.from(phased.data)).not.toEqual(Array.from(two.data));
+    expect(Array.from(weighted.data)).not.toEqual(Array.from(two.data));
+    expect(Array.from(tighter.data)).not.toEqual(Array.from(two.data));
+    expect(Array.from(buildCompositeWaveField(multiState, context)!.data)).toEqual(Array.from(two.data));
+  });
+
+  it("normalizes additive sums and ignores disabled or invalid rows", () => {
+    const glyph = getGlyphEmitterMetadata(state, context.textGeometry!)[0];
+    const unit = {
+      id: "unit-1",
+      glyphId: glyph.glyphId,
+      enabled: true,
+      weight: 1,
+      phaseOffset: 0,
+      radiusMultiplier: 1,
+      label: "Unit",
+    };
+    const oneState = { ...state, emitterMode: "multiple" as const, emitters: [unit] };
+    const one = buildCompositeWaveField(oneState, context)!;
+    const doubled = buildCompositeWaveField({
+      ...oneState,
+      emitters: [unit, { ...unit, id: "unit-2" }],
+    }, context)!;
+    expect(doubled.contributionMax).toBeLessThanOrEqual(one.contributionMax * Math.sqrt(2) + 1e-6);
+
+    const ignored = buildCompositeWaveField({
+      ...oneState,
+      emitters: [
+        unit,
+        { ...unit, id: "disabled", enabled: false, phaseOffset: 2 },
+        { ...unit, id: "invalid", glyphId: "removed-glyph", weight: 2 },
+      ],
+    }, context)!;
+    expect(Array.from(ignored.data)).toEqual(Array.from(one.data));
+    expect(ignored.skippedSources.map((source) => source.reason)).toEqual(["disabled", "invalid-glyph"]);
+  });
+
+  it("returns a zero-safe context with no active emitters and finite multi diagnostics", () => {
+    const zero = buildCompositeWaveField({
+      ...state,
+      emitterMode: "multiple",
+      emitters: [{ ...state.emitters[0], enabled: false }],
+    }, context);
+    expect(zero).toBeNull();
+    const zeroContext = createGlyphFieldContext(zero);
+    expect(zeroContext.sampleGlyphField(100, 100)).toBe(0);
+    expect(zeroContext.sampleGlyphFieldGradient(100, 100)).toEqual({ x: 0, y: 0, magnitude: 0, finite: true });
+
+    const field = buildCompositeWaveField({
+      ...state,
+      emitterMode: "multiple",
+      emitters: [
+        { ...state.emitters[0], id: "active", glyphId: "auto-first", label: "Active" },
+        { ...state.emitters[0], id: "disabled", enabled: false, label: "Disabled" },
+      ],
+    }, context)!;
+    const diagnostics = createGlyphFieldContext(field).glyphFieldDiagnostics!;
+    expect(diagnostics).toMatchObject({
+      activeEmitterCount: 1,
+      skippedEmitterCount: 1,
+      selectedGlyphLabels: [expect.any(String)],
+      compositionMode: "add",
+      contributionsFinite: true,
+    });
+    expect(Number.isFinite(diagnostics.contributionAverage)).toBe(true);
+    expect(Number.isFinite(diagnostics.contributionMax)).toBe(true);
+    field.data.forEach((value) => expect(Number.isFinite(value)).toBe(true));
+    const gradient = sampleGlyphFieldGradient(field, field.anchor.x + 8, field.anchor.y + 8);
+    expect([gradient.x, gradient.y, gradient.magnitude].every(Number.isFinite)).toBe(true);
   });
 
   it("responds to amplitude, frequency, radius, falloff, and self influence", () => {

@@ -4,6 +4,7 @@ import { getRenderer } from "./renderers";
 import type { GlyphEmitter, ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
 import { glyphModulationCacheKey } from "./controlOwnership";
+import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
 
 const substrateIds = new WeakMap<object, number>();
 let nextSubstrateId = 1;
@@ -45,6 +46,37 @@ function emitterKey(e: GlyphEmitter) {
   ].join("~");
 }
 
+function multiEmitterKey(state: ProjectState, textGeometry: RenderContext["textGeometry"]) {
+  const shared = [
+    state.emitter.enabled ? 1 : 0,
+    state.emitter.sourceMode,
+    state.emitter.amplitude,
+    state.emitter.frequency,
+    state.emitter.phase,
+    state.emitter.radius,
+    state.emitter.falloff,
+    state.emitter.selfInfluence,
+    state.emitter.neighborInfluence,
+    state.emitter.customX,
+    state.emitter.customY,
+  ].join("~");
+  if (!state.emitter.enabled) return `multiple~${shared}~${state.fieldBlendMode}~inactive`;
+  const resolved = resolveGlyphEmitterSources(state, textGeometry ?? null);
+  const active = resolved.sources.map((source) => [
+    source.glyphId,
+    source.weight,
+    source.phaseOffset,
+    source.radiusMultiplier,
+  ].join("~")).join("^");
+  return `multiple~${shared}~${state.fieldBlendMode}~${active}`;
+}
+
+export function emitterGeometryKey(state: ProjectState, textGeometry: RenderContext["textGeometry"]) {
+  return state.emitterMode === "single"
+    ? `single~${emitterKey(state.emitter)}`
+    : multiEmitterKey(state, textGeometry);
+}
+
 function cacheKey(state: ProjectState, context: RenderContext) {
   const renderer = getRenderer(state.renderer);
   const substrate = renderer.usesSubstrate ? substrateKey(context) : "unused";
@@ -66,7 +98,7 @@ function cacheKey(state: ProjectState, context: RenderContext) {
     state.maxNodes,
     state.seed,
     state.substrateQuality,
-    emitterKey(state.emitter),
+    emitterGeometryKey(state, context.textGeometry),
     state.waveContourMode,
     state.waveDotSpacing,
     state.waveDotRadius,

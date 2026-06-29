@@ -13,7 +13,7 @@ import { getTextBounds, getTextLayout } from "./engine/textLayout";
 import { VIEWPORT } from "./engine/constants";
 import { useAnimationClock } from "./hooks/useAnimationClock";
 import type { PreviewDiagnostics, PreviewSettings, ProjectState, RenderContext } from "./types";
-import { generateRendererGeometry, summarizeGeometry } from "./engine/rendererRuntime";
+import { emitterGeometryKey, generateRendererGeometry, summarizeGeometry } from "./engine/rendererRuntime";
 import { getExportBudgetWarnings } from "./engine/exportBudget";
 import { getSubstratePerformanceWarnings, measure } from "./engine/performance";
 import { useSubstrateBackend } from "./hooks/useSubstrateBackend";
@@ -39,6 +39,7 @@ export default function App() {
   const [canvasSample, setCanvasSample] = useState<CanvasPreviewSample | null>(null);
   const [canvasFailed, setCanvasFailed] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
@@ -53,7 +54,7 @@ export default function App() {
   );
   const textGeometryBuild = useMemo(
     () => measure(() => loadedFont ? layoutGlyphs(state, loadedFont) : null),
-    [state.text, state.fontSize, state.tracking, state.precision, loadedFont],
+    [state.text, state.fontSize, state.tracking, state.precision, state.kerningMode, state.kerningStrength, state.opticalSpacing, state.opticalSpacingStrength, state.textAlign, state.textOffsetY, loadedFont],
   );
   const textGeometry = textGeometryBuild.value;
   const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state.text, state.fontSize, state.tracking, textGeometry]);
@@ -68,11 +69,13 @@ export default function App() {
       fontWeight: layout.fontWeight,
       baselineY: layout.baselineY,
       textX: layout.x,
+      kerningMode: state.kerningMode,
       resolution: SUBSTRATE_RESOLUTIONS[state.substrateQuality],
       bounds: textGeometry?.bounds ?? getTextBounds(state),
     };
-  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, textGeometry]);
+  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, state.kerningMode, state.textAlign, state.textOffsetY, textGeometry]);
   const substrateBuild = useSubstrateBackend(substrateInput);
+  const emitterFieldKey = emitterGeometryKey(state, textGeometry);
   useEffect(() => setCanvasFailed(false), [state.renderer, previewSettings.backend]);
 
   const randomize = useCallback(() => {
@@ -89,7 +92,7 @@ export default function App() {
       viewport: VIEWPORT,
     };
     return { ...base, ...createGlyphFieldContext(buildCompositeWaveField(state, base)) };
-  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, state.emitter, state.amplitude, state.frequency, textGeometry, substrateBuild.data]);
+  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, emitterFieldKey, state.amplitude, state.frequency, textGeometry, substrateBuild.data]);
   const renderContext: RenderContext = useMemo(() => ({
     ...staticRenderContext,
     ...activeClockContext,
@@ -148,10 +151,17 @@ export default function App() {
     state.outlineWarpMaxDisplacement,
     state.preserveCounters,
   ].join("|");
-  const diagnostics: SvgDiagnostics | null = useMemo(() => {
-    if (!state.debug.costEstimate) return null;
-    const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry);
-    return getSvgDiagnostics(timed.svg, timed.serializationTimeMs);
+  useEffect(() => {
+    if (!state.debug.costEstimate) {
+      setDiagnostics(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry);
+      setDiagnostics(getSvgDiagnostics(timed.svg, timed.serializationTimeMs));
+    }, 200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.debug.costEstimate, estimateGeometry, estimateContext, textGeometry, estimateExportKey]);
   const previewDiagnostics: PreviewDiagnostics = useMemo(() => ({
     estimatedFps: canvasFlowActive && canvasSample ? canvasSample.estimatedFps : clockDiagnostics.estimatedFps,

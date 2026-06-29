@@ -26,14 +26,15 @@ export interface ProjectValidationResult {
 export function migrateProject(input: unknown): UnknownRecord {
   if (!isRecord(input)) throw new Error("Project must be a JSON object.");
   const version = typeof input.version === "number" ? input.version : 1;
-  if (version > 5) throw new Error(`Project version ${version} is newer than this app supports.`);
+  if (version > 6) throw new Error(`Project version ${version} is newer than this app supports.`);
+  let migrated: UnknownRecord = { ...input };
   if (version <= 3) {
-    return {
-      ...input,
+    migrated = {
+      ...migrated,
       version: 4,
-      exportFrameMode: input.exportFrameMode ?? "current",
-      debug: { ...defaultDebugSettings, ...(isRecord(input.debug) ? input.debug : {}) },
-      font: version <= 2 ? null : input.font,
+      exportFrameMode: migrated.exportFrameMode ?? "current",
+      debug: { ...defaultDebugSettings, ...(isRecord(migrated.debug) ? migrated.debug : {}) },
+      font: version <= 2 ? null : migrated.font,
       emitter: baseState.emitter,
       waveContourMode: "continuous",
       waveDotSpacing: 11,
@@ -45,18 +46,54 @@ export function migrateProject(input: unknown): UnknownRecord {
     // (shared params + single source). `emitterMode` defaults to "single" so old
     // projects render identically. One emitter instance is derived from the old
     // emitter's glyphId so switching to "multiple" mode immediately has one entry.
-    const oldEmitter = isRecord(input.emitter) ? input.emitter : {};
+    const oldEmitter = isRecord(migrated.emitter) ? migrated.emitter : {};
     const oldGlyphId = typeof oldEmitter.glyphId === "string" ? oldEmitter.glyphId : null;
     const oldBlendMode = typeof oldEmitter.blendMode === "string" ? oldEmitter.blendMode : baseState.emitter.blendMode;
-    return {
-      ...input,
+    migrated = {
+      ...migrated,
       version: 5,
       emitterMode: "single",
       emitters: [{ id: "emitter-1", glyphId: oldGlyphId, enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Emitter 1" }],
       fieldBlendMode: oldBlendMode === "max" ? "max" : "add",
     };
   }
-  return input;
+  if (version <= 5) {
+    migrated = {
+      ...migrated,
+      version: 6,
+      kerningMode: migrated.kerningMode ?? "font",
+      kerningStrength: migrated.kerningStrength ?? 1,
+      opticalSpacing: migrated.opticalSpacing ?? false,
+      opticalSpacingStrength: migrated.opticalSpacingStrength ?? 0,
+      textAlign: migrated.textAlign ?? "center",
+      textOffsetY: migrated.textOffsetY ?? 0,
+    };
+  }
+  return migrated;
+}
+
+function validateEmitterInstances(value: unknown) {
+  if (!Array.isArray(value)) return baseState.emitters;
+  const usedIds = new Set<string>();
+  const nextId = () => {
+    let suffix = 1;
+    while (usedIds.has(`emitter-${suffix}`)) suffix += 1;
+    return `emitter-${suffix}`;
+  };
+  return value.filter(isRecord).slice(0, 8).map((instance, index) => {
+    const requestedId = typeof instance.id === "string" ? instance.id.trim().slice(0, 64) : "";
+    const id = requestedId && !usedIds.has(requestedId) ? requestedId : nextId();
+    usedIds.add(id);
+    return {
+      id,
+      glyphId: typeof instance.glyphId === "string" ? instance.glyphId.slice(0, 128) : null,
+      enabled: typeof instance.enabled === "boolean" ? instance.enabled : true,
+      weight: clamp(instance.weight, 1, 0, 2),
+      phaseOffset: clamp(instance.phaseOffset, 0, -Math.PI * 4, Math.PI * 4),
+      radiusMultiplier: clamp(instance.radiusMultiplier, 1, 0.25, 2),
+      label: typeof instance.label === "string" ? instance.label.slice(0, 32) : `Emitter ${index + 1}`,
+    };
+  });
 }
 
 export function validateProject(input: unknown): ProjectValidationResult {
@@ -91,10 +128,16 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 5,
+    version: 6,
     text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
     fontSize: clamp(source.fontSize, baseState.fontSize, 64, 220),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
+    kerningMode: enumValue(source.kerningMode, ["font", "none"], baseState.kerningMode),
+    kerningStrength: clamp(source.kerningStrength, baseState.kerningStrength, 0, 2),
+    opticalSpacing: typeof source.opticalSpacing === "boolean" ? source.opticalSpacing : baseState.opticalSpacing,
+    opticalSpacingStrength: clamp(source.opticalSpacingStrength, baseState.opticalSpacingStrength, 0, 1),
+    textAlign: enumValue(source.textAlign, ["left", "center", "right"], baseState.textAlign),
+    textOffsetY: clamp(source.textOffsetY, baseState.textOffsetY, -120, 120),
     renderer: enumValue(source.renderer, rendererIds, baseState.renderer),
     seed: clamp(source.seed, baseState.seed, 0, 999999, true),
     density: clamp(source.density, baseState.density, 10, 80),
@@ -126,17 +169,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
       customY: clamp(emitterSource.customY, baseState.emitter.customY, 0, 720),
     },
     emitterMode: enumValue(source.emitterMode, ["single", "multiple"], baseState.emitterMode),
-    emitters: Array.isArray(source.emitters) && source.emitters.length <= 8
-      ? (source.emitters as unknown[]).filter(isRecord).slice(0, 8).map((instance, index) => ({
-          id: typeof instance.id === "string" ? instance.id.slice(0, 64) : `emitter-${index + 1}`,
-          glyphId: typeof instance.glyphId === "string" ? instance.glyphId.slice(0, 128) : null,
-          enabled: typeof instance.enabled === "boolean" ? instance.enabled : true,
-          weight: clamp(instance.weight, 1, 0, 2),
-          phaseOffset: clamp(instance.phaseOffset, 0, -Math.PI * 4, Math.PI * 4),
-          radiusMultiplier: clamp(instance.radiusMultiplier, 1, 0.25, 2),
-          label: typeof instance.label === "string" ? instance.label.slice(0, 32) : `Emitter ${index + 1}`,
-        }))
-      : baseState.emitters,
+    emitters: validateEmitterInstances(source.emitters),
     fieldBlendMode: enumValue(source.fieldBlendMode, ["add", "max"], baseState.fieldBlendMode),
     waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
     waveDotSpacing: clamp(source.waveDotSpacing, baseState.waveDotSpacing, 3, 40),
@@ -183,7 +216,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     font,
   };
 
-  if (originalVersion < 5) warnings.push("Project was migrated to schema version 5.");
+  if (originalVersion < 6) warnings.push("Project was migrated to schema version 6.");
   if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
   return { project, warnings };
 }

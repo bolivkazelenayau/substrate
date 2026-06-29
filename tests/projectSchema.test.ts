@@ -3,14 +3,14 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
-  it("migrates version 1 projects to version 5", () => {
+  it("migrates version 1 projects to version 6", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(5);
+    expect(result.project.version).toBe(6);
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 5.");
+    expect(result.warnings).toContain("Project was migrated to schema version 6.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -19,7 +19,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(5);
+    expect(result.project.version).toBe(6);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -73,6 +73,59 @@ describe("project schema", () => {
   it("fills missing fields from defaults", () => {
     const { project } = validateProject({ version: 3 });
     expect(project).toEqual(baseState);
+  });
+
+  it("migrates version 5 typography fields to layout-preserving defaults", () => {
+    const { project, warnings } = validateProject({ ...baseState, version: 5 });
+    expect(project).toMatchObject({
+      version: 6,
+      kerningMode: "font",
+      kerningStrength: 1,
+      opticalSpacing: false,
+      opticalSpacingStrength: 0,
+      textAlign: "center",
+      textOffsetY: 0,
+    });
+    expect(warnings).toContain("Project was migrated to schema version 6.");
+  });
+
+  it("validates and clamps typography controls", () => {
+    const { project } = validateProject({
+      ...baseState,
+      kerningMode: "invalid",
+      kerningStrength: 99,
+      opticalSpacing: true,
+      opticalSpacingStrength: -5,
+      textAlign: "justify",
+      textOffsetY: 999,
+    });
+    expect(project).toMatchObject({
+      kerningMode: "font",
+      kerningStrength: 2,
+      opticalSpacing: true,
+      opticalSpacingStrength: 0,
+      textAlign: "center",
+      textOffsetY: 120,
+    });
+  });
+
+  it("bounds emitters and repairs missing or duplicate IDs deterministically", () => {
+    const emitters = Array.from({ length: 10 }, (_, index) => ({
+      id: index < 2 ? "duplicate" : "",
+      glyphId: `glyph-${index}`,
+      enabled: true,
+      weight: 1,
+      phaseOffset: 0,
+      radiusMultiplier: 1,
+      label: `Emitter ${index + 1}`,
+    }));
+    const first = validateProject({ ...baseState, emitters }).project.emitters;
+    const second = validateProject({ ...baseState, emitters }).project.emitters;
+    expect(first).toHaveLength(8);
+    expect(first).toEqual(second);
+    expect(new Set(first.map((emitter) => emitter.id)).size).toBe(8);
+    expect(first[0].id).toBe("duplicate");
+    expect(first[1].id).toBe("emitter-1");
   });
 
   it("fills and validates warped-outline controls", () => {

@@ -96,6 +96,34 @@ describe("SDF Streamlines renderer", () => {
     expect(first.diagnostics).toMatchObject({ glyphFieldEnabled: true, glyphFieldMode: "strong" });
   });
 
+  it("preserves single-mode modulation and responds to multiple shared-field sources", () => {
+    const renderer = getRenderer("sdf-streamlines");
+    const enabled = {
+      ...state,
+      emitter: { ...state.emitter, enabled: true },
+      glyphFieldMode: "strong" as const,
+      glyphFieldInfluence: 100,
+      glyphFieldDisplacement: 30,
+      glyphFieldDensity: 80,
+    };
+    const legacy = renderer.generateGeometry(enabled, context);
+    expect(renderer.generateGeometry({
+      ...enabled,
+      emitterMode: "single",
+      emitters: [{ ...enabled.emitters[0], phaseOffset: 2, weight: 0.2 }],
+    }, context).geometries).toEqual(legacy.geometries);
+    const first = { ...enabled.emitters[0], id: "first", glyphId: "auto-first" };
+    const one = renderer.generateGeometry({ ...enabled, emitterMode: "multiple", emitters: [first] }, context);
+    const multipleState = {
+      ...enabled,
+      emitterMode: "multiple" as const,
+      emitters: [first, { ...first, id: "last", glyphId: "auto-last", phaseOffset: Math.PI / 2 }],
+    };
+    const multiple = renderer.generateGeometry(multipleState, context);
+    expect(multiple.geometries).not.toEqual(one.geometries);
+    expect(renderer.generateGeometry(multipleState, context).geometries).toEqual(multiple.geometries);
+  });
+
   it("returns an explicit empty fallback without substrate", () => {
     const group = getRenderer("sdf-streamlines").generateGeometry(state, { timeMs: 0, frame: 0 });
     expect(group.geometries).toEqual([]);

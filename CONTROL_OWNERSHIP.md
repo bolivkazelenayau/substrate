@@ -2,6 +2,8 @@
 
 SUBSTRATE keeps Glyph Modulation and Outline Warp separate. Outline Warp is not multiplied by Glyph Modulation; this avoids two overlapping displacement controls.
 
+Emitter mode is shared field state rather than renderer-local state. `single` uses the legacy `emitter`; `multiple` resolves up to eight rows from `emitters`. Glyph Diffuser, Wave Contours, applicable SDF glyph modulation, and warped outlines consume the same resolved field.
+
 | Control | Consumer |
 | --- | --- |
 | Glyph Modulation Mode | SDF Halftone, SDF Contours, SDF Streamlines |
@@ -23,6 +25,9 @@ SUBSTRATE keeps Glyph Modulation and Outline Warp separate. Outline Warp is not 
 | Warp Edge Bias | Parsed-font blend between field gradient and SDF normal |
 | Max Displacement | Parsed-font per-point warp clamp |
 | Preserve Counters | Parsed-font counter-contour displacement reduction |
+| Kerning Mode / Strength | Parsed OpenType layout; native Editable Text supports only representable font kerning |
+| Optical Spacing / Strength | Parsed OpenType layout only |
+| Text Alignment / Vertical Offset | Parsed layout, native fallback, preview, masks, and SVG export |
 
 ## Mode-aware UI
 
@@ -34,3 +39,5 @@ SUBSTRATE keeps Glyph Modulation and Outline Warp separate. Outline Warp is not 
 - Outline Warp controls require Glyph Diffuser, `warped-outline`, and loaded parsed `.ttf/.otf` paths. Native SVG text reports a solid fallback.
 
 Inactive control values do not enter the static renderer cache key. Active Outline Warp controls use their own overlay cache key; unrelated debug settings do not invalidate either cache.
+
+Editable Text remains one native SVG `<text>` element. Parsed-only spacing and outline deformation are not serialized as editable glyph geometry; `.substrate.json` retains the complete procedural state.

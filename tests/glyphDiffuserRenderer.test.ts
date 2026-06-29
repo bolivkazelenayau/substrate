@@ -97,6 +97,62 @@ describe("Glyph Diffuser renderer", () => {
     });
   });
 
+  it("preserves single-mode geometry and reacts deterministically to multiple emitters", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const legacy = renderer.generateGeometry(state, context);
+    const ignoredRows = renderer.generateGeometry({
+      ...state,
+      emitterMode: "single",
+      emitters: [
+        { ...state.emitters[0], glyphId: "auto-first", phaseOffset: 2, weight: 0.25 },
+        { ...state.emitters[0], id: "ignored", glyphId: "auto-last" },
+      ],
+    }, context);
+    expect(ignoredRows.geometries).toEqual(legacy.geometries);
+
+    const unit = { ...state.emitters[0], id: "first", glyphId: "auto-first", label: "First" };
+    const multiState = {
+      ...state,
+      diffuserRingContrast: 0,
+      emitterMode: "multiple" as const,
+      emitters: [unit, { ...unit, id: "cancel", phaseOffset: Math.PI }],
+    };
+    const one = renderer.generateGeometry({ ...multiState, emitters: [unit] }, context);
+    const multiple = renderer.generateGeometry(multiState, context);
+    expect(multiple.geometries).not.toEqual(one.geometries);
+    expect(renderer.generateGeometry(multiState, context).geometries).toEqual(multiple.geometries);
+    const svg = createSvg(multiState, context, context.textGeometry, multiple);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
+    expect(svg).not.toMatch(/<image|<canvas|data:image/i);
+  });
+
+  it("preserves single-mode warped outlines and routes multiple mode through the shared field", () => {
+    const warpState = {
+      ...state,
+      overlayMode: "warped-outline" as const,
+      outlineWarpAmount: 24,
+      outlineWarpMaxDisplacement: 30,
+    };
+    const legacy = generateWarpedOutline(warpState, warpedContext(warpState));
+    const ignoredRows = {
+      ...warpState,
+      emitterMode: "single" as const,
+      emitters: [{ ...warpState.emitters[0], phaseOffset: 2, radiusMultiplier: 0.5 }],
+    };
+    expect(generateWarpedOutline(ignoredRows, warpedContext(ignoredRows)).paths).toEqual(legacy.paths);
+
+    const first = { ...warpState.emitters[0], id: "first", glyphId: "auto-first" };
+    const oneState = { ...warpState, emitterMode: "multiple" as const, emitters: [first] };
+    const multipleState = {
+      ...oneState,
+      emitters: [first, { ...first, id: "last", glyphId: "auto-last", phaseOffset: Math.PI / 2 }],
+    };
+    const one = generateWarpedOutline(oneState, warpedContext(oneState));
+    const multiple = generateWarpedOutline(multipleState, warpedContext(multipleState));
+    expect(multiple.paths).not.toEqual(one.paths);
+    expect(generateWarpedOutline(multipleState, warpedContext(multipleState)).paths).toEqual(multiple.paths);
+  });
+
   it("changes distribution for another emitter glyph and radius/falloff", () => {
     const renderer = getRenderer("glyph-diffuser");
     const baseline = renderer.generateGeometry(state, context);

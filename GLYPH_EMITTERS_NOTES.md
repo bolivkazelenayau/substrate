@@ -1,7 +1,7 @@
 # Glyph Emitters and Composite Wave Fields
 
-Version: 0.12.0  
-Schema: 4
+Current architecture: v0.17 release candidate  
+Schema: 6
 
 ## Concept
 
@@ -11,7 +11,9 @@ This is a static procedural field, not reaction-diffusion and not a persistent p
 
 ## Emitter model
 
-The schema stores one active `GlyphEmitter` while using an ID-based shape that can be extended to multiple emitters later. It records glyph ID, source mode, amplitude, frequency, phase, radius, falloff, self/neighbor influence, blend mode, and optional custom coordinates.
+The legacy `GlyphEmitter` stores shared amplitude, frequency, phase, radius, falloff, self/neighbor influence, source mode, and custom coordinates. It remains the source in `emitterMode: "single"` so old projects and presets retain their historical path.
+
+`emitterMode: "multiple"` opts into an array of at most eight emitter instances. Each row has a stable ID, automatic or explicit glyph selection, enabled state, weight, phase offset, radius multiplier, and label. Enabled valid rows resolve once into shared field sources. Disabled rows and invalid explicit glyph IDs are skipped with diagnostics.
 
 For point `p` and anchor `a`:
 
@@ -38,7 +40,28 @@ The field uses the existing bounded substrate resolution. Points outside the tex
 
 Source-glyph membership is currently a glyph-bounds approximation. This can classify counters and overlapping glyph extents imperfectly; diagnostics report the approximation explicitly.
 
-`blendMode` is stored in the forward-compatible emitter model for future multi-emitter composition. With one active emitter, `add` and `max` may not visibly differ.
+Multiple sources use the shared field blend mode and bounded normalization. A single unit-weight source retains the legacy field calculation.
+
+## Consumers and presets
+
+The same resolved field is consumed by Wave Contours, Glyph Diffuser, SDF Halftone/Contours/Streamlines glyph modulation, and warped-outline geometry where those modes are active.
+
+Three presets opt into multiple mode:
+
+- **Sonic Interference** uses middle, first, and last automatic selectors.
+- **Counter Resonance** prefers a counter-bearing glyph and adds a middle response.
+- **Split Field** uses asymmetric first/last weights, phases, and radii.
+
+All older presets explicitly restore `emitterMode: "single"`.
+
+## Safe fallback
+
+- Short text remains valid; automatic rows can resolve to the same available glyph.
+- Empty or whitespace-only text resolves no active sources and produces a zero-safe field.
+- `auto-counter` falls back to the middle eligible glyph when no supported counter glyph is available.
+- Native fallback uses deterministic approximate character cells when parsed OpenType geometry is unavailable.
+
+Native cells do not perform shaping, and counter detection remains a conservative character/bounds heuristic.
 
 ## Preview and export
 
@@ -46,6 +69,8 @@ Wave Contours is static and never starts the animation clock. Its preview uses t
 
 Final Artwork export uses the unchanged SVG serializer and full text mask. Continuous output is SVG polylines and dotted output is SVG circles. Editable Text remains native SVG text. No field raster, canvas, PNG, or JPEG enters export.
 
-## Future path
+True outline deformation and falloff-deformed glyph geometry require parsed outlines and Final Artwork. Editable Text remains one native `<text>` element and cannot faithfully encode scaled kerning, optical spacing, or deformed outlines. Preserve `.substrate.json` as the procedural source of truth.
 
-Possible later work includes exact per-glyph raster membership, multi-emitter composition, custom viewport anchor picking, improved counter topology, and persistent particles. Reaction-diffusion would be a separate future system with different state and performance requirements.
+## Deferred work
+
+Exact per-glyph raster membership, custom viewport anchor picking, improved counter topology, persistent particles, and reaction-diffusion are not part of this architecture.

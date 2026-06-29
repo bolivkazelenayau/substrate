@@ -6,6 +6,7 @@ import type { SubstrateDebugMode } from "../engine/substrate";
 import { getGlyphDisplayLabel, type GlyphEmitterMetadata } from "../engine/field/glyphEmitters";
 import { NATIVE_OUTLINE_WARP_WARNING } from "../engine/outlineWarp";
 import { getControlActivity } from "../engine/controlOwnership";
+import { addEmitterRow, duplicateEmitterRow, MAX_EMITTER_ROWS, removeEmitterRow, updateEmitterRow } from "../engine/emitterEditor";
 
 interface Props {
   state: ProjectState;
@@ -52,21 +53,28 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
   const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
   const warpControlsActive = controlActivity.warp;
   const glyphModulationEnabled = controlActivity.glyphModulation && state.glyphFieldMode !== "off";
+  const emitterConsumerActive = state.renderer === "glyph-diffuser"
+    || state.renderer === "wave-contours"
+    || (controlActivity.glyphModulation && state.glyphFieldMode !== "off");
   const patch = (next: Partial<ProjectState>) => setState({ ...state, ...next });
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const setDebug = <K extends keyof DebugSettings,>(id: K, value: DebugSettings[K]) =>
     patch({ debug: { ...state.debug, [id]: value } });
   const patchEmitter = (next: Partial<ProjectState["emitter"]>) =>
     patchField({ emitter: { ...state.emitter, ...next } });
+  const patchEmitterRow = (id: string, next: Partial<ProjectState["emitters"][number]>) =>
+    patchField({ emitters: updateEmitterRow(state.emitters, id, next) });
 
   const defaultOpen = {
     advanced: false,
+    emitters: false,
     output: false,
     debug: false,
   };
 
   const [lastRenderer, setLastRenderer] = useState(state.renderer);
   const [userToggles, setUserToggles] = useState<Record<string, boolean>>({});
+  const [expandedEmitterRows, setExpandedEmitterRows] = useState<Record<string, boolean>>({});
 
   if (state.renderer !== lastRenderer) {
     setLastRenderer(state.renderer);
@@ -78,6 +86,11 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
 
   const toggleGroup = (id: keyof typeof defaultOpen) => 
     setUserToggles(prev => ({ ...prev, [id]: !isOpen(id) }));
+  const toggleEmitterRow = (id: string) =>
+    setExpandedEmitterRows((current) => ({ ...current, [id]: !current[id] }));
+  const eligibleGlyphs = emitterGlyphs.filter((glyph) => glyph.emitterEligible);
+  const isInvalidEmitterGlyph = (glyphId: string | null) =>
+    Boolean(glyphId && !glyphId.startsWith("auto-") && !eligibleGlyphs.some((glyph) => glyph.glyphId === glyphId));
 
   return (
     <aside className="controls">
@@ -192,6 +205,120 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
             )
           ))}
         </div>
+
+        <Accordion
+          title={`Emitters · ${state.emitterMode === "single" ? "single" : `${state.emitters.filter((row) => row.enabled).length}/${state.emitters.length}`}`}
+          isOpen={isOpen("emitters")}
+          onToggle={() => toggleGroup("emitters")}
+          className="emitter-editor"
+        >
+          <div className="field compact-field">
+            <span>Emitter mode</span>
+            <div className="mode-switch" aria-label="Emitter mode">
+              <button
+                type="button"
+                className={state.emitterMode === "single" ? "active" : ""}
+                onClick={() => patchField({ emitterMode: "single" })}
+              >
+                Single
+              </button>
+              <button
+                type="button"
+                className={state.emitterMode === "multiple" ? "active" : ""}
+                onClick={() => patchField({ emitterMode: "multiple" })}
+              >
+                Multiple
+              </button>
+            </div>
+          </div>
+
+          {state.emitterMode === "single" ? (
+            <small className="inactive-hint">Single mode uses the existing source and field controls below.</small>
+          ) : (
+            <>
+              {eligibleGlyphs.length === 0 && (
+                <small className="emitter-inline-warning">No eligible glyphs in the current text.</small>
+              )}
+              {emitterConsumerActive && state.emitter.enabled && !state.emitters.some((row) => row.enabled) && (
+                <small className="emitter-inline-warning">Enable an emitter row to drive this renderer.</small>
+              )}
+              <div className="emitter-list">
+                {state.emitters.map((row, index) => {
+                  const expanded = Boolean(expandedEmitterRows[row.id]);
+                  const invalidGlyph = isInvalidEmitterGlyph(row.glyphId);
+                  return (
+                    <div key={row.id} className={`emitter-row${row.enabled ? "" : " is-disabled"}`}>
+                      <div className="emitter-row-head">
+                        <label className="emitter-enable">
+                          <input
+                            type="checkbox"
+                            checked={row.enabled}
+                            onChange={(event) => patchEmitterRow(row.id, { enabled: event.target.checked })}
+                          />
+                          <span>{String(index + 1).padStart(2, "0")}</span>
+                        </label>
+                        <select
+                          aria-label={`Emitter ${index + 1} glyph`}
+                          value={row.glyphId ?? "auto-first"}
+                          onChange={(event) => patchEmitterRow(row.id, { glyphId: event.target.value })}
+                        >
+                          <option value="auto-first">First glyph</option>
+                          <option value="auto-last">Last glyph</option>
+                          <option value="auto-middle">Middle glyph</option>
+                          <option value="auto-counter">Counter glyph</option>
+                          {eligibleGlyphs.map((glyph) => (
+                            <option key={glyph.glyphId} value={glyph.glyphId}>{getGlyphDisplayLabel(glyph)}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="emitter-detail-toggle"
+                          aria-label={`${expanded ? "Collapse" : "Expand"} emitter ${index + 1} controls`}
+                          aria-expanded={expanded}
+                          onClick={() => toggleEmitterRow(row.id)}
+                        >
+                          {expanded ? "−" : "+"}
+                        </button>
+                      </div>
+                      {invalidGlyph && <small className="emitter-inline-warning">Selected glyph is unavailable; this row will be skipped.</small>}
+                      {expanded && (
+                        <div className="emitter-row-details">
+                          <Range label="Weight" value={row.weight} min={0} max={2} step={0.05} onChange={(weight) => patchEmitterRow(row.id, { weight })} />
+                          <Range label="Phase" value={row.phaseOffset} min={-6.3} max={6.3} step={0.1} onChange={(phaseOffset) => patchEmitterRow(row.id, { phaseOffset })} />
+                          <Range label="Radius ×" value={row.radiusMultiplier} min={0.25} max={2} step={0.05} onChange={(radiusMultiplier) => patchEmitterRow(row.id, { radiusMultiplier })} />
+                          <div className="emitter-row-actions">
+                            <button
+                              type="button"
+                              disabled={state.emitters.length >= MAX_EMITTER_ROWS}
+                              onClick={() => patchField({ emitters: duplicateEmitterRow(state.emitters, row.id) })}
+                            >
+                              Duplicate
+                            </button>
+                            <button
+                              type="button"
+                              disabled={state.emitters.length <= 1}
+                              onClick={() => patchField({ emitters: removeEmitterRow(state.emitters, row.id) })}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                className="emitter-add"
+                disabled={state.emitters.length >= MAX_EMITTER_ROWS || eligibleGlyphs.length === 0}
+                onClick={() => patchField({ emitters: addEmitterRow(state.emitters) })}
+              >
+                Add emitter · {state.emitters.length}/{MAX_EMITTER_ROWS}
+              </button>
+            </>
+          )}
+        </Accordion>
 
         {state.renderer === "glyph-diffuser" && (
           <>

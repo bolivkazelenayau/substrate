@@ -3,6 +3,7 @@ import type { RasterMask, SubstrateBuildInput, SubstrateType } from "./types";
 export interface RasterContext {
   fillStyle: string | CanvasGradient | CanvasPattern;
   font: string;
+  fontKerning?: CanvasFontKerning;
   textAlign: CanvasTextAlign;
   textBaseline: CanvasTextBaseline;
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void;
@@ -52,6 +53,7 @@ export function rasterizeGlyphs(input: SubstrateBuildInput, factory: RasterSurfa
     substrateType = "glyph-paths";
   } else if (input.sourceText.length > 0) {
     context.font = `${input.fontWeight} ${input.fontSize}px ${input.fontFamily}`;
+    if (input.kerningMode === "none" && "fontKerning" in context) context.fontKerning = "none";
     context.textAlign = "center";
     context.textBaseline = "alphabetic";
     context.fillText(input.sourceText, input.textX, input.baselineY);

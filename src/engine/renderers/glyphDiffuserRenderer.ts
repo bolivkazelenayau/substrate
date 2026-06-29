@@ -1,5 +1,5 @@
 import { VIEWPORT } from "../constants";
-import { buildCompositeWaveField, getEmitterContributionAtPoint, getFalloffWeight } from "../field/compositeWaveField";
+import { buildCompositeWaveField, getEmitterContributionAtPoint, getFalloffWeight, sampleGlyphField } from "../field/compositeWaveField";
 import type { CircleMark, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
 import { sampleEdge, sampleMask } from "../substrate";
@@ -63,6 +63,19 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
     const geometries: CircleMark[] = [];
+    
+    const rendererFrequency = state.frequency / 18;
+    const waveFrequency = state.emitter.frequency * rendererFrequency;
+    const bandThreshold = 1 - state.bandWidth;
+    const invBandWidth = 1 / Math.max(0.001, state.bandWidth);
+    const invContributionDivisor = 1 / Math.max(0.001, state.emitter.amplitude * state.amplitude / 22);
+    const ringContrastFactor = 0.55 + state.diffuserRingContrast * 0.95;
+    const readabilityFactor = 1 - state.edgeInfluence / 100 * 0.72;
+    const reactiveBase = 0.35;
+    const reactiveScale = 0.65 + state.edgeInfluence / 100 * 0.55;
+    const densityAcceptanceBase = 0.012 + densityRatio * 0.08;
+    const invHaloRadius = 1 / Math.max(1, haloRadius);
+
     let rejectedOutsideMask = 0;
     let rejectedByInfluence = 0;
     let radiusTotal = 0;
@@ -99,29 +112,27 @@ export const glyphDiffuserRenderer: VectorRenderer = {
           continue;
         }
 
-        const contribution = getEmitterContributionAtPoint(samplingState, field.sourceGlyph, field.anchor, x, y);
-        const falloff = getFalloffWeight(distance / Math.max(1, haloRadius), state.emitter.falloff);
-        const rendererFrequency = state.frequency / 18;
-        const wave = Math.abs(Math.sin(distance * state.emitter.frequency * rendererFrequency + state.emitter.phase));
-        const bandThreshold = 1 - state.bandWidth;
-        const bandPosition = Math.max(0, Math.min(1, (wave - bandThreshold) / Math.max(0.001, state.bandWidth)));
+        const contribution = state.emitterMode === "single"
+          ? getEmitterContributionAtPoint(samplingState, field.sourceGlyph, field.anchor, x, y)
+          : sampleGlyphField(field, x, y);
+        const farField = distance * invHaloRadius;
+        const falloff = getFalloffWeight(farField, state.emitter.falloff);
+        const wave = Math.abs(Math.sin(distance * waveFrequency + state.emitter.phase));
+        const bandPosition = Math.max(0, Math.min(1, (wave - bandThreshold) * invBandWidth));
         const ringStrength = Math.pow(bandPosition * bandPosition * (3 - 2 * bandPosition), state.ringSharpness);
-        const contributionStrength = Math.min(1, Math.abs(contribution) / Math.max(0.001, state.emitter.amplitude * state.amplitude / 22));
-        const ringSignal = Math.min(1, ringStrength * (0.55 + state.diffuserRingContrast * 0.95) + contributionStrength * 0.12);
+        const contributionStrength = Math.min(1, Math.abs(contribution) * invContributionDivisor);
+        const ringSignal = Math.min(1, ringStrength * ringContrastFactor + contributionStrength * 0.12);
         ringStrengthTotal += ringStrength;
         falloffTotal += falloff;
         fieldSamples += 1;
         const grain = 0.72 + random() * 0.56;
-        const readability = insideText && state.diffuserComposition === "behind-text"
-          ? 1 - state.edgeInfluence / 100 * 0.72
-          : 1;
+        const readability = insideText && state.diffuserComposition === "behind-text" ? readabilityFactor : 1;
         const edge = sampleEdge(substrate, x, y);
         const reactive = state.diffuserComposition === "text-reactive"
-          ? 0.35 + Math.min(1, edge * 1.8) * (0.65 + state.edgeInfluence / 100 * 0.55)
+          ? reactiveBase + Math.min(1, edge * 1.8) * reactiveScale
           : 1;
-        const farField = distance / Math.max(1, haloRadius);
         const falloffShape = Math.pow(falloff, 1.45);
-        const acceptance = Math.min(0.98, (0.012 + densityRatio * 0.08 + ringSignal * 0.88) * falloffShape * grain * readability * reactive);
+        const acceptance = Math.min(0.98, (densityAcceptanceBase + ringSignal * 0.88) * falloffShape * grain * readability * reactive);
         if (random() > acceptance) {
           rejectedByInfluence += 1;
           if (farField > 0.62) rejectedFarFieldCandidates += 1;

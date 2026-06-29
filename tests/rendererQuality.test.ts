@@ -14,6 +14,7 @@ import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyp
 import { getTextLayout } from "../src/engine/textLayout";
 import type { ProjectState, RenderContext } from "../src/types";
 import { getControlActivity } from "../src/engine/controlOwnership";
+import { getGlyphEmitterMetadata } from "../src/engine/field/glyphEmitters";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
   const canvas = createCanvas(width, height);
@@ -162,6 +163,65 @@ describe("renderer quality contracts", () => {
       glyphFieldOpacity: 100,
     }, context);
     expect(inactiveChanged).toBe(first);
+  });
+
+  it("keys static multi-emitter geometry by resolved active values only", () => {
+    clearRendererGeometryCache();
+    const glyphs = getGlyphEmitterMetadata(baseState, context.textGeometry ?? null);
+    const active = {
+      id: "active",
+      glyphId: "auto-first",
+      enabled: true,
+      weight: 1,
+      phaseOffset: 0,
+      radiusMultiplier: 1,
+      label: "Active",
+    };
+    const state = {
+      ...baseState,
+      text: "TYPE",
+      renderer: "wave-contours" as const,
+      emitter: { ...baseState.emitter, enabled: true },
+      emitterMode: "multiple" as const,
+      emitters: [active],
+      maxNodes: 220,
+    };
+    const first = generateRendererGeometry(state, context);
+    const labelOnly = generateRendererGeometry({
+      ...state,
+      emitters: [{ ...active, label: "Editor label only" }],
+    }, context);
+    const disabledOnly = generateRendererGeometry({
+      ...state,
+      emitters: [
+        active,
+        { ...active, id: "disabled", enabled: false, weight: 0.2, phaseOffset: 2, radiusMultiplier: 0.4 },
+      ],
+    }, context);
+    const equivalentSelector = generateRendererGeometry({
+      ...state,
+      emitters: [{ ...active, glyphId: glyphs[0].glyphId }],
+    }, context);
+    expect(labelOnly).toBe(first);
+    expect(disabledOnly).toBe(first);
+    expect(equivalentSelector).toBe(first);
+
+    const weightChanged = generateRendererGeometry({
+      ...state,
+      emitters: [{ ...active, weight: 0.5 }],
+    }, context);
+    expect(weightChanged).not.toBe(first);
+
+    const outputChangingVariants = [
+      { ...active, phaseOffset: Math.PI / 2 },
+      { ...active, radiusMultiplier: 0.5 },
+      { ...active, glyphId: glyphs[glyphs.length - 1].glyphId },
+    ];
+    outputChangingVariants.forEach((emitter) => {
+      const changed = generateRendererGeometry({ ...state, emitters: [emitter] }, context);
+      expect(changed).not.toBe(first);
+      expect(changed.geometries).not.toEqual(first.geometries);
+    });
   });
 
   it("reports export budget risks without blocking export", () => {

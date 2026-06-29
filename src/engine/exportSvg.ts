@@ -31,7 +31,8 @@ function serializeGeometry(group: GeometryGroup, precision: number): string {
 function serializeText(state: ProjectState, fill: string, visibility?: "hidden", useCustomFont = true) {
   const layout = getTextLayout(state, useCustomFont);
   const hidden = visibility ? ` visibility="${visibility}"` : "";
-  return `<text x="${layout.x}" y="${layout.baselineY}" text-anchor="${layout.anchor}" font-family="${escape(layout.fontFamily)}" font-size="${layout.fontSize}" font-weight="${layout.fontWeight}" letter-spacing="${layout.tracking}" fill="${fill}"${hidden}>${escape(layout.text)}</text>`;
+  const fontKerning = state.kerningMode === "none" ? ' font-kerning="none"' : "";
+  return `<text x="${layout.x}" y="${layout.baselineY}" text-anchor="${layout.anchor}" font-family="${escape(layout.fontFamily)}" font-size="${layout.fontSize}" font-weight="${layout.fontWeight}" letter-spacing="${layout.tracking}"${fontKerning} fill="${fill}"${hidden}>${escape(layout.text)}</text>`;
 }
 
 function serializeGlyphPaths(textGeometry: TextGeometry) {
