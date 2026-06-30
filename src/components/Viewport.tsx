@@ -18,6 +18,7 @@ import { CanvasFlowPreview, type CanvasPreviewSample } from "./CanvasFlowPreview
 import type { PreviewBackend } from "../engine/previewBackend";
 import { formatFps, getFramePacingStatus } from "../engine/animationTiming";
 import { useWaveFieldDebugImage } from "../hooks/useWaveFieldDebugImage";
+import { recordViewportRender } from "../dev/viewportNavigationInstrumentation";
 import { generateEdgeErosionMarks } from "../engine/edgeErosion";
 import { generateWarpedOutline, getFinalOutlineGeometry, outlineWarpCacheKey } from "../engine/outlineWarp";
 import { getControlActivity } from "../engine/controlOwnership";
@@ -35,6 +36,7 @@ interface ViewportProps {
 }
 
 export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+  recordViewportRender();
   const diagnosticsExpanded = diagnosticsMode === "full";
   const renderer = getRenderer(state.renderer);
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);

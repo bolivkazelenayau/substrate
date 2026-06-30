@@ -150,6 +150,21 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .canvas-navigation.can-pan { cursor: grab; }
 .canvas-navigation.is-panning { cursor: grabbing; }
 .canvas-navigation-transform { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; transform-origin: center; }
+/* Crisp default ("crisp" compositing mode): the wrapper stays on the browser's
+   native repaint path — every committed `transform` re-rasters the SVG/canvas
+   subtree sharply, with no GPU layer texture to upscale during the gesture.
+   Compositor promotion (`translate3d`, `will-change: transform`, `backface-
+   visibility: hidden`) was the source of transient gesture-time blur on the
+   vector preview, because the compositor upscales a pre-rasterized layer
+   texture while zooming and re-rasterizes only after the gesture ends.
+   Promotion is gated on `.is-composited`, which is only applied by
+   `CanvasNavigation` when the runtime-only dev compositing mode is set to
+   `"composited"` (default `"crisp"`). The `will-change` hint is further gated
+   on `is-active-interaction` so the composited layer isn't permanently
+   retained outside gestures. Preview/export untouched — this only influences
+   how the browser composites the navigation wrapper. */
+.canvas-navigation-transform.is-composited { backface-visibility: hidden; }
+.canvas-navigation-transform.is-composited.is-active-interaction { will-change: transform; }
 .canvas-navigation-controls { position: absolute; right: 12px; bottom: 12px; z-index: 4; display: flex; align-items: stretch; color: var(--text); background: var(--panel); border: 1px solid var(--line); }
 .canvas-navigation-controls button { min-width: 34px; min-height: 30px; padding: 0 9px; border: 0; border-right: 1px solid var(--line); color: var(--text); }
 .canvas-navigation-controls button:last-child { border-right: 0; border-left: 1px solid var(--line); }

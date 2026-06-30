@@ -1014,6 +1014,33 @@ Final Artwork SVG has no dependency on either preview backend. It continues to
 use the CPU renderer and existing SVG serializer with full geometry and
 forbidden-raster validation.
 
+## Viewport navigation crispness
+
+`CanvasNavigation` owns zoom/pan state and applies it as a CSS transform on
+the preview wrapper. Wheel/pointer-move events are coalesced through
+`requestAnimationFrame` so a burst of native events produces at most one
+React commit and one transform change per animation frame. Zoom/pan never
+enters `ProjectState`, `RenderContext`, `rendererGeometryStateKey`,
+geometry generation, substrate builds, or SVG export.
+
+Default navigation mode is **crisp**: the wrapper uses 2D
+`translate(...) scale(...)` and stays on the browser's native repaint path, so
+every committed zoom value re-rasters the SVG/canvas subtree sharply. No
+`translate3d`, `will-change`, or `backface-visibility` is applied by default
+because GPU layer promotion was the source of transient gesture-time blur on
+the masked SVG preview (the compositor upscales a cached layer texture while
+zooming and re-rasterizes only after the gesture ends).
+
+A **composited** mode exists only for performance investigation, reachable in
+dev builds via `globalThis.__SUBSTRATE_NAV_COMPOSITING__.set("composited")`.
+It restores `translate3d` + transient `will-change: transform` +
+`backface-visibility: hidden` to promote the wrapper to a GPU layer. It may
+blur SVG/canvas content during zoom because the browser can scale a cached
+layer texture. The composited branch is gated on `import.meta.env.DEV` and is
+dead-code-eliminated from production builds; production ships only the crisp
+2D transform path. Do not expose composited mode as normal product UI unless
+the tradeoff is explicitly communicated.
+
 # 9. Known Issues / Limitations
 
 - The SDF is an approximate chamfer field, not an exact Euclidean distance transform.

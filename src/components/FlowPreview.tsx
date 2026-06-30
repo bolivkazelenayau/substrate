@@ -11,6 +11,7 @@ import {
   type FlowPreviewUpdateResult,
 } from "../engine/flowPreviewOptimization";
 import { recordPreviewGeometryBuild, recordPreviewPathCommit } from "../engine/previewRuntimeDiagnostics";
+import { recordFlowPreviewPathCommit, recordFlowPreviewRender } from "../dev/viewportNavigationInstrumentation";
 import { advanceAnimationFrameBudget } from "../engine/animationTiming";
 import { generateRendererGeometry } from "../engine/rendererRuntime";
 import type { SvgTraceMode } from "../engine/previewTraceConfig";
@@ -64,6 +65,7 @@ export const FlowPreview = memo(function FlowPreview({
   running = false,
   fpsCap = 60,
 }: FlowPreviewProps) {
+  recordFlowPreviewRender();
   const lines = geometry.geometries as LineSegment[];
   const pathRefs = useRef<Array<SVGPathElement | null>>([]);
   const previousDStrings = useRef<string[]>([]);
@@ -120,7 +122,7 @@ export const FlowPreview = memo(function FlowPreview({
       : shouldFreeze
         ? 0
         : plan.buckets.reduce((total, bucket) => total + bucket.d.length, 0);
-    recordPreviewPathCommit({
+recordPreviewPathCommit({
       pathGroupingMs,
       domWriteMs,
       stats,
@@ -128,6 +130,7 @@ export const FlowPreview = memo(function FlowPreview({
       activeBuckets: plan.activeBuckets,
       dStringLength,
     });
+    recordFlowPreviewPathCommit(stats);
     onUpdate?.(stats);
   };
 
