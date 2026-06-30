@@ -1,20 +1,28 @@
-export type GraphOutputKind =
-  | "scalar-field"
-  | "vector-field"
+import type { GraphSocketId } from "./graphTypes";
+
+export type GraphValueKind =
+  | "number"
+  | "boolean"
+  | "string"
+  | "color"
+  | "enum"
+  | "point"
+  | "bounds"
+  | "glyph-geometry"
   | "mask-field"
   | "distance-field"
+  | "scalar-field"
+  | "vector-field"
   | "geometry"
   | "appearance";
 
-export interface NodeInputSocket {
-  id: string;
-  label: string;
-  accepts: readonly GraphOutputKind[];
-  required?: boolean;
-}
+export type GraphSocketDirection = "input" | "output";
 
-export interface NodeOutputSocket {
-  id: string;
+export type GraphSocket = {
+  id: GraphSocketId;
   label: string;
-  kind: GraphOutputKind;
-}
+  kind: GraphValueKind;
+  direction: GraphSocketDirection;
+  required?: boolean;
+  defaultValue?: unknown;
+};

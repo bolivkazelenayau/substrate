@@ -88,7 +88,7 @@ export function rendererGeometryStateKey(state: ProjectState) {
   return JSON.stringify(geometryState);
 }
 
-function cacheKey(state: ProjectState, context: RenderContext) {
+export function rendererGeometryCacheKey(state: ProjectState, context: RenderContext) {
   const renderer = getRenderer(state.renderer);
   const substrate = renderer.usesSubstrate ? substrateKey(context) : "unused";
   const time = renderer.usesTime ? `${context.timeMs}:${context.frame}` : "0:0";
@@ -132,7 +132,7 @@ export function generateRendererGeometry(state: ProjectState, context: RenderCon
     geometryTimings.set(result.value, { durationMs: result.durationMs, cached: false });
     return result.value;
   }
-  const key = cacheKey(state, context);
+  const key = rendererGeometryCacheKey(state, context);
   const cached = geometryCache.get(key);
   if (cached) {
     const timing = geometryTimings.get(cached);

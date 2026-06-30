@@ -1,57 +1,73 @@
-import * as v from "valibot";
 import type { GraphDocument } from "./graphTypes";
 
-const outputKindSchema = v.picklist([
-  "scalar-field",
-  "vector-field",
-  "mask-field",
-  "distance-field",
-  "geometry",
-  "appearance",
-]);
-const endpointSchema = v.object({ nodeId: v.string(), socketId: v.string() });
-const nodeSchema = v.object({
-  id: v.string(),
-  type: v.string(),
-  version: v.number(),
-  parameters: v.record(v.string(), v.unknown()),
-  position: v.optional(v.object({ x: v.number(), y: v.number() })),
-});
-const graphDocumentSchema = v.object({
-  version: v.literal(1),
-  nodes: v.array(nodeSchema),
-  connections: v.array(v.object({
-    id: v.string(),
-    from: endpointSchema,
-    to: endpointSchema,
-  })),
-  outputs: v.array(v.object({
-    nodeId: v.string(),
-    socketId: v.string(),
-    kind: outputKindSchema,
-  })),
-});
+export type GraphValidationIssue = {
+  code:
+    | "missing-output-node"
+    | "duplicate-node-id"
+    | "duplicate-connection-id"
+    | "missing-source-node"
+    | "missing-target-node"
+    | "self-connection";
+  message: string;
+};
 
-function assertUnique(values: readonly string[], label: string): void {
-  if (new Set(values).size !== values.length) {
-    throw new Error(`Graph contains duplicate ${label}.`);
+function duplicateIds(ids: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const reported = new Set<string>();
+  const duplicates: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id) && !reported.has(id)) {
+      duplicates.push(id);
+      reported.add(id);
+    }
+    seen.add(id);
   }
+  return duplicates;
 }
 
-export function validateGraphDocument(input: unknown): GraphDocument {
-  const graph = v.parse(graphDocumentSchema, input) as GraphDocument;
-  assertUnique(graph.nodes.map(({ id }) => id), "node ids");
-  assertUnique(graph.connections.map(({ id }) => id), "connection ids");
+/** Dependency-free structural validation for the future runtime IR. */
+export function validateGraphDocument(graph: GraphDocument): GraphValidationIssue[] {
+  const issues: GraphValidationIssue[] = [];
   const nodeIds = new Set(graph.nodes.map(({ id }) => id));
+
+  for (const id of duplicateIds(graph.nodes.map(({ id }) => id))) {
+    issues.push({
+      code: "duplicate-node-id",
+      message: `Graph node id "${id}" is duplicated.`,
+    });
+  }
+  for (const id of duplicateIds(graph.connections.map(({ id }) => id))) {
+    issues.push({
+      code: "duplicate-connection-id",
+      message: `Graph connection id "${id}" is duplicated.`,
+    });
+  }
+  if (!nodeIds.has(graph.outputNodeId)) {
+    issues.push({
+      code: "missing-output-node",
+      message: `Graph output node "${graph.outputNodeId}" does not exist.`,
+    });
+  }
   for (const connection of graph.connections) {
-    if (!nodeIds.has(connection.from.nodeId) || !nodeIds.has(connection.to.nodeId)) {
-      throw new Error(`Connection "${connection.id}" references an unknown node.`);
+    if (!nodeIds.has(connection.fromNodeId)) {
+      issues.push({
+        code: "missing-source-node",
+        message: `Connection "${connection.id}" source node "${connection.fromNodeId}" does not exist.`,
+      });
+    }
+    if (!nodeIds.has(connection.toNodeId)) {
+      issues.push({
+        code: "missing-target-node",
+        message: `Connection "${connection.id}" target node "${connection.toNodeId}" does not exist.`,
+      });
+    }
+    if (connection.fromNodeId === connection.toNodeId) {
+      issues.push({
+        code: "self-connection",
+        message: `Connection "${connection.id}" connects node "${connection.fromNodeId}" to itself.`,
+      });
     }
   }
-  for (const output of graph.outputs) {
-    if (!nodeIds.has(output.nodeId)) {
-      throw new Error(`Graph output references unknown node "${output.nodeId}".`);
-    }
-  }
-  return graph;
+
+  return issues;
 }

@@ -1,28 +1,53 @@
-import type { GeometryGroup } from "../engine/geometry";
 import type { VectorRenderer } from "../engine/renderers/types";
-import type { ProjectState, RenderContext } from "../types";
+import { getRendererManifest } from "../engine/renderers/rendererManifest";
 import type { NodeDefinition } from "./nodeTypes";
-
-export interface RendererGeometryNodeAdapter {
-  definition: NodeDefinition;
-  renderer: VectorRenderer;
-  evaluate(state: ProjectState, context: RenderContext): GeometryGroup;
-}
+import type { GraphSocket } from "./socketTypes";
 
 /**
- * Type-level bridge only: existing renderers remain the source of geometry and
- * are not registered with, or executed by, a graph runtime in schema v7.
+ * Definition-only bridge. The current renderer registry remains authoritative;
+ * this does not register, load, or execute a renderer through a graph runtime.
  */
-export function adaptVectorRenderer(renderer: VectorRenderer): RendererGeometryNodeAdapter {
+export function createRendererNodeDefinition(renderer: VectorRenderer): NodeDefinition {
+  const manifest = getRendererManifest(renderer.id);
+  const inputs: GraphSocket[] = [];
+  if (manifest.dependencies.includes("substrate")) {
+    inputs.push({
+      id: "substrate",
+      label: "Substrate",
+      kind: "distance-field",
+      direction: "input",
+      required: true,
+    });
+  }
+  if (manifest.dependencies.includes("field")) {
+    inputs.push({
+      id: "field",
+      label: "Field",
+      kind: "scalar-field",
+      direction: "input",
+    });
+  }
+  if (manifest.dependencies.includes("time")) {
+    inputs.push({
+      id: "time",
+      label: "Time",
+      kind: "number",
+      direction: "input",
+      defaultValue: 0,
+    });
+  }
+
   return {
-    definition: {
-      type: `renderer.${renderer.id}`,
-      version: 1,
-      label: renderer.label,
-      inputs: [],
-      outputs: [{ id: "geometry", label: "Geometry", kind: "geometry" }],
-    },
-    renderer,
-    evaluate: (state, context) => renderer.generateGeometry(state, context),
+    type: `renderer.${manifest.id}`,
+    label: manifest.label,
+    category: manifest.graphNode?.category ?? "renderer",
+    inputs,
+    outputs: [{
+      id: "geometry",
+      label: "Geometry",
+      kind: "geometry",
+      direction: "output",
+    }],
+    experimental: manifest.graphNode?.experimental,
   };
 }

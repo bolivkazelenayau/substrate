@@ -1,9 +1,19 @@
-import type { NodeInputSocket, NodeOutputSocket } from "./socketTypes";
+import type { GraphNodeType } from "./graphTypes";
+import type { GraphSocket } from "./socketTypes";
 
-export interface NodeDefinition {
-  type: string;
-  version: number;
+export type NodeCategory =
+  | "input"
+  | "substrate"
+  | "field"
+  | "renderer"
+  | "appearance"
+  | "output";
+
+export type NodeDefinition = {
+  type: GraphNodeType;
   label: string;
-  inputs: readonly NodeInputSocket[];
-  outputs: readonly NodeOutputSocket[];
-}
+  category: NodeCategory;
+  inputs: GraphSocket[];
+  outputs: GraphSocket[];
+  experimental?: boolean;
+};
