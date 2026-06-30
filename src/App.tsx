@@ -1,4 +1,4 @@
-import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controls } from "./components/Controls";
 import { Viewport } from "./components/Viewport";
 import { createTimedSvg, download } from "./engine/exportSvg";
@@ -19,8 +19,6 @@ import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
 import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
 import { buildCompositeWaveField, createGlyphFieldContext } from "./engine/field/compositeWaveField";
 import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
-import { WebGpuFieldOverlay } from "./components/dev/WebGpuFieldOverlay";
-import { PreviewPerformanceMeter } from "./components/dev/PreviewPerformanceMeter";
 import { CanvasNavigation } from "./components/CanvasNavigation";
 import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetExportability";
 import { recordPreviewAppRender, recordPreviewGeometryBuild } from "./engine/previewRuntimeDiagnostics";
@@ -31,6 +29,13 @@ import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
 import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
+
+const DevWebGpuFieldOverlay = import.meta.env.DEV
+  ? lazy(() => import("./components/dev/WebGpuFieldOverlay").then(({ WebGpuFieldOverlay }) => ({ default: WebGpuFieldOverlay })))
+  : null;
+const DevPreviewPerformanceMeter = import.meta.env.DEV
+  ? lazy(() => import("./components/dev/PreviewPerformanceMeter").then(({ PreviewPerformanceMeter }) => ({ default: PreviewPerformanceMeter })))
+  : null;
 
 export default function App() {
   recordPreviewAppRender();
@@ -410,8 +415,8 @@ export default function App() {
           >
             {webGpuOverlayOpen ? "✕ GPU DEBUG" : "▸ GPU FIELD DEBUG"}
           </button>
-          {webGpuOverlayOpen && (
-            <WebGpuFieldOverlay
+          {webGpuOverlayOpen && DevWebGpuFieldOverlay && (
+            <Suspense fallback={null}><DevWebGpuFieldOverlay
               getSnapshot={getWebGpuDevSnapshot}
               rendererComparison={{
                 activeFieldEmitterCount: geometry.diagnostics?.rendererActiveFieldEmitterCount,
@@ -426,7 +431,7 @@ export default function App() {
                 zeroStrengthEmitterCount: geometry.diagnostics?.zeroStrengthEmitterCount,
               }}
               onClose={() => setWebGpuOverlayOpen(false)}
-            />
+            /></Suspense>
           )}
           <button
             type="button"
@@ -449,8 +454,8 @@ export default function App() {
           >
             {fpsMeterOpen ? "✕ FPS METER" : "▸ FPS METER"}
           </button>
-          {fpsMeterOpen && (
-            <PreviewPerformanceMeter
+          {fpsMeterOpen && DevPreviewPerformanceMeter && (
+            <Suspense fallback={null}><DevPreviewPerformanceMeter
               state={state}
               context={renderContext}
               fpsCap={previewSettings.fpsCap}
@@ -458,7 +463,7 @@ export default function App() {
               traceConfig={activeSvgTraceConfig}
               onTraceConfigChange={setSvgTraceConfig}
               onClose={() => setFpsMeterOpen(false)}
-            />
+            /></Suspense>
           )}
         </>
       )}

@@ -40,7 +40,7 @@ export default [
     rules: {
       "no-restricted-imports": ["error", {
         patterns: [
-          { group: ["../components/Canvas*", "./preview*", "./gpu/**", "../experiments/**"], message: "SVG export must remain isolated from preview, WebGPU, and experiments." },
+          { group: ["../components/Canvas*", "../components/dev/**", "./preview*", "./gpu/**", "../experiments/**", "../hooks/**"], message: "SVG export must remain isolated from preview, WebGPU, diagnostics, experiments, and runtime hooks." },
         ],
       }],
     },

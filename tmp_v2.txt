@@ -1,0 +1,69 @@
+﻿
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90mC:/Users/Breeze/Documents/Dev/type_react_kit[39m
+
+node.exe : [90mstderr[2m | tests/webGpuOverlayDevGating.test.ts[2m > [22m[2mdev-only WebGPU overlay gating[2m > 
+[22m[2mrenders the dev-only GPU FIELD DEBUG toggle in dev builds
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Breeze\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([90mstderr[2m...e in dev builds:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[22m[39m[SUBSTRATE] Worker creation failed. {
+  workerUrl: [32m'http://localhost:3000/src/engine/substrate/substrate.worker.ts'[39m,
+  workerType: [32m'undefined'[39m,
+  offscreenCanvasType: [32m'undefined'[39m,
+  path2DType: [32m'undefined'[39m,
+  exceptionName: [32m'ReferenceError'[39m,
+  exceptionMessage: [32m'Worker is not defined'[39m,
+  exceptionStack: [32m'ReferenceError: Worker is not defined\n'[39m +
+    [32m'    at CpuWorkerSubstrateBackend.workerUrl.workerUrl 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:377:46)\n'[39m +
+    [32m'    at new CpuWorkerSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:148:21)\n'[39m +
+    [32m'    at createCpuWorkerSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:377:10)\n'[39m +
+    [32m'    at C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:42:42\n'[39m +
+    [32m'    at mountStateImpl (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react
+-dom-client.development.js:8268:24)\n'[39m +
+    [32m'    at mountState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom
+-client.development.js:8289:22)\n'[39m +
+    [32m'    at Object.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\reac
+t-dom-client.development.js:26243:18)\n'[39m +
+    [32m'    at process.env.NODE_ENV.exports.useState 
+(C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react\\cjs\\react.development.js:1263:34)\n'[39m +
+    [32m'    at useSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:42:27)\n'[39m +
+    [32m'    at App (C:/Users/Breeze/Documents/Dev/type_react_kit/src/App.tsx:154:26)'[39m
+}
+
+[90mstderr[2m | tests/webGpuOverlayDevGating.test.ts[2m > [22m[2mdev-only WebGPU overlay gating[2m > 
+[22m[2mdoes not render the overlay panel until the toggle is opened
+[22m[39m[SUBSTRATE] Worker creation failed. {
+  workerUrl: [32m'http://localhost:3000/src/engine/substrate/substrate.worker.ts'[39m,
+  workerType: [32m'undefined'[39m,
+  offscreenCanvasType: [32m'undefined'[39m,
+  path2DType: [32m'undefined'[39m,
+  exceptionName: [32m'ReferenceError'[39m,
+  exceptionMessage: [32m'Worker is not defined'[39m,
+  exceptionStack: [32m'ReferenceError: Worker is not defined\n'[39m +
+    [32m'    at CpuWorkerSubstrateBackend.workerUrl.workerUrl 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:377:46)\n'[39m +
+    [32m'    at new CpuWorkerSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:148:21)\n'[39m +
+    [32m'    at createCpuWorkerSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:377:10)\n'[39m +
+    [32m'    at C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:42:42\n'[39m +
+    [32m'    at mountStateImpl (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react
+-dom-client.development.js:8268:24)\n'[39m +
+    [32m'    at mountState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom
+-client.development.js:8289:22)\n'[39m +
+    [32m'    at Object.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\reac
+t-dom-client.development.js:26243:18)\n'[39m +
+    [32m'    at process.env.NODE_ENV.exports.useState 
+(C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react\\cjs\\react.development.js:1263:34)\n'[39m +
+    [32m'    at useSubstrateBackend 
+(C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:42:27)\n'[39m +
+    [32m'    at App (C:/Users/Breeze/Documents/Dev/type_react_kit/src/App.tsx:154:26)'[39m
+}
+
