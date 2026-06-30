@@ -7,6 +7,8 @@ import type { ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
 import { generateEdgeErosionMarks } from "./edgeErosion";
 import { generateWarpedOutline, getFinalOutlineGeometry } from "./outlineWarp";
+import { assertPresetExportable } from "./presetExportability";
+import { assertVectorOnlySvg } from "./svgValidation";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -43,6 +45,7 @@ function serializeGlyphPaths(textGeometry: TextGeometry) {
 }
 
 export function createSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup): string {
+  assertPresetExportable(state.preset, state.exportMode);
   const renderer = getRenderer(state.renderer);
   const geometry = generatedGeometry ?? renderer.generateGeometry(state, context);
   const exportContext = context.textGeometry === textGeometry ? context : { ...context, textGeometry };
@@ -110,7 +113,9 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     `<g id="${SVG_IDS.sourceText}">${serializeText(state, "none", "hidden")}</g>`,
   ].join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWPORT.width} ${VIEWPORT.height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWPORT.width} ${VIEWPORT.height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
+  assertVectorOnlySvg(svg);
+  return svg;
 }
 
 export function createTimedSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup) {

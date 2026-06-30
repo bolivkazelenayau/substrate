@@ -45,13 +45,16 @@ export interface GlyphEmitterInstance {
   radiusMultiplier: number;
   label: string;
 }
-export type PreviewBackendPreference = "auto" | "canvas-2d" | "svg-dom";
+export type PreviewBackendPreference = "canvas-2d" | "svg-dom";
+export type PreviewQuality = "full" | "balanced" | "performance";
+export type DiagnosticsMode = "off" | "compact" | "full";
 
 export interface PreviewSettings {
   fpsCap: PreviewFpsCap;
   pauseWhenHidden: boolean;
   reducedMotion: boolean;
   backend: PreviewBackendPreference;
+  quality: PreviewQuality;
 }
 
 export interface PreviewDiagnostics {

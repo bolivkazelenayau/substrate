@@ -51,3 +51,71 @@ export function consumeFrameBudget(accumulatorMs: number, targetIntervalMs: numb
     remainderMs: Math.max(0, accumulatorMs - targetIntervalMs),
   };
 }
+
+export const MAX_ANIMATION_DELTA_MS = 250;
+export const DIAGNOSTICS_PUBLISH_INTERVAL_MS = 300;
+
+export interface AnimationFrameBudget {
+  draw: boolean;
+  remainderMs: number;
+  phaseDeltaMs: number;
+  clamped: boolean;
+}
+
+/**
+ * Advance a capped rAF clock while preserving fractional frame remainder.
+ * At most one visual frame is returned per call. Long gaps intentionally drop
+ * backlog so a restored tab cannot enter a catch-up spiral.
+ */
+export function advanceAnimationFrameBudget(
+  accumulatorMs: number,
+  deltaMs: number,
+  targetIntervalMs: number,
+  maximumDeltaMs = MAX_ANIMATION_DELTA_MS,
+): AnimationFrameBudget {
+  if (
+    !Number.isFinite(accumulatorMs)
+    || accumulatorMs < 0
+    || !Number.isFinite(deltaMs)
+    || deltaMs <= 0
+    || !Number.isFinite(targetIntervalMs)
+    || targetIntervalMs <= 0
+    || !Number.isFinite(maximumDeltaMs)
+    || maximumDeltaMs <= 0
+  ) {
+    return { draw: false, remainderMs: 0, phaseDeltaMs: 0, clamped: false };
+  }
+
+  const clamped = deltaMs > maximumDeltaMs;
+  const nextAccumulator = accumulatorMs + Math.min(deltaMs, maximumDeltaMs);
+  const budget = consumeFrameBudget(nextAccumulator, targetIntervalMs);
+  if (!budget.draw) {
+    return {
+      draw: false,
+      remainderMs: nextAccumulator,
+      phaseDeltaMs: 0,
+      clamped,
+    };
+  }
+
+  // A large backlog represents inactivity or a blocked main thread, not visual
+  // frames that should be replayed. Drop it after emitting this one update.
+  const excessiveBacklog = clamped || nextAccumulator >= targetIntervalMs * 3;
+  return {
+    draw: true,
+    remainderMs: excessiveBacklog ? 0 : budget.remainderMs,
+    phaseDeltaMs: Math.min(deltaMs, maximumDeltaMs),
+    clamped: excessiveBacklog,
+  };
+}
+
+export function shouldPublishAnimationDiagnostics(
+  nowMs: number,
+  lastPublishedMs: number,
+  intervalMs = DIAGNOSTICS_PUBLISH_INTERVAL_MS,
+): boolean {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(lastPublishedMs) || !Number.isFinite(intervalMs) || intervalMs <= 0) {
+    return false;
+  }
+  return lastPublishedMs === 0 || nowMs - lastPublishedMs >= intervalMs;
+}

@@ -1,66 +1,71 @@
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controls } from "./components/Controls";
 import { Viewport } from "./components/Viewport";
-import { baseState } from "./engine/presets";
 import { createTimedSvg, download } from "./engine/exportSvg";
-import { validateProject } from "./engine/projectSchema";
 import { loadFontFile, validateLoadedFont, type LoadedFont } from "./engine/fontLoader";
 import { layoutGlyphs } from "./engine/glyphLayout";
 import { validateTextGeometry } from "./engine/glyphGeometry";
 import { getSvgDiagnostics, reportSvgValidation, type SvgDiagnostics } from "./engine/svgValidation";
-import { SUBSTRATE_RESOLUTIONS } from "./engine/substrate";
-import { getTextBounds, getTextLayout } from "./engine/textLayout";
 import { VIEWPORT } from "./engine/constants";
 import { useAnimationClock } from "./hooks/useAnimationClock";
-import type { PreviewDiagnostics, PreviewSettings, ProjectState, RenderContext } from "./types";
+import type { PreviewDiagnostics, RenderContext } from "./types";
 import { emitterGeometryKey, generateRendererGeometry, rendererGeometryStateKey, summarizeGeometry } from "./engine/rendererRuntime";
 import { getExportBudgetWarnings } from "./engine/exportBudget";
 import { getSubstratePerformanceWarnings, measure } from "./engine/performance";
-import { useSubstrateBackend } from "./hooks/useSubstrateBackend";
 import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
-import { DEFAULT_PREVIEW_FPS_CAP, selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
+import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
 import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
 import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
 import { buildCompositeWaveField, createGlyphFieldContext } from "./engine/field/compositeWaveField";
 import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
 import { WebGpuFieldOverlay } from "./components/dev/WebGpuFieldOverlay";
+import { PreviewPerformanceMeter } from "./components/dev/PreviewPerformanceMeter";
+import { CanvasNavigation } from "./components/CanvasNavigation";
+import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetExportability";
+import { recordPreviewAppRender, recordPreviewGeometryBuild } from "./engine/previewRuntimeDiagnostics";
+import { DEFAULT_SVG_TRACE_CONFIG, traceConfigForPreviewQuality, type SvgTraceConfig } from "./engine/previewTraceConfig";
+import { useProjectDocument, serializeProjectDocument } from "./hooks/useProjectDocument";
+import { usePreviewSettings } from "./hooks/usePreviewSettings";
+import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
+import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
+import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
+import { useExportController } from "./hooks/useExportController";
 
 export default function App() {
-  const [state, setState] = useState<ProjectState>(baseState);
+  recordPreviewAppRender();
+  const { project: state, setProject: setState, importUnknown } = useProjectDocument();
   const [playing, setPlaying] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [previewSettings, setPreviewSettings] = useState<PreviewSettings>(() => ({
-    fpsCap: DEFAULT_PREVIEW_FPS_CAP,
-    pauseWhenHidden: true,
-    reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-    backend: "auto",
-  }));
+  const { exporting, setExporting } = useExportController();
+  const [previewSettings, setPreviewSettings] = usePreviewSettings();
   const [message, setMessage] = useState("");
   const [loadedFont, setLoadedFont] = useState<LoadedFont | null>(null);
   const [canvasSample, setCanvasSample] = useState<CanvasPreviewSample | null>(null);
   const [canvasFailed, setCanvasFailed] = useState(false);
-  const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
+  const diagnosticsState = useDiagnosticsState();
   const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
   const [webGpuOverlayOpen, setWebGpuOverlayOpen] = useState(false);
+  const [fpsMeterOpen, setFpsMeterOpen] = useState(false);
+  const [svgTraceConfig, setSvgTraceConfig] = useState<SvgTraceConfig>(DEFAULT_SVG_TRACE_CONFIG);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
   const selectedPreviewBackend = selectPreviewBackend(state.renderer, requestedMarkCount(state), previewSettings.backend, !canvasFailed);
   const canvasFlowActive = selectedPreviewBackend === "canvas-2d";
   const previewAnimationRunning = shouldRunPreviewAnimation(renderer.usesTime, playing, previewSettings.reducedMotion, exporting);
-  const clockRunning = previewAnimationRunning && !canvasFlowActive;
+  const qualityTraceConfig = traceConfigForPreviewQuality(previewSettings.quality);
+  const activeSvgTraceConfig = import.meta.env.DEV && svgTraceConfig.mode !== "normal"
+    ? svgTraceConfig
+    : qualityTraceConfig;
+  const clockRunning = previewAnimationRunning && !canvasFlowActive && activeSvgTraceConfig.mode !== "local-clock";
   const { context, diagnostics: clockDiagnostics, reset } = useAnimationClock(
     clockRunning,
     previewSettings.fpsCap,
     previewSettings.pauseWhenHidden,
   );
-  const textGeometryBuild = useMemo(
-    () => measure(() => loadedFont ? layoutGlyphs(state, loadedFont) : null),
-    [state.text, state.fontSize, state.tracking, state.precision, state.kerningMode, state.kerningStrength, state.opticalSpacing, state.opticalSpacingStrength, state.textAlign, state.textOffsetY, loadedFont],
-  );
+  const textGeometryBuild = useTypographyGeometry(state, loadedFont);
   const textGeometry = textGeometryBuild.value;
-  const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state.text, state.fontSize, state.tracking, textGeometry]);
+  const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state, textGeometry]);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const multiple = resolveGlyphEmitterSources(state, textGeometry);
@@ -106,7 +111,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [setState]);
   const getWebGpuDevSnapshot = useCallback(() => {
     const multiple = resolveGlyphEmitterSources(state, textGeometry);
     const singleGlyph = resolveEmitterGlyph(emitterGlyphs, state.emitter.glyphId);
@@ -131,29 +136,13 @@ export default function App() {
     };
     return snapshot;
   }, [state, textGeometry, emitterGlyphs]);
-  const substrateInput = useMemo(() => {
-    const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
-    return {
-      sourceText: state.text,
-      textGeometry,
-      fontSize: state.fontSize,
-      tracking: state.tracking,
-      fontFamily: layout.fontFamily,
-      fontWeight: layout.fontWeight,
-      baselineY: layout.baselineY,
-      textX: layout.x,
-      kerningMode: state.kerningMode,
-      resolution: SUBSTRATE_RESOLUTIONS[state.substrateQuality],
-      bounds: textGeometry?.bounds ?? getTextBounds(state),
-    };
-  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, state.kerningMode, state.textAlign, state.textOffsetY, textGeometry]);
-  const substrateBuild = useSubstrateBackend(substrateInput);
+  const substrateBuild = useSubstratePipeline(state, textGeometry);
   const emitterFieldKey = emitterGeometryKey(state, textGeometry);
   useEffect(() => setCanvasFailed(false), [state.renderer, previewSettings.backend]);
 
   const randomize = useCallback(() => {
     setState((current) => ({ ...current, seed: Math.floor(Math.random() * 1_000_000), preset: "Custom" }));
-  }, []);
+  }, [setState]);
   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
   const staticRenderContext: RenderContext = useMemo(() => {
@@ -165,7 +154,7 @@ export default function App() {
       viewport: VIEWPORT,
     };
     return { ...base, ...createGlyphFieldContext(buildCompositeWaveField(state, base)) };
-  }, [state.text, state.fontSize, state.tracking, state.font, state.substrateQuality, emitterFieldKey, state.amplitude, state.frequency, textGeometry, substrateBuild.data]);
+  }, [state, textGeometry, substrateBuild.data]);
   const renderContext: RenderContext = useMemo(() => ({
     ...staticRenderContext,
     ...activeClockContext,
@@ -178,7 +167,11 @@ export default function App() {
     : { ...renderContext, timeMs: 0, frame: 0 };
   const geometryStateKey = rendererGeometryStateKey(state);
   const geometry = useMemo(
-    () => generateRendererGeometry(state, renderContext),
+    () => {
+      const timed = measure(() => generateRendererGeometry(state, renderContext));
+      recordPreviewGeometryBuild(timed.durationMs);
+      return timed.value;
+    },
     // Appearance-only changes intentionally preserve generated geometry identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [geometryStateKey, renderContext],
@@ -203,7 +196,7 @@ export default function App() {
     ...renderContext,
     timeMs: 0,
     frame: 0,
-  }), [renderContext.substrateData, renderContext.textGeometry, renderContext.viewport]);
+  }), [renderContext]);
   // Compute the estimate geometry through the renderer cache (cheap, identity-stable
   // across debug/preview-only changes); then derive byte-size diagnostics from it.
   // The serialization + DOMParser only run when the cached geometry identity changes.
@@ -257,6 +250,10 @@ export default function App() {
               : "paused",
   }), [canvasFlowActive, canvasSample, clockDiagnostics, exporting, playing, previewSettings.pauseWhenHidden, previewSettings.reducedMotion, renderer.usesTime]);
   const exportSvg = () => {
+    if (state.exportMode === "artwork" && presetExportKinds[state.preset] === "preview-only") {
+      setMessage(PREVIEW_ONLY_EXPORT_WARNING);
+      return;
+    }
     setExporting(true);
     requestAnimationFrame(() => {
       try {
@@ -282,18 +279,19 @@ export default function App() {
     setMessage(exactWarnings.length > 0
       ? `Exported ${formatBytes(exactDiagnostics.byteSize)} in ${timed.serializationTimeMs.toFixed(1)} ms. ${exactWarnings.join(" ")}`
       : `SVG exported · ${formatBytes(exactDiagnostics.byteSize)} · ${timed.serializationTimeMs.toFixed(1)} ms.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "SVG export failed.");
       } finally {
         setExporting(false);
       }
     });
   };
-  const exportJson = () => download(JSON.stringify(state, null, 2), "substrate-project.json", "application/json");
+  const exportJson = () => download(serializeProjectDocument(state), "substrate-project.json", "application/json");
   const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const { project, warnings } = validateProject(JSON.parse(await file.text()));
-      setState(project);
+      const { project, warnings } = importUnknown(JSON.parse(await file.text()));
       setLoadedFont(null);
       reset();
       const fontWarning = project.font ? `Re-upload ${project.font.fileName} to restore glyph outlines.` : "";
@@ -352,11 +350,11 @@ export default function App() {
           previewSettings={previewSettings}
           onPreviewSettingsChange={setPreviewSettings}
           emitterGlyphs={emitterGlyphs}
-          diagnosticsExpanded={diagnosticsExpanded}
-          onDiagnosticsExpandedChange={setDiagnosticsExpanded}
+          diagnosticsMode={diagnosticsState.mode}
+          onDiagnosticsModeChange={diagnosticsState.setMode}
         />
         <section className="viewport-shell">
-          <div className="stage-frame">
+          <CanvasNavigation>
             <Viewport
             state={state}
             context={renderContext}
@@ -375,9 +373,10 @@ export default function App() {
             canvasSample={canvasSample}
             onCanvasSample={setCanvasSample}
             onCanvasFailure={handleCanvasFailure}
-            diagnosticsExpanded={diagnosticsExpanded}
+            diagnosticsMode={diagnosticsState.mode}
+            svgTraceConfig={activeSvgTraceConfig}
           />
-          </div>
+          </CanvasNavigation>
           <div className="transport">
             <button className="play" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => setPlaying(!playing)}>{playing ? "Ⅱ" : "▶"}</button>
             <button onClick={reset}>Reset</button>
@@ -427,6 +426,38 @@ export default function App() {
                 zeroStrengthEmitterCount: geometry.diagnostics?.zeroStrengthEmitterCount,
               }}
               onClose={() => setWebGpuOverlayOpen(false)}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setFpsMeterOpen((open) => !open)}
+            style={{
+              position: "fixed",
+              left: 16,
+              bottom: 44,
+              zIndex: 99999,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              fontSize: 11,
+              color: fpsMeterOpen ? "#0a0c10" : "#d7ff00",
+              background: fpsMeterOpen ? "#d7ff00" : "rgba(8,10,14,0.85)",
+              border: "1px solid #d7ff00",
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+            aria-label={fpsMeterOpen ? "Close FPS meter overlay" : "Open FPS meter overlay"}
+            title="Dev-only Edge Current FPS meter (Gate 7.8A) — not export, not production UI."
+          >
+            {fpsMeterOpen ? "✕ FPS METER" : "▸ FPS METER"}
+          </button>
+          {fpsMeterOpen && (
+            <PreviewPerformanceMeter
+              state={state}
+              context={renderContext}
+              fpsCap={previewSettings.fpsCap}
+              onFpsCapChange={(fpsCap) => setPreviewSettings((current) => ({ ...current, fpsCap }))}
+              traceConfig={activeSvgTraceConfig}
+              onTraceConfigChange={setSvgTraceConfig}
+              onClose={() => setFpsMeterOpen(false)}
             />
           )}
         </>

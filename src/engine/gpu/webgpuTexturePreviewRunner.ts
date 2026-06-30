@@ -384,7 +384,7 @@ export function createTexturePreviewSustainedRunner(
       activeFinish = finish;
 
       const schedule = () => {
-        activeHandle = animationFrame.request(async (timestamp) => {
+        activeHandle = animationFrame.request((timestamp) => void (async () => {
           activeHandle = null;
           if (state !== "running") {
             return;
@@ -482,7 +482,7 @@ export function createTexturePreviewSustainedRunner(
           } else {
             schedule();
           }
-        });
+        })());
       };
       schedule();
     });
@@ -552,7 +552,7 @@ export async function createSustainedTexturePreviewHarness(
     getMountResult: () => mountResult,
     async recreate() {
       runner.dispose();
-      mountResult.controller?.dispose();
+      if (mountResult.status !== "error") mountResult.controller?.dispose();
       mountResult = await mountWebGpuTexturePreview(canvas, options);
       if (mountResult.status !== "error" && mountResult.controller) {
         runner = createTexturePreviewSustainedRunner(
@@ -580,7 +580,7 @@ export async function createSustainedTexturePreviewHarness(
     },
     dispose() {
       runner.dispose();
-      mountResult.controller?.dispose();
+      if (mountResult.status !== "error") mountResult.controller?.dispose();
     },
   };
   return harness;
@@ -622,7 +622,7 @@ function errorMessage(error: unknown): string {
 function defaultPacingCanvas(
   size: 256 | 512,
   mode: TexturePreviewPacingMode,
-  cssDisplaySize = size,
+  cssDisplaySize: number = size,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = size;

@@ -95,18 +95,18 @@ function createMockParityDevice(options: {
 
   return {
     queue: {
-      writeBuffer(buffer, _offset, data) {
+      writeBuffer(buffer: unknown, _offset: number, data: ArrayBufferView) {
         const mock = buffer as unknown as MockBuffer;
         const view = data as Float32Array;
         mock.data = new Float32Array(view);
       },
-      submit(commands) {
+      submit(commands: unknown[]) {
         // Commands are no-ops; compute already ran during pass.end().
         void commands;
       },
       onSubmittedWorkDone: () => Promise.resolve(),
     },
-    createBuffer(descriptor) {
+    createBuffer(descriptor: { size: number; usage: number }) {
       const byteLength = descriptor.size;
       const mock = createMockBuffer(descriptor.usage, byteLength);
       return mock as unknown as never;
@@ -115,12 +115,12 @@ function createMockParityDevice(options: {
     createComputePipeline: () => ({
       getBindGroupLayout: () => ({}),
     }),
-    createBindGroup: (descriptor) =>
+    createBindGroup: (descriptor: { entries: unknown[] }) =>
       ({ entries: descriptor.entries }) as unknown as never,
     createCommandEncoder: () => ({
       beginComputePass: () => ({
         setPipeline: () => undefined,
-        setBindGroup: (_index, bindGroup) => {
+        setBindGroup: (_index: number, bindGroup: unknown) => {
           const entries = (bindGroup as unknown as {
             entries: Array<{ resource: { buffer: MockBuffer } }>;
           }).entries;
@@ -189,7 +189,7 @@ function createMockParityDevice(options: {
           output.data = values;
         },
       }),
-      copyBufferToBuffer: (source, _so, destination, _do, size) => {
+      copyBufferToBuffer: (source: unknown, _so: number, destination: unknown, _do: number, size: number) => {
         const src = source as unknown as MockBuffer;
         const dst = destination as unknown as MockBuffer;
         const count = Math.min(

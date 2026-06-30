@@ -16,6 +16,14 @@ export interface SvgDiagnostics {
   substrateType: "glyph-paths" | "native-text";
 }
 
+const RASTER_SVG_PATTERN = /<image\b|<canvas\b|<foreignObject\b|data:image\/|;base64,/i;
+
+export function assertVectorOnlySvg(svg: string) {
+  if (RASTER_SVG_PATTERN.test(svg)) {
+    throw new Error("Final Artwork SVG contains a forbidden raster or foreign-object payload.");
+  }
+}
+
 export function validateSvgReload(svg: string, expectPathMask: boolean, requireArtworkStructure = true): SvgReloadValidation {
   const document = new DOMParser().parseFromString(svg, "image/svg+xml");
   const errors: string[] = [];
@@ -23,8 +31,8 @@ export function validateSvgReload(svg: string, expectPathMask: boolean, requireA
   if (parserError) errors.push(`SVG XML parse error: ${parserError.textContent?.trim() || "unknown parser error"}`);
 
   const requiredIds = requireArtworkStructure
-    ? [SVG_IDS.background, SVG_IDS.substrateMask, SVG_IDS.artwork, SVG_IDS.sourceText]
-    : [SVG_IDS.background, SVG_IDS.artwork];
+    ? [SVG_IDS.substrateMask, SVG_IDS.artwork, SVG_IDS.sourceText]
+    : [SVG_IDS.artwork];
   requiredIds.forEach((id) => {
     if (!document.getElementById(id)) errors.push(`Missing required SVG group: #${id}`);
   });

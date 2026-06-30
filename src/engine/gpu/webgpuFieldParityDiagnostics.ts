@@ -497,7 +497,7 @@ export async function runDevWebGpuFieldParityDiagnostics(
   const resultRows: FieldParityGridReport[] = [];
 
   const noteReason = (
-    report: Omit<FieldParityGridReport, "reason">,
+    report: FieldParityGridReport,
   ): FieldParityGridReport => {
     if (mapping.fieldState === "approximate" && report.status !== "invalid") {
       return { ...report, reason: mapping.approximateReason };

@@ -5,7 +5,7 @@ Updated for the v0.17 Multi-Emitter + Safe Typography release.
 ## Release state
 
 - Current release: `0.17.0`
-- Project schema: `6`
+- Project schema: `7`
 - Package, app, and exported SVG metadata report `0.17.0`.
 
 ## v0.17 Multi-Emitter + Safe Typography
@@ -31,6 +31,71 @@ Export limitations:
 - Scaled kerning and optical spacing cannot be represented faithfully in native Editable Text and may not be preserved.
 - `.substrate.json` is the procedural source of truth. Editable Text SVG is an interoperable text export, not a lossless project format.
 - Final Artwork remains vector-only; no field raster, canvas, PNG, or JPEG is serialized.
+
+## Gate 7.7 Preset vector integrity
+
+All normal presets, including the first preset **Edge Current**, have an explicit
+`exportKind: vector` contract outside project JSON. Edge Current uses the Flow Lines
+renderer and now defaults to the SVG DOM preview. Its previous Canvas 2D surface was
+preview-only, even though Final Artwork serialization already regenerated the same
+frame as vector paths.
+
+Canvas 2D remains available only as an explicitly selected, labeled preview backend.
+It is never passed to Final Artwork export. The SVG serializer rejects `<image>`,
+`<canvas>`, `<foreignObject>`, image data URLs, and embedded base64 payloads. A
+preview-only preset added in the future is refused for Final Artwork with:
+`This preset is preview-only and cannot be exported as Final Artwork SVG.`
+Editable Text SVG remains unchanged.
+
+## Gate 7.8 Edge Current SVG preview performance
+
+Manual QA after Gate 7.7 collapsed Edge Current / Flow Lines interactive preview
+FPS to ≈ 6 once the Canvas 2D auto-selection above 500 elements was removed and
+SVG DOM became the only normal preview surface.
+
+Root cause (Scope A — Diagnose Edge Current performance):
+- The Flow Preview component emitted ~1.5k `<line>` elements and called
+  `setAttribute` for x1/y1/x2/y2/opacity on each one every animation frame
+  (≈ 5 * 1564 ≈ 7800 live DOM attribute mutations per frame). Each mutation
+  re-coordinates the masked `<g>` paint and re-runs the glyph clip path, which
+  quickly saturates the browser's SVG repainting and collapsed the preview.
+- The renderer regenerated once per animation tick (cheap, single-pass math),
+  and React only re-ran the small memoized element array, so the bottleneck was
+  per-segment DOM attribute thrash, not React reconciliation or geometry build.
+
+Optimization (Scope B — Optimize SVG DOM preview):
+- `src/engine/flowPreviewOptimization.ts` partitions the LineSegments into a
+  fixed pool of `FLOW_PREVIEW_BUCKET_COUNT = 24` opacity buckets and produces
+  one concatenated `d` attribute per bucket (`M… L… M… L…` multi-subpath).
+- `src/components/FlowPreview.tsx` now mounts the bucket `<path>` pool once and
+  updates them imperatively in a `useLayoutEffect`. Per-frame DOM mutations
+  drop from ≈ N * 5 to ≤ `2 * FLOW_PREVIEW_BUCKET_COUNT` `setAttribute` calls,
+  and the SVG node tree is never recreated across animation frames
+  (`stats.nodeIdentityReused` is asserted true by tests).
+- Multi-subpath stroke painting on grouped paths is visually equivalent to the
+  previous `<line>` set because the parent `<g>` already supplies a single
+  stroke style, mask, and stroke width.
+- Canvas 2D remains available only as an explicitly selected, labeled preview
+  backend; the automatic vector preview backend (`auto`) stays SVG DOM. Canvas
+  / WebGPU / raster paths remain absent from the Final Artwork serializer.
+
+Appearance and zoom/pan invariants (Scope C and Scope D — verified by tests):
+- `primaryColor`, `outlineColor`, `backgroundColor`, and
+  `transparentBackground` changes are paint-only — they do not enter
+  `rendererGeometryStateKey`, do not regenerate geometry, do not modify path
+  `d`, line count, bucket counts, or bucket opacities. The color picker drag
+  therefore cannot trigger a full geometry rebuild.
+- Zoom and pan live entirely in `CanvasNavigation` component state
+  (`ViewportNavigationState`) and only mutate the CSS transform on the
+  navigation wrapper; `ProjectState`, `RenderContext`,
+  `rendererGeometryStateKey`, `generateRendererGeometry`, and the bucketed
+  flow path strings are unaffected by zoom level or pan offset.
+
+Deterministic Final Artwork:
+- `src/engine/exportSvg.ts` is unchanged: it still serializes one vector
+  `<path d="M… L…">` per LineSegment with its true per-segment opacity, inside
+  the masked `<g id="generated-artwork">`. The Flow Preview optimization is
+  preview-only and never feeds Final Artwork export.
 
 ### Changes in v0.16.1
 - **Performance Quick Wins (Phase 1)**: Debounced synchronous `costEstimate` generation during slider scrubs, hoisted invariant math out of `glyphDiffuserRenderer` inner loops, and added a 50ms debounce to `SubstrateBuildInput` to prevent stale Web Worker queueing during rapid text edits. Visual output, export semantics, and deterministic seeds remain unchanged.
@@ -913,6 +978,41 @@ Implemented changes:
 7. **Streamlines in-line distance accumulation (`src/engine/renderers/sdfStreamlinesRenderer.ts`)** — the per-step `sampleDistance` already sampled for the finite-distance check is now accumulated into a `distanceAccumulator`; the post-integration `points.reduce` re-sampling loop is removed.
 
 Remaining bottlenecks: **worker round-trip backlog during rapid text/quality scrubbing** remains the top responsive risk; it requires actual worker cancellation, which **remains deferred** in this pass. Main-thread debug-image generation (Deferred/idle-bound but still 100–170 ms for High/Ultra edge views), composite wave field rebuild on amplitude/frequency change, redundant `buildCompositeWaveField` fallbacks in Wave/Diffuser, post-stitch per-point `sampleDistanceGradient` in Contours, dense SVG-DOM preview reconciliation, and large `<metadata>` project serialization in export remain unchanged and visible in `PERFORMANCE_AUDIT.md`.
+
+## Preview quality control
+
+Flow Lines now exposes a runtime-only **Preview Quality** selector beside its
+backend/FPS controls:
+
+- **Full** (default): refreshes all 24 opacity paths each frame.
+- **Balanced**: refreshes 12 opacity paths together each frame.
+- **Performance**: refreshes 8 opacity paths together each frame.
+
+The setting is preview-only UI state. It is not part of `ProjectState`, project
+JSON, renderer geometry, or SVG serialization. Final Artwork SVG always remains
+full-quality deterministic vector output. All product modes now present a
+coherent animation time; lower modes trade only preview opacity resolution,
+not temporal synchronization. Balanced remains opt-in pending human visual
+acceptance; no Canvas/WebGPU fallback is introduced.
+
+## Gate 7.9 Dual preview pipeline
+
+Dense animated Flow previews now use an explicit, visible backend contract:
+
+- **Canvas Performance · preview only** is the recommended and initial mode for
+  Edge Current. It owns its animation loop and batches shared Flow line geometry
+  into at most 24 Canvas stroke submissions.
+- **SVG Accuracy · vector DOM** remains available as the reference preview and
+  retains its SVG quality controls.
+
+Both backends consume the same renderer math and presentation-neutral Flow
+frame data. Preview backend state and recommendation metadata remain outside
+`ProjectState` and `.substrate.json`. Unsupported renderers visibly resolve to
+SVG Accuracy rather than silently presenting Canvas.
+
+Final Artwork SVG has no dependency on either preview backend. It continues to
+use the CPU renderer and existing SVG serializer with full geometry and
+forbidden-raster validation.
 
 # 9. Known Issues / Limitations
 

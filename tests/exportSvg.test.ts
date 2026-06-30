@@ -72,6 +72,7 @@ describe("SVG export", () => {
     }, context, null), "image/svg+xml");
     expect(transparent.querySelector("#background")).toBeNull();
     expect(transparent.documentElement.getAttribute("viewBox")).toBe("0 0 1200 720");
+    expect(validateSvgReload(transparent.documentElement.outerHTML, false).valid).toBe(true);
   });
 
   it("keeps Editable Text native and applies its configured primary color", () => {

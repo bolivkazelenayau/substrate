@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { SVG_IDS, VIEWPORT } from "../engine/constants";
 import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
 import { getRenderer } from "../engine/renderers";
@@ -6,12 +6,13 @@ import { getTextBounds, getTextLayout, textAttributes } from "../engine/textLayo
 import type { TextGeometry } from "../engine/glyphGeometry";
 import type { SvgDiagnostics } from "../engine/svgValidation";
 import { sampleDistanceGradient } from "../engine/substrate";
-import type { PreviewDiagnostics, PreviewSettings, ProjectState, RenderContext } from "../types";
+import type { DiagnosticsMode, PreviewDiagnostics, PreviewSettings, ProjectState, RenderContext } from "../types";
 import { summarizeGeometry } from "../engine/rendererRuntime";
 import { getRendererTiming } from "../engine/rendererRuntime";
 import type { SubstrateBackendStatus } from "../engine/substrate";
 import { getBackendDiagnosticItems } from "../engine/substrate";
 import { useDeferredDebugImage } from "../hooks/useDeferredDebugImage";
+import { FLOW_PREVIEW_BUCKET_COUNT, type FlowPreviewUpdateResult } from "../engine/flowPreviewOptimization";
 import { FlowPreview } from "./FlowPreview";
 import { CanvasFlowPreview, type CanvasPreviewSample } from "./CanvasFlowPreview";
 import type { PreviewBackend } from "../engine/previewBackend";
@@ -20,6 +21,7 @@ import { useWaveFieldDebugImage } from "../hooks/useWaveFieldDebugImage";
 import { generateEdgeErosionMarks } from "../engine/edgeErosion";
 import { generateWarpedOutline, getFinalOutlineGeometry, outlineWarpCacheKey } from "../engine/outlineWarp";
 import { getControlActivity } from "../engine/controlOwnership";
+import { DEFAULT_SVG_TRACE_CONFIG, type SvgTraceConfig } from "../engine/previewTraceConfig";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -28,12 +30,24 @@ interface ViewportProps {
   previewDiagnostics: PreviewDiagnostics; previewBackend: PreviewBackend; previewSettings: PreviewSettings;
   previewRunning: boolean; canvasSample: CanvasPreviewSample | null;
   onCanvasSample: (sample: CanvasPreviewSample) => void; onCanvasFailure: () => void;
-  diagnosticsExpanded: boolean;
+  diagnosticsMode: DiagnosticsMode;
+  svgTraceConfig?: SvgTraceConfig;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsExpanded }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+  const diagnosticsExpanded = diagnosticsMode === "full";
   const renderer = getRenderer(state.renderer);
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
+  // Gate 7.8 — flow preview instrumentation. Held in a ref so per-frame
+  // `FlowPreview` update summaries surface in the diagnostic surface without
+  // committing additional React state during the animation loop. The callback
+  // identity is stabilized (`useCallback`) so paint-only Viewport re-renders
+  // (e.g. dragging the color picker) cannot invalidate FlowPreview's effect
+  // deps and force matching-bucket SVG DOM writes that would not otherwise run.
+  const flowPreviewStatsRef = useRef<FlowPreviewUpdateResult | null>(null);
+  const handleFlowPreviewUpdate = useCallback((stats: FlowPreviewUpdateResult) => {
+    flowPreviewStatsRef.current = stats;
+  }, []);
   const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
   const bounds = textGeometry?.bounds ?? getTextBounds(state);
   const hasGlyphPaths = Boolean(textGeometry?.hasOutlines);
@@ -95,7 +109,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   }, [substrate, state.debug.substrateMode]);
 
   return (
-    <div className="stage">
+    <div className={`stage diagnostics-${diagnosticsMode}`}>
       <div
         className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
         data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
@@ -145,9 +159,18 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
             </mask>
           )}
         </defs>
-        <g id={SVG_IDS.artwork} mask={(renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }}>
+        <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }}>
           {state.renderer === "flow" && previewBackend === "svg-dom"
-            ? <FlowPreview geometry={geometry} />
+            ? <FlowPreview
+                geometry={geometry}
+                onUpdate={handleFlowPreviewUpdate}
+                bucketCount={svgTraceConfig.bucketCount}
+                traceMode={svgTraceConfig.mode}
+                state={state}
+                context={context}
+                running={previewRunning}
+                fpsCap={previewSettings.fpsCap}
+              />
             : state.renderer !== "flow"
               ? geometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)
               : null}
@@ -369,6 +392,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {diagnosticsExpanded && <span>DRAW ACTUAL {previewBackend === "canvas-2d" ? canvasSample?.actualDrawIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>}
         {diagnosticsExpanded && <span>DIAG UPDATE {previewBackend === "canvas-2d" ? canvasSample?.diagnosticsUpdateIntervalMs.toFixed(1) ?? "0.0" : "0.0"}MS</span>}
         {diagnosticsExpanded && <span>SVG DOM {previewBackend === "svg-dom" ? geometrySummary.elementCount : 0}</span>}
+        {diagnosticsExpanded && state.renderer === "flow" && previewBackend === "svg-dom" && (
+          <span>FLOW PATHS {FLOW_PREVIEW_BUCKET_COUNT} / UPD {flowPreviewStatsRef.current?.attributeWrites ?? 0}</span>
+        )}
         {(diagnosticsExpanded || (previewBackend === "svg-dom" && geometrySummary.elementCount >= 500)) && previewBackend === "svg-dom" && geometrySummary.elementCount >= 500 && <span>SVG DEBUG / SLOW</span>}
         {diagnosticsExpanded && <span>CLIP {previewBackend === "canvas-2d" && canvasSample?.clippingActive ? "ACTIVE" : "SVG"}</span>}
         {(diagnosticsExpanded || (state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom")) && <span>SVG FALLBACK {state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom" ? "ACTIVE" : "NO"}</span>}

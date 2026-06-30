@@ -1,5 +1,9 @@
 # SUBSTRATE SVG Vector Compatibility Checklist
 
+All exportable presets must declare vector exportability and pass the preset-level
+raster signature audit. Canvas 2D and WebGPU surfaces are preview/diagnostic-only;
+they are not Final Artwork preset outputs and must never be serialized into SVG.
+
 Use the same representative project for each application:
 
 - A short word with counters and curves, such as `FORM`.

@@ -145,6 +145,15 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 /* viewport */
 .viewport-shell { flex: 1; min-width: 0; min-height: 0; padding: 24px; display: flex; flex-direction: column; background-color: var(--ink); background-image: linear-gradient(#151514 1px, transparent 1px), linear-gradient(90deg, #151514 1px, transparent 1px); background-size: 40px 40px; overflow: hidden; font-variant-numeric: tabular-nums; }
 .stage-frame { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.canvas-navigation { position: relative; cursor: default; outline: none; user-select: none; }
+.canvas-navigation:focus-visible { outline: 1px solid var(--acid); outline-offset: -1px; }
+.canvas-navigation.can-pan { cursor: grab; }
+.canvas-navigation.is-panning { cursor: grabbing; }
+.canvas-navigation-transform { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; transform-origin: center; }
+.canvas-navigation-controls { position: absolute; right: 12px; bottom: 12px; z-index: 4; display: flex; align-items: stretch; color: var(--text); background: var(--panel); border: 1px solid var(--line); }
+.canvas-navigation-controls button { min-width: 34px; min-height: 30px; padding: 0 9px; border: 0; border-right: 1px solid var(--line); color: var(--text); }
+.canvas-navigation-controls button:last-child { border-right: 0; border-left: 1px solid var(--line); }
+.canvas-navigation-controls output { min-width: 52px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; color: var(--acid); font-size: 9px; font-variant-numeric: tabular-nums; }
 .stage { position: relative; width: 100%; max-height: 100%; aspect-ratio: 1200 / 720; border: 1px solid var(--line); background: var(--ink); overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
 .artboard-backing { position: absolute; inset: 0; z-index: 0; background: var(--ink); pointer-events: none; }
 .artboard-backing.is-transparent {
@@ -175,6 +184,20 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 /* diagnostics */
 .substrate-diagnostics, .renderer-diagnostics, .backend-diagnostics, .export-warnings, .performance-warnings, .substrate-error {
   position: absolute; z-index: 3; padding: 8px 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); font-size: 9px; pointer-events: none; display: flex; flex-wrap: wrap; gap: 6px 12px; letter-spacing: 0.05em;
+}
+.diagnostics-off .substrate-diagnostics,
+.diagnostics-off .renderer-diagnostics,
+.diagnostics-off .backend-diagnostics {
+  display: none;
+}
+.panel-heading-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .substrate-diagnostics { top: 24px; left: 24px; max-width: calc(100% - 48px); }
 .renderer-diagnostics { top: 24px; right: 24px; justify-content: flex-end; max-width: calc(100% - 48px); }

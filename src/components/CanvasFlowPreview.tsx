@@ -1,9 +1,8 @@
 import { memo, useEffect, useRef } from "react";
 import { consumeFrameBudget, updateTimingAverage } from "../engine/animationTiming";
 import { VIEWPORT } from "../engine/constants";
-import type { LineSegment } from "../engine/geometry";
+import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../engine/flowPreviewFrame";
 import type { TextGeometry } from "../engine/glyphGeometry";
-import { generateRendererGeometry } from "../engine/rendererRuntime";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 
@@ -66,23 +65,26 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     const draw = (timeMs: number, frameNumber: number) => {
       const started = performance.now();
       const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: VIEWPORT };
-      const geometry = generateRendererGeometry(state, renderContext);
+      const previewFrame = createFlowPreviewFrame(state, renderContext);
       context2d.setTransform(ratio, 0, 0, ratio, 0, 0);
       context2d.clearRect(0, 0, VIEWPORT.width, VIEWPORT.height);
-      if (!state.transparentBackground) {
-        context2d.fillStyle = state.backgroundColor;
+      if (!previewFrame.appearance.transparentBackground) {
+        context2d.fillStyle = previewFrame.appearance.backgroundColor;
         context2d.fillRect(0, 0, VIEWPORT.width, VIEWPORT.height);
       }
       context2d.save();
       if (glyphClip) context2d.clip(glyphClip);
-      context2d.strokeStyle = state.primaryColor;
-      context2d.lineWidth = 1.4;
+      context2d.strokeStyle = previewFrame.appearance.primaryColor;
+      context2d.lineWidth = previewFrame.appearance.strokeWidth;
       context2d.lineCap = "round";
-      for (const line of geometry.geometries as LineSegment[]) {
-        context2d.globalAlpha = line.opacity;
+      for (const batch of batchFlowLinesForCanvas(previewFrame.lines)) {
+        if (batch.lines.length === 0) continue;
+        context2d.globalAlpha = batch.opacity;
         context2d.beginPath();
-        context2d.moveTo(line.start.x, line.start.y);
-        context2d.lineTo(line.end.x, line.end.y);
+        for (const line of batch.lines) {
+          context2d.moveTo(line.start.x, line.start.y);
+          context2d.lineTo(line.end.x, line.end.y);
+        }
         context2d.stroke();
       }
       if (!glyphClip) {

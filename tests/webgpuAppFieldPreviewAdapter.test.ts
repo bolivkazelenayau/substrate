@@ -345,7 +345,7 @@ describe("dev WebGPU app-field preview adapter", () => {
       },
     };
     const mounted = await mountDevWebGpuAppFieldPreview(
-      canvas as HTMLCanvasElement,
+      canvas as unknown as HTMLCanvasElement,
       initialSnapshot,
       {
         size: 256,

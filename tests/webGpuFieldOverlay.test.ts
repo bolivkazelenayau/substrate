@@ -220,7 +220,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
         createElement(WebGpuFieldOverlay, {
           getSnapshot,
           onClose: () => undefined,
-          size: 128,
+          size: 256,
           ...overrides,
         } as WebGpuFieldOverlayProps),
       );
@@ -348,6 +348,8 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
         emitterDomains: undefined,
         artboardBoundsClipped: undefined,
         maxNodesClipped: undefined,
+        activeContributingEmitterCount: undefined,
+        zeroStrengthEmitterCount: undefined,
       },
     });
     const text = overlayRoot()!.textContent ?? "";
@@ -464,7 +466,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
         tick: async () => {
           const getter = getterHolder.current;
           if (!getter) return;
-          await lastController!.updateSpy(getter());
+          await lastController!.controller.update(getter());
         },
       };
     }
@@ -518,7 +520,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
           createElement(WebGpuFieldOverlay, {
             getSnapshot: getSnapshotB,
             onClose: () => undefined,
-            size: 128,
+            size: 256,
           } as WebGpuFieldOverlayProps),
         );
       });
@@ -557,7 +559,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
           createElement(WebGpuFieldOverlay, {
             getSnapshot: getSnapshotB,
             onClose: () => undefined,
-            size: 128,
+            size: 256,
           } as WebGpuFieldOverlayProps),
         );
       });
@@ -579,7 +581,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
           createElement(WebGpuFieldOverlay, {
             getSnapshot: getSnapshotB,
             onClose: () => undefined,
-            size: 128,
+            size: 256,
           } as WebGpuFieldOverlayProps),
         );
       });

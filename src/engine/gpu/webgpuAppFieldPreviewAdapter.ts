@@ -404,10 +404,10 @@ export async function mountDevWebGpuAppFieldPreview(
         presentationPhase += step;
         await controller.update(getSnapshot());
         if (!disposed) {
-          frameHandle = requestAnimationFrame(frame);
+          frameHandle = requestAnimationFrame(() => { void frame(); });
         }
       };
-      frameHandle = requestAnimationFrame(frame);
+      frameHandle = requestAnimationFrame(() => { void frame(); });
     },
     stop() {
       if (frameHandle !== null) {

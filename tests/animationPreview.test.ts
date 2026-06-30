@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { consumeFrameBudget, formatFps, getFramePacingStatus, updateTimingAverage } from "../src/engine/animationTiming";
-import { DEFAULT_PREVIEW_FPS_CAP, selectPreviewBackend, shouldRunPreviewAnimation } from "../src/engine/previewBackend";
+import {
+  advanceAnimationFrameBudget,
+  consumeFrameBudget,
+  formatFps,
+  getFramePacingStatus,
+  shouldPublishAnimationDiagnostics,
+  updateTimingAverage,
+} from "../src/engine/animationTiming";
+import {
+  DEFAULT_PREVIEW_FPS_CAP,
+  previewBackends,
+  recommendedPreviewBackends,
+  selectPreviewBackend,
+  shouldRunPreviewAnimation,
+} from "../src/engine/previewBackend";
+import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../src/engine/flowPreviewFrame";
 import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry } from "../src/engine/rendererRuntime";
 import { createSvg } from "../src/engine/exportSvg";
@@ -35,12 +49,59 @@ describe("animation preview", () => {
     expect(consumeFrameBudget(33.2, 1000 / 30).draw).toBe(true);
   });
 
-  it("selects Canvas 2D for dense animated Flow Lines and keeps SVG fallback selectable", () => {
+  it.each([24, 30, 60])("paces %i FPS accurately on simulated 60 Hz rAF", (targetFps) => {
+    const targetInterval = 1000 / targetFps;
+    const rafInterval = 1000 / 60;
+    let accumulator = 0;
+    let commits = 0;
+    for (let tick = 0; tick < 600; tick += 1) {
+      const budget = advanceAnimationFrameBudget(accumulator, rafInterval, targetInterval);
+      accumulator = budget.remainderMs;
+      if (budget.draw) commits += 1;
+    }
+    expect(commits / 10).toBeCloseTo(targetFps, 0);
+    expect(commits).toBeLessThanOrEqual(600);
+  });
+
+  it("carries remainder at 24 FPS instead of quantizing to three vsyncs", () => {
+    const interval = 1000 / 24;
+    let accumulator = 0;
+    let sawRemainder = false;
+    for (let tick = 0; tick < 12; tick += 1) {
+      const budget = advanceAnimationFrameBudget(accumulator, 1000 / 60, interval);
+      accumulator = budget.remainderMs;
+      if (budget.draw && budget.remainderMs > 0) sawRemainder = true;
+    }
+    expect(sawRemainder).toBe(true);
+  });
+
+  it("drops long-gap backlog and emits at most one visual update", () => {
+    const result = advanceAnimationFrameBudget(20, 5_000, 1000 / 30);
+    expect(result).toMatchObject({ draw: true, remainderMs: 0, phaseDeltaMs: 250, clamped: true });
+    expect(advanceAnimationFrameBudget(0, 1000 / 60, 1000 / 30).draw).toBe(false);
+  });
+
+  it("publishes diagnostics at a throttled cadence", () => {
+    expect(shouldPublishAnimationDiagnostics(16, 0)).toBe(true);
+    expect(shouldPublishAnimationDiagnostics(250, 16)).toBe(false);
+    expect(shouldPublishAnimationDiagnostics(316, 16)).toBe(true);
+  });
+
+  it("keeps Flow Lines preview selection explicit and renderer-scoped", () => {
     expect(DEFAULT_PREVIEW_FPS_CAP).toBe(30);
-    expect(selectPreviewBackend("flow", 1564, "auto")).toBe("canvas-2d");
+    expect(selectPreviewBackend("flow", 1564, "canvas-2d")).toBe("canvas-2d");
     expect(selectPreviewBackend("flow", 1564, "svg-dom")).toBe("svg-dom");
     expect(selectPreviewBackend("flow", 1564, "canvas-2d", false)).toBe("svg-dom");
     expect(selectPreviewBackend("ripple", 1564, "canvas-2d")).toBe("svg-dom");
+    expect(previewBackends["canvas-2d"]).toMatchObject({
+      label: "Canvas Performance",
+      detail: "preview only",
+    });
+    expect(previewBackends["svg-dom"]).toMatchObject({
+      label: "SVG Accuracy",
+      detail: "vector DOM",
+    });
+    expect(recommendedPreviewBackends["Edge Current"]).toBe("canvas-2d");
   });
 
   it("does not animate static renderers, reduced motion, paused previews, or exports", () => {
@@ -59,5 +120,25 @@ describe("animation preview", () => {
     expect(generateRendererGeometry(state, context)).toEqual(geometry);
     expect(first).toContain("<path");
     expect(first).not.toMatch(/<canvas|<image|data:image/i);
+    expect(JSON.stringify(state)).not.toMatch(/canvas-2d|svg-dom|previewBackend/);
+  });
+
+  it("uses the renderer's resolved Flow geometry as the shared preview frame", () => {
+    const state = { ...baseState, renderer: "flow" as const };
+    const context = { timeMs: 420, frame: 12 };
+    const geometry = generateRendererGeometry(state, context);
+    const frame = createFlowPreviewFrame(state, context, geometry);
+    expect(frame.geometry).toBe(geometry);
+    expect(frame.lines).toBe(geometry.geometries);
+    expect(frame.bounds).toMatchObject({ width: 1200, height: 720 });
+    expect(frame.appearance).toMatchObject({
+      primaryColor: state.primaryColor,
+      outlineColor: state.outlineColor,
+      backgroundColor: state.backgroundColor,
+      transparentBackground: state.transparentBackground,
+    });
+    const batches = batchFlowLinesForCanvas(frame.lines);
+    expect(batches).toHaveLength(24);
+    expect(batches.reduce((count, batch) => count + batch.lines.length, 0)).toBe(frame.lines.length);
   });
 });

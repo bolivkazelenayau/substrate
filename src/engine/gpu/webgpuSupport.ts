@@ -15,7 +15,7 @@ export interface WebGpuCommandEncoder {
   }): {
     setPipeline(pipeline: unknown): void;
     setBindGroup(index: number, bindGroup: unknown): void;
-    dispatchWorkgroups(count: number): void;
+    dispatchWorkgroups(x: number, y?: number, z?: number): void;
     end(): void;
   };
   copyBufferToBuffer(

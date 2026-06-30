@@ -13,6 +13,7 @@ const previewSettings = {
   pauseWhenHidden: true,
   reducedMotion: false,
   backend: "svg-dom" as const,
+  quality: "full" as const,
 };
 
 function previewMarkup(state: ProjectState, previewBackend: "svg-dom" | "canvas-2d" = "svg-dom") {
@@ -56,7 +57,7 @@ function previewMarkup(state: ProjectState, previewBackend: "svg-dom" | "canvas-
       canvasSample: null,
       onCanvasSample: () => undefined,
       onCanvasFailure: () => undefined,
-      diagnosticsExpanded: false,
+      diagnosticsMode: "compact",
     }),
   );
 }

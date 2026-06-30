@@ -9,7 +9,8 @@ const previewSettings = {
   fpsCap: 30 as const,
   pauseWhenHidden: true,
   reducedMotion: false,
-  backend: "auto" as const,
+  backend: "canvas-2d" as const,
+  quality: "full" as const,
 };
 
 describe("Safe Typography controls", () => {
@@ -49,8 +50,8 @@ describe("Safe Typography controls", () => {
         previewSettings,
         onPreviewSettingsChange: () => undefined,
         emitterGlyphs: [],
-        diagnosticsExpanded: false,
-        onDiagnosticsExpandedChange: () => undefined,
+        diagnosticsMode: "compact",
+        onDiagnosticsModeChange: () => undefined,
       }));
     });
   };
@@ -203,5 +204,30 @@ describe("Safe Typography controls", () => {
       expect.objectContaining({ id: "first", radiusMultiplier: 1 }),
       expect.objectContaining({ id: "second", radiusMultiplier: 1 }),
     ]);
+  });
+
+  it("shows Full as the default preview-only quality control", () => {
+    renderControls();
+    const advancedOutput = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Advanced Output"));
+    expect(advancedOutput).toBeTruthy();
+    act(() => advancedOutput!.click());
+    const quality = field("Preview Quality", "select") as HTMLSelectElement;
+    expect(quality.value).toBe("full");
+    expect(quality.parentElement?.textContent).toContain("every path stays synchronized");
+    expect(quality.parentElement?.textContent).toContain("SVG export remains full quality");
+  });
+
+  it("shows an explicit Canvas Performance mode and Edge Current recommendation", () => {
+    renderControls();
+    const advancedOutput = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Advanced Output"));
+    act(() => advancedOutput!.click());
+    const mode = field("Preview Mode", "select") as HTMLSelectElement;
+    expect(mode.value).toBe("canvas-2d");
+    expect(mode.textContent).toContain("Canvas Performance · preview only");
+    expect(mode.textContent).toContain("SVG Accuracy · vector DOM");
+    expect(mode.parentElement?.textContent).toContain("Recommended for Edge Current");
+    expect(mode.parentElement?.textContent).toContain("Export remains full vector SVG");
   });
 });

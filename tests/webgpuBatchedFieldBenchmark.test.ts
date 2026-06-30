@@ -197,7 +197,7 @@ describe("batched WebGPU field benchmark", () => {
           status: "success",
           size,
           batchSize,
-          submissionsPerSync: options.submissionsPerSync ?? 1,
+          submissionsPerSync: options?.submissionsPerSync ?? 1,
           dispatchCount: batchSize,
           validationStatus: "timing-only-validated-formula",
           timestampStatus: "timestamp-unavailable",

@@ -3,6 +3,18 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
+  it("ignores runtime preview backend and quality fields on import", () => {
+    const { project } = validateProject({
+      ...baseState,
+      previewBackend: "canvas-2d",
+      previewMode: "svg-dom",
+      previewQuality: "performance",
+    });
+    const serialized = JSON.stringify(project);
+    expect(serialized).not.toMatch(/previewBackend|previewMode|previewQuality|canvas-2d|svg-dom/);
+    expect(project).toEqual(baseState);
+  });
+
   it("migrates version 1 projects to version 7", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
     expect(result.project.version).toBe(7);

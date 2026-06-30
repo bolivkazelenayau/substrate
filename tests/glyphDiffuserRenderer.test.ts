@@ -577,7 +577,7 @@ describe("Glyph Diffuser renderer", () => {
       diffuserComposition: "behind-text" as const,
     };
     const warped = generateWarpedOutline(outlineState, context);
-    const final = getFinalOutlineGeometry(context.textGeometry, warped, false);
+    const final = getFinalOutlineGeometry(context.textGeometry ?? null, warped, false);
     expect(final.diagnostics).toMatchObject({
       pathCount: context.textGeometry!.glyphs.length,
       openContourCount: 0,

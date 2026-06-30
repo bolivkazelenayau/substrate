@@ -223,7 +223,7 @@ function rounded(value: number | null): number | null {
 
 export function repeatedBenchmarkTableRows(
   report: RepeatedWebGpuFieldBenchmarkResult,
-): Array<Record<string, number | null>> {
+): Array<Record<string, number | string | null>> {
   return report.sizes.flatMap((sizeResult) =>
     TIMING_NAMES.map((timing) => {
       const statistics = sizeResult.statistics[timing];

@@ -35,6 +35,6 @@ export function useWaveFieldDebugImage(state: ProjectState, context: RenderConte
     }
     drawing.putImageData(image, 0, 0);
     setUrl(canvas.toDataURL("image/png"));
-  }, [context.glyphField, context.substrateData, context.textGeometry, enabled, state]);
+  }, [context, enabled, state]);
   return url;
 }
