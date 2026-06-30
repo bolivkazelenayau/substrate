@@ -13,7 +13,7 @@ import { getTextBounds, getTextLayout } from "./engine/textLayout";
 import { VIEWPORT } from "./engine/constants";
 import { useAnimationClock } from "./hooks/useAnimationClock";
 import type { PreviewDiagnostics, PreviewSettings, ProjectState, RenderContext } from "./types";
-import { emitterGeometryKey, generateRendererGeometry, summarizeGeometry } from "./engine/rendererRuntime";
+import { emitterGeometryKey, generateRendererGeometry, rendererGeometryStateKey, summarizeGeometry } from "./engine/rendererRuntime";
 import { getExportBudgetWarnings } from "./engine/exportBudget";
 import { getSubstratePerformanceWarnings, measure } from "./engine/performance";
 import { useSubstrateBackend } from "./hooks/useSubstrateBackend";
@@ -21,8 +21,10 @@ import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
 import { DEFAULT_PREVIEW_FPS_CAP, selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
 import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
-import { getGlyphEmitterMetadata } from "./engine/field/glyphEmitters";
+import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
 import { buildCompositeWaveField, createGlyphFieldContext } from "./engine/field/compositeWaveField";
+import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
+import { WebGpuFieldOverlay } from "./components/dev/WebGpuFieldOverlay";
 
 export default function App() {
   const [state, setState] = useState<ProjectState>(baseState);
@@ -40,6 +42,7 @@ export default function App() {
   const [canvasFailed, setCanvasFailed] = useState(false);
   const [diagnosticsExpanded, setDiagnosticsExpanded] = useState(false);
   const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
+  const [webGpuOverlayOpen, setWebGpuOverlayOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
@@ -58,6 +61,76 @@ export default function App() {
   );
   const textGeometry = textGeometryBuild.value;
   const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state.text, state.fontSize, state.tracking, textGeometry]);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const multiple = resolveGlyphEmitterSources(state, textGeometry);
+    const singleGlyph = resolveEmitterGlyph(emitterGlyphs, state.emitter.glyphId);
+    const snapshot: DevWebGpuAppFieldSnapshot = {
+      project: {
+        ...state,
+        emitter: { ...state.emitter },
+        emitters: state.emitters.map((emitter) => ({ ...emitter })),
+      },
+      bounds: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      singleAnchor: singleGlyph
+        ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
+            x: state.emitter.customX,
+            y: state.emitter.customY,
+          })
+        : null,
+      resolvedEmitterAnchors: multiple.sources.map((source) => ({
+        id: source.id,
+        x: source.anchor.x,
+        y: source.anchor.y,
+      })),
+    };
+    const devGlobal = globalThis as typeof globalThis & {
+      __SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__?: () => DevWebGpuAppFieldSnapshot;
+    };
+    const getter = () => snapshot;
+    devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__ = getter;
+    return () => {
+      if (devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__ === getter) {
+        delete devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__;
+      }
+    };
+  }, [state, textGeometry, emitterGlyphs]);
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + Shift + G toggles the dev WebGPU field overlay.
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "g" || event.key === "G")) {
+        event.preventDefault();
+        setWebGpuOverlayOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+  const getWebGpuDevSnapshot = useCallback(() => {
+    const multiple = resolveGlyphEmitterSources(state, textGeometry);
+    const singleGlyph = resolveEmitterGlyph(emitterGlyphs, state.emitter.glyphId);
+    const snapshot: DevWebGpuAppFieldSnapshot = {
+      project: {
+        ...state,
+        emitter: { ...state.emitter },
+        emitters: state.emitters.map((emitter) => ({ ...emitter })),
+      },
+      bounds: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      singleAnchor: singleGlyph
+        ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
+            x: state.emitter.customX,
+            y: state.emitter.customY,
+          })
+        : null,
+      resolvedEmitterAnchors: multiple.sources.map((source) => ({
+        id: source.id,
+        x: source.anchor.x,
+        y: source.anchor.y,
+      })),
+    };
+    return snapshot;
+  }, [state, textGeometry, emitterGlyphs]);
   const substrateInput = useMemo(() => {
     const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
     return {
@@ -103,13 +176,17 @@ export default function App() {
   const exportContext: RenderContext = state.exportFrameMode === "current"
     ? renderContext
     : { ...renderContext, timeMs: 0, frame: 0 };
+  const geometryStateKey = rendererGeometryStateKey(state);
   const geometry = useMemo(
     () => generateRendererGeometry(state, renderContext),
-    [state, renderContext],
+    // Appearance-only changes intentionally preserve generated geometry identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometryStateKey, renderContext],
   );
   const exportGeometry = useMemo(
     () => state.exportFrameMode === "current" ? geometry : generateRendererGeometry(state, exportContext),
-    [state, exportContext, geometry],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geometryStateKey, state.exportFrameMode, exportContext, geometry],
   );
   const geometrySummary = useMemo(() => summarizeGeometry(exportGeometry), [exportGeometry]);
   const exportWarnings = useMemo(() => getExportBudgetWarnings({
@@ -133,7 +210,7 @@ export default function App() {
   const estimateGeometry = useMemo(
     () => generateRendererGeometry(state, estimateContext),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state, estimateContext],
+    [geometryStateKey, estimateContext],
   );
   const estimateExportKey = [
     state.exportMode,
@@ -311,6 +388,49 @@ export default function App() {
           {message && <p className="error" role="status">{message}</p>}
         </section>
       </div>
+      {import.meta.env.DEV && (
+        <>
+          <button
+            type="button"
+            onClick={() => setWebGpuOverlayOpen((open) => !open)}
+            style={{
+              position: "fixed",
+              left: 16,
+              bottom: 16,
+              zIndex: 99999,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              fontSize: 11,
+              color: webGpuOverlayOpen ? "#0a0c10" : "#d7ff00",
+              background: webGpuOverlayOpen ? "#d7ff00" : "rgba(8,10,14,0.85)",
+              border: "1px solid #d7ff00",
+              padding: "4px 8px",
+              cursor: "pointer",
+            }}
+            aria-label={webGpuOverlayOpen ? "Close WebGPU field debug overlay" : "Open WebGPU field debug overlay"}
+            title="Dev-only WebGPU field heatmap overlay (Ctrl/⌘+Shift+G) — not export, not production UI."
+          >
+            {webGpuOverlayOpen ? "✕ GPU DEBUG" : "▸ GPU FIELD DEBUG"}
+          </button>
+          {webGpuOverlayOpen && (
+            <WebGpuFieldOverlay
+              getSnapshot={getWebGpuDevSnapshot}
+              rendererComparison={{
+                activeFieldEmitterCount: geometry.diagnostics?.rendererActiveFieldEmitterCount,
+                consumedFieldMode: geometry.diagnostics?.consumedFieldMode,
+                cacheEmitterKey: emitterFieldKey,
+                renderedMarkCountPerEmitter: geometry.diagnostics?.renderedMarkCountPerEmitter,
+                normalizationMode: geometry.diagnostics?.fieldNormalizationMode,
+                emitterDomains: geometry.diagnostics?.emitterDomainDiagnostics,
+                artboardBoundsClipped: geometry.diagnostics?.artboardBoundsClipped,
+                maxNodesClipped: geometry.diagnostics?.maxNodesClipped,
+                activeContributingEmitterCount: geometry.diagnostics?.activeContributingEmitterCount,
+                zeroStrengthEmitterCount: geometry.diagnostics?.zeroStrengthEmitterCount,
+              }}
+              onClose={() => setWebGpuOverlayOpen(false)}
+            />
+          )}
+        </>
+      )}
     </main>
   );
 }

@@ -86,7 +86,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 6;
+  version: 7;
   text: string;
   fontSize: number;
   tracking: number;
@@ -104,6 +104,10 @@ export interface ProjectState {
   turbulence: number;
   edgeInfluence: number;
   exportMode: ExportMode;
+  primaryColor: string;
+  outlineColor: string;
+  backgroundColor: string;
+  transparentBackground: boolean;
   exportFrameMode: ExportFrameMode;
   precision: number;
   maxNodes: number;

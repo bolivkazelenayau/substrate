@@ -17,6 +17,8 @@ const clamp = (value: unknown, fallback: number, min: number, max: number, integ
 };
 const enumValue = <T extends string>(value: unknown, values: readonly T[], fallback: T): T =>
   typeof value === "string" && values.includes(value as T) ? value as T : fallback;
+const colorValue = (value: unknown, fallback: string): string =>
+  typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
 
 export interface ProjectValidationResult {
   project: ProjectState;
@@ -26,7 +28,7 @@ export interface ProjectValidationResult {
 export function migrateProject(input: unknown): UnknownRecord {
   if (!isRecord(input)) throw new Error("Project must be a JSON object.");
   const version = typeof input.version === "number" ? input.version : 1;
-  if (version > 6) throw new Error(`Project version ${version} is newer than this app supports.`);
+  if (version > 7) throw new Error(`Project version ${version} is newer than this app supports.`);
   let migrated: UnknownRecord = { ...input };
   if (version <= 3) {
     migrated = {
@@ -67,6 +69,16 @@ export function migrateProject(input: unknown): UnknownRecord {
       opticalSpacingStrength: migrated.opticalSpacingStrength ?? 0,
       textAlign: migrated.textAlign ?? "center",
       textOffsetY: migrated.textOffsetY ?? 0,
+    };
+  }
+  if (version <= 6) {
+    migrated = {
+      ...migrated,
+      version: 7,
+      primaryColor: migrated.primaryColor ?? baseState.primaryColor,
+      outlineColor: migrated.outlineColor ?? baseState.outlineColor,
+      backgroundColor: migrated.backgroundColor ?? baseState.backgroundColor,
+      transparentBackground: migrated.transparentBackground ?? baseState.transparentBackground,
     };
   }
   return migrated;
@@ -128,7 +140,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 6,
+    version: 7,
     text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
     fontSize: clamp(source.fontSize, baseState.fontSize, 64, 220),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
@@ -146,6 +158,12 @@ export function validateProject(input: unknown): ProjectValidationResult {
     turbulence: clamp(source.turbulence, baseState.turbulence, 0, 100),
     edgeInfluence: clamp(source.edgeInfluence, baseState.edgeInfluence, 0, 100),
     exportMode: enumValue(source.exportMode, exportModes, baseState.exportMode),
+    primaryColor: colorValue(source.primaryColor, baseState.primaryColor),
+    outlineColor: colorValue(source.outlineColor, baseState.outlineColor),
+    backgroundColor: colorValue(source.backgroundColor, baseState.backgroundColor),
+    transparentBackground: typeof source.transparentBackground === "boolean"
+      ? source.transparentBackground
+      : baseState.transparentBackground,
     exportFrameMode: enumValue(source.exportFrameMode, exportFrameModes, baseState.exportFrameMode),
     precision: clamp(source.precision, baseState.precision, 0, 3, true),
     maxNodes: clamp(source.maxNodes, baseState.maxNodes, 400, 5000, true),
@@ -216,7 +234,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     font,
   };
 
-  if (originalVersion < 6) warnings.push("Project was migrated to schema version 6.");
+  if (originalVersion < 7) warnings.push("Project was migrated to schema version 7.");
   if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
   return { project, warnings };
 }

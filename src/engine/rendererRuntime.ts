@@ -77,6 +77,17 @@ export function emitterGeometryKey(state: ProjectState, textGeometry: RenderCont
     : multiEmitterKey(state, textGeometry);
 }
 
+export function rendererGeometryStateKey(state: ProjectState) {
+  const {
+    primaryColor: _primaryColor,
+    outlineColor: _outlineColor,
+    backgroundColor: _backgroundColor,
+    transparentBackground: _transparentBackground,
+    ...geometryState
+  } = state;
+  return JSON.stringify(geometryState);
+}
+
 function cacheKey(state: ProjectState, context: RenderContext) {
   const renderer = getRenderer(state.renderer);
   const substrate = renderer.usesSubstrate ? substrateKey(context) : "unused";

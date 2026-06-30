@@ -15,7 +15,7 @@ import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
 import { generateEdgeErosionMarks, MAX_EDGE_EROSION_MARKS } from "../src/engine/edgeErosion";
 import { buildCompositeWaveField, createGlyphFieldContext } from "../src/engine/field/compositeWaveField";
-import { areOutlineWarpControlsActive, generateWarpedOutline, NATIVE_OUTLINE_WARP_WARNING, outlineWarpCacheKey } from "../src/engine/outlineWarp";
+import { areOutlineWarpControlsActive, generateWarpedOutline, getFinalOutlineGeometry, NATIVE_OUTLINE_WARP_WARNING, outlineWarpCacheKey } from "../src/engine/outlineWarp";
 import type { ProjectState, RenderContext } from "../src/types";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
@@ -66,6 +66,69 @@ describe("Glyph Diffuser renderer", () => {
     expect(result.geometries).toHaveLength(0);
     expect(result.diagnostics?.fallback).toBe(true);
     expect(result.diagnostics?.warning).toBe("Glyph Diffuser requires an enabled glyph emitter.");
+  });
+
+  it("treats enabled single-emitter strength zero as neutral with zero marks", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const zero = {
+      ...state,
+      emitter: { ...state.emitter, enabled: true, amplitude: 0 },
+    };
+    const result = renderer.generateGeometry(zero, context);
+    expect(result.geometries).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      activeContributingEmitterCount: 0,
+      zeroStrengthEmitterCount: 1,
+      renderedMarkCountPerEmitter: { [zero.emitter.id]: 0 },
+    });
+    expect(result.diagnostics?.warning).toContain("no positive-strength emitter contribution");
+
+    const restored = renderer.generateGeometry({
+      ...zero,
+      emitter: { ...zero.emitter, amplitude: 0.1 },
+    }, context);
+    expect(restored.geometries.length).toBeGreaterThan(0);
+
+    const svg = createSvg(zero, context, context.textGeometry, result);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
+    expect(svg).not.toMatch(/<image|<canvas|data:image/i);
+  });
+
+  it("responds continuously and monotonically across low strength values", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const shared = {
+      ...state,
+      density: 68,
+      maxNodes: 5000,
+      diffuserDomain: "halo" as const,
+      emitter: { ...state.emitter, radius: 370 },
+    };
+    const zero = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, amplitude: 0 },
+    }, context);
+    const subtle = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, amplitude: 0.05 },
+    }, context);
+    const low = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, amplitude: 0.25 },
+    }, context);
+    const normal = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, amplitude: 1 },
+    }, context);
+    expect(zero.geometries).toHaveLength(0);
+    expect(subtle.geometries.length).toBeGreaterThan(0);
+    expect(subtle.geometries.length).toBeLessThan(low.geometries.length);
+    expect(low.geometries.length).toBeLessThan(normal.geometries.length);
+    expect(subtle.diagnostics?.effectiveStrengthResponse).toBeLessThan(
+      low.diagnostics?.effectiveStrengthResponse ?? 0,
+    );
+    expect(low.diagnostics?.effectiveStrengthResponse).toBeLessThan(
+      normal.diagnostics?.effectiveStrengthResponse ?? 0,
+    );
   });
 
   it("presets using glyph-diffuser enable an emitter by default", () => {
@@ -126,6 +189,116 @@ describe("Glyph Diffuser renderer", () => {
     expect(svg).not.toMatch(/<image|<canvas|data:image/i);
   });
 
+  it("samples every multiple-emitter domain and reports renderer comparison diagnostics", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const first = { ...state.emitters[0], id: "first", glyphId: "auto-first", label: "First" };
+    const last = { ...first, id: "last", glyphId: "auto-last", label: "Last" };
+    const multiState = {
+      ...state,
+      density: 80,
+      emitterMode: "multiple" as const,
+      emitters: [first, last],
+    };
+    const result = renderer.generateGeometry(multiState, context);
+    expect(result.diagnostics).toMatchObject({
+      rendererActiveFieldEmitterCount: 2,
+      consumedFieldMode: multiState.fieldBlendMode,
+      fieldNormalizationMode: "none",
+    });
+    expect(result.diagnostics?.renderedMarkCountPerEmitter?.first).toBeGreaterThan(0);
+    expect(result.diagnostics?.renderedMarkCountPerEmitter?.last).toBeGreaterThan(0);
+    expect(result.diagnostics?.emitterDomainDiagnostics).toEqual([
+      expect.objectContaining({
+        id: "first",
+        weight: first.weight,
+        radiusMultiplier: first.radiusMultiplier,
+        effectiveRadius: multiState.emitter.radius * first.radiusMultiplier,
+        sampleCount: expect.any(Number),
+        renderedMarkCount: expect.any(Number),
+      }),
+      expect.objectContaining({
+        id: "last",
+        weight: last.weight,
+        radiusMultiplier: last.radiusMultiplier,
+        effectiveRadius: multiState.emitter.radius * last.radiusMultiplier,
+        sampleCount: expect.any(Number),
+        renderedMarkCount: expect.any(Number),
+      }),
+    ]);
+
+    const weakerLast = renderer.generateGeometry({
+      ...multiState,
+      emitters: [first, { ...last, weight: 0.1 }],
+    }, context);
+    const tighterLast = renderer.generateGeometry({
+      ...multiState,
+      emitters: [first, { ...last, radiusMultiplier: 0.35 }],
+    }, context);
+    expect(weakerLast.geometries).not.toEqual(result.geometries);
+    expect(tighterLast.geometries).not.toEqual(result.geometries);
+    expect(tighterLast.diagnostics?.emitterDomainDiagnostics?.[0].effectiveRadius)
+      .toBe(result.diagnostics?.emitterDomainDiagnostics?.[0].effectiveRadius);
+    expect(tighterLast.diagnostics?.emitterDomainDiagnostics?.[1].effectiveRadius)
+      .toBe(multiState.emitter.radius * 0.35);
+  });
+
+  it("excludes zero-weight rows from fields and marks without suppressing other rows", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const first = { ...state.emitters[0], id: "first", glyphId: "auto-first", label: "First", weight: 1 };
+    const last = { ...first, id: "last", glyphId: "auto-last", label: "Last", weight: 0 };
+    const multiState = {
+      ...state,
+      density: 80,
+      emitterMode: "multiple" as const,
+      emitters: [first, last],
+    };
+    const zeroLast = renderer.generateGeometry(multiState, context);
+    expect(zeroLast.geometries.length).toBeGreaterThan(0);
+    expect(zeroLast.diagnostics).toMatchObject({
+      activeContributingEmitterCount: 1,
+      zeroStrengthEmitterCount: 1,
+      renderedMarkCountPerEmitter: { first: expect.any(Number), last: 0 },
+    });
+    expect(zeroLast.diagnostics?.renderedMarkCountPerEmitter?.first).toBeGreaterThan(0);
+    expect(zeroLast.diagnostics?.emitterDomainDiagnostics?.map((entry) => entry.id)).toEqual(["first"]);
+
+    const activeLast = renderer.generateGeometry({
+      ...multiState,
+      emitters: [first, { ...last, weight: 1 }],
+    }, context);
+    expect(activeLast.diagnostics).toMatchObject({
+      activeContributingEmitterCount: 2,
+      zeroStrengthEmitterCount: 0,
+    });
+    expect(activeLast.diagnostics?.renderedMarkCountPerEmitter?.last).toBeGreaterThan(0);
+    expect(activeLast.geometries).not.toEqual(zeroLast.geometries);
+  });
+
+  it("keeps a low-strength second emitter subtle without reducing the first emitter", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const first = { ...state.emitters[0], id: "first", glyphId: "auto-first", label: "First", weight: 1 };
+    const last = { ...first, id: "last", glyphId: "auto-last", label: "Last" };
+    const shared = {
+      ...state,
+      density: 68,
+      maxNodes: 5000,
+      emitterMode: "multiple" as const,
+    };
+    const subtle = renderer.generateGeometry({
+      ...shared,
+      emitters: [first, { ...last, weight: 0.05 }],
+    }, context);
+    const normal = renderer.generateGeometry({
+      ...shared,
+      emitters: [first, { ...last, weight: 1 }],
+    }, context);
+    expect(subtle.diagnostics?.renderedMarkCountPerEmitter?.first)
+      .toBe(normal.diagnostics?.renderedMarkCountPerEmitter?.first);
+    expect(subtle.diagnostics?.renderedMarkCountPerEmitter?.last).toBeGreaterThan(0);
+    expect(subtle.diagnostics?.renderedMarkCountPerEmitter?.last)
+      .toBeLessThan(normal.diagnostics?.renderedMarkCountPerEmitter?.last ?? 0);
+  });
+
   it("preserves single-mode warped outlines and routes multiple mode through the shared field", () => {
     const warpState = {
       ...state,
@@ -163,6 +336,34 @@ describe("Glyph Diffuser renderer", () => {
     expect(tighter.geometries).not.toEqual(baseline.geometries);
   });
 
+  it("keeps mark amount density-driven across practical radius changes", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const shared = {
+      ...state,
+      density: 68,
+      maxNodes: 1400,
+      diffuserDomain: "halo" as const,
+      diffuserHaloPadding: 0,
+    };
+    const compact = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, radius: 260 },
+    }, context);
+    const broad = renderer.generateGeometry({
+      ...shared,
+      emitter: { ...shared.emitter, radius: 700 },
+    }, context);
+    const delta = Math.abs(compact.geometries.length - broad.geometries.length);
+    const baseline = Math.max(1, compact.geometries.length, broad.geometries.length);
+    expect(delta / baseline).toBeLessThanOrEqual(0.2);
+    expect(compact.diagnostics).toMatchObject({
+      candidateCount: expect.any(Number),
+      preCapAcceptedCount: expect.any(Number),
+      cappedCount: expect.any(Number),
+      effectiveDensity: expect.any(Number),
+    });
+  });
+
   it("changes crest distribution when ring sharpness and band width change", () => {
     const renderer = getRenderer("glyph-diffuser");
     const broad = renderer.generateGeometry({ ...state, ringSharpness: 0.8, bandWidth: 0.65 }, context);
@@ -185,6 +386,79 @@ describe("Glyph Diffuser renderer", () => {
       && Math.hypot(geometry.center.x - anchorX, geometry.center.y - anchorY) > 248);
     expect(group.diagnostics?.rejectedFarFieldCandidates).toBeGreaterThan(0);
     expect(farDots.length).toBeLessThan(group.geometries.length * 0.25);
+  });
+
+  it("edge-feathers deterministic large-radius output at intentional artboard bounds", () => {
+    const large = {
+      ...state,
+      density: 30,
+      maxNodes: 5000,
+      diffuserDomain: "halo" as const,
+      diffuserHaloPadding: 400,
+      emitter: { ...state.emitter, radius: 1000 },
+    };
+    const renderer = getRenderer("glyph-diffuser");
+    const first = renderer.generateGeometry(large, context);
+    const second = renderer.generateGeometry(large, context);
+    expect(second.geometries).toEqual(first.geometries);
+    expect(first.diagnostics).toMatchObject({
+      artboardBoundsClipped: true,
+      artboardEdgeFeather: 56,
+    });
+    expect(first.diagnostics?.warning).toContain("intentionally edge-feathered and clipped to export bounds");
+    expect(first.geometries.every((geometry) => geometry.type !== "circle"
+      || (geometry.center.x >= 0 && geometry.center.x <= 1200
+        && geometry.center.y >= 0 && geometry.center.y <= 720))).toBe(true);
+    const edgeMarks = first.geometries.filter((geometry) => geometry.type === "circle"
+      && Math.min(geometry.center.x, 1200 - geometry.center.x, geometry.center.y, 720 - geometry.center.y) < 28);
+    expect(edgeMarks.every((geometry) => geometry.opacity <= 0.47)).toBe(true);
+    const svg = createSvg(large, context, context.textGeometry, first);
+    expect(validateSvgReload(svg, true).valid).toBe(true);
+    expect(svg).not.toMatch(/<image|<canvas|data:image/i);
+  });
+
+  it("keeps artboard and mark-cap diagnostics independent", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const contained = {
+      ...state,
+      density: 80,
+      diffuserDomain: "halo" as const,
+      diffuserHaloPadding: 0,
+      emitter: { ...state.emitter, radius: 80 },
+    };
+    const normal = renderer.generateGeometry(contained, context);
+    expect(normal.diagnostics).toMatchObject({
+      artboardBoundsClipped: false,
+      artboardEdgeFeather: 0,
+      maxNodesClipped: false,
+    });
+    expect(normal.diagnostics?.warning).toBeUndefined();
+
+    const capped = renderer.generateGeometry({ ...contained, maxNodes: 1 }, context);
+    expect(capped.diagnostics).toMatchObject({
+      artboardBoundsClipped: false,
+      artboardEdgeFeather: 0,
+      maxNodesClipped: true,
+    });
+    expect(capped.diagnostics?.warning).toContain("1 node budget");
+    expect(capped.diagnostics?.warning).not.toContain("artboard");
+  });
+
+  it("keeps fixed vector-only SVG bounds for feathered output", () => {
+    const large = {
+      ...state,
+      diffuserDomain: "halo" as const,
+      diffuserHaloPadding: 400,
+      emitter: { ...state.emitter, radius: 1000 },
+    };
+    const geometry = getRenderer("glyph-diffuser").generateGeometry(large, context);
+    const first = createSvg(large, context, context.textGeometry, geometry);
+    const second = createSvg(large, context, context.textGeometry, geometry);
+    const stripTimestamp = (svg: string) =>
+      svg.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/g, "");
+    expect(stripTimestamp(second)).toBe(stripTimestamp(first));
+    expect(first).toContain('viewBox="0 0 1200 720"');
+    expect(first).not.toMatch(/<image|<canvas|data:image|png|jpe?g/i);
   });
 
   it("enforces maxNodes", () => {
@@ -294,6 +568,40 @@ describe("Glyph Diffuser renderer", () => {
     expect(first.diagnostics.activeEmitterGlyph).toMatch(/·/);
     expect(first.paths[0].d).not.toBe(context.textGeometry!.glyphs[0].path.d);
     expect(first.paths.some((path) => path.d.includes("Z"))).toBe(true);
+  });
+
+  it("uses one closed authoritative path set for fill, outline, preview, and export", () => {
+    const outlineState = {
+      ...state,
+      overlayMode: "outline" as const,
+      diffuserComposition: "behind-text" as const,
+    };
+    const warped = generateWarpedOutline(outlineState, context);
+    const final = getFinalOutlineGeometry(context.textGeometry, warped, false);
+    expect(final.diagnostics).toMatchObject({
+      pathCount: context.textGeometry!.glyphs.length,
+      openContourCount: 0,
+      clippingApplied: false,
+      simplificationApplied: false,
+      source: "parsed",
+    });
+    expect(final.diagnostics.subpathCount).toBeGreaterThan(final.diagnostics.pathCount);
+
+    const outlineSvg = new DOMParser().parseFromString(
+      createSvg(outlineState, context, context.textGeometry),
+      "image/svg+xml",
+    );
+    const fillSvg = new DOMParser().parseFromString(
+      createSvg({ ...outlineState, overlayMode: "solid" }, context, context.textGeometry),
+      "image/svg+xml",
+    );
+    const outlinePaths = [...outlineSvg.querySelectorAll("#diffuser-text-overlay path")].map((path) => path.getAttribute("d"));
+    const fillPaths = [...fillSvg.querySelectorAll("#diffuser-text-overlay path")].map((path) => path.getAttribute("d"));
+    expect(outlinePaths).toEqual(final.paths.map((path) => path.d));
+    expect(fillPaths).toEqual(outlinePaths);
+    expect(outlineSvg.querySelector("#diffuser-text-overlay > g")?.getAttribute("fill-rule")).toBe("evenodd");
+    expect(outlineSvg.querySelector("#diffuser-text-overlay > g")?.getAttribute("stroke-linejoin")).toBe("round");
+    expect(outlineSvg.querySelector("#diffuser-text-overlay > g")?.getAttribute("stroke-linecap")).toBe("round");
   });
 
   it("changes warped geometry with emitter frequency and amplitude", () => {

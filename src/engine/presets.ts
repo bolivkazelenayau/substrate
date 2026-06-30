@@ -1,4 +1,5 @@
 import type { PresetId, ProjectState } from "../types";
+import { COLORS } from "./constants";
 
 export const defaultDebugSettings: ProjectState["debug"] = {
   substrateMode: "none",
@@ -16,7 +17,7 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 6,
+  version: 7,
   text: "SUBSTRATE",
   fontSize: 148,
   tracking: -3,
@@ -34,6 +35,10 @@ export const baseState: ProjectState = {
   turbulence: 42,
   edgeInfluence: 68,
   exportMode: "artwork",
+  primaryColor: COLORS.artwork,
+  outlineColor: COLORS.artwork,
+  backgroundColor: COLORS.background,
+  transparentBackground: false,
   exportFrameMode: "current",
   precision: 1,
   maxNodes: 2800,

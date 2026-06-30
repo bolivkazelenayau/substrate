@@ -1,5 +1,5 @@
 import { memo, useState, type ChangeEvent, type RefObject, type ReactNode } from "react";
-import { applyPreset, presetIds } from "../engine/presets";
+import { applyPreset, baseState, presetIds } from "../engine/presets";
 import { getRenderer, rendererList } from "../engine/renderers";
 import type { DebugSettings, FieldControlId, PreviewSettings, ProjectState } from "../types";
 import type { SubstrateDebugMode } from "../engine/substrate";
@@ -32,6 +32,54 @@ const fieldControls: Array<{ id: FieldControlId; label: string; min: number; max
   { id: "turbulence", label: "Turbulence", min: 0, max: 100 },
   { id: "edgeInfluence", label: "Edge influence", min: 0, max: 100 },
 ];
+
+const rangeDefaults: Record<string, number> = {
+  Size: baseState.fontSize,
+  Tracking: baseState.tracking,
+  "Kerning strength": baseState.kerningStrength,
+  "Vertical offset": baseState.textOffsetY,
+  "Optical strength": baseState.opticalSpacingStrength,
+  Density: baseState.density,
+  Amplitude: baseState.amplitude,
+  Frequency: baseState.frequency,
+  Turbulence: baseState.turbulence,
+  "Edge influence": baseState.edgeInfluence,
+  Strength: baseState.emitter.amplitude,
+  "Wave frequency": baseState.emitter.frequency,
+  Phase: baseState.emitter.phase,
+  Radius: baseState.emitter.radius,
+  "Self influence": baseState.emitter.selfInfluence,
+  "Neighbor influence": baseState.emitter.neighborInfluence,
+  Weight: baseState.emitters[0].weight,
+  "Radius ×": baseState.emitters[0].radiusMultiplier,
+  "Global strength": baseState.emitter.amplitude,
+  "Global wave frequency": baseState.emitter.frequency,
+  "Global phase": baseState.emitter.phase,
+  "Global base radius": baseState.emitter.radius,
+  "Global self influence": baseState.emitter.selfInfluence,
+  "Global neighbor influence": baseState.emitter.neighborInfluence,
+  "Outline width": baseState.outlineStrokeWidth,
+  "Overlay opacity": baseState.textOverlayOpacity,
+  "Edge erosion": baseState.edgeErosionAmount,
+  "Erosion width": baseState.edgeErosionWidth,
+  "Interior protection": baseState.interiorProtection,
+  "Warp amount": baseState.outlineWarpAmount,
+  "Warp scale": baseState.outlineWarpScale,
+  "Warp smoothing": baseState.outlineWarpSmoothing,
+  "Warp edge bias": baseState.outlineWarpEdgeBias,
+  "Max displacement": baseState.outlineWarpMaxDisplacement,
+  "Max nodes / marks": baseState.maxNodes,
+  "Ring contrast": baseState.diffuserRingContrast,
+  "Ring sharpness": baseState.ringSharpness,
+  "Band width": baseState.bandWidth,
+  "Halo padding": baseState.diffuserHaloPadding,
+  Influence: baseState.glyphFieldInfluence,
+  Displacement: baseState.glyphFieldDisplacement,
+  "Density modulation": baseState.glyphFieldDensity,
+  "Radius modulation": baseState.glyphFieldRadius,
+  "Opacity modulation": baseState.glyphFieldOpacity,
+  "Dot spacing": baseState.waveDotSpacing,
+};
 
 type BooleanDebugKey = Exclude<keyof DebugSettings, "substrateMode">;
 
@@ -67,7 +115,7 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
 
   const defaultOpen = {
     advanced: false,
-    emitters: false,
+    emitters: true,
     output: false,
     debug: false,
   };
@@ -180,33 +228,6 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
           ))}
         </div>
 
-        {state.renderer === "glyph-diffuser" && (
-          <div className="compact-field">
-            {!state.emitter.enabled && (
-              <div className="control-warning">
-                <strong>⚠️ Glyph Diffuser requires an active emitter.</strong>
-                {emitterGlyphs.some(g => g.emitterEligible) ? (
-                  <button type="button" onClick={() => patchEmitter({ enabled: true })}>
-                    Enable Emitter
-                  </button>
-                ) : (
-                  <span>No eligible glyph found for current text/font.</span>
-                )}
-              </div>
-            )}
-            <div className="field compact-field">
-              <span>Emitter status</span>
-              <div className="mode-switch">
-                <button className={!state.emitter.enabled ? "active" : ""} onClick={() => patchEmitter({ enabled: false })}>Off</button>
-                <button className={state.emitter.enabled ? "active" : ""} disabled={emitterGlyphs.length === 0} onClick={() => patchEmitter({ enabled: true })}>On</button>
-              </div>
-            </div>
-            {state.emitter.enabled && emitterGlyphs.length === 0 && (
-              <small className="inactive-hint" style={{ color: "var(--accent)" }}>No eligible glyph found for current text/font.</small>
-            )}
-          </div>
-        )}
-
         {state.renderer === "wave-contours" && (
           <label className="field compact-field" style={{ marginTop: "16px" }}>
             <span>Contour mode</span>
@@ -250,6 +271,14 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
           onToggle={() => toggleGroup("emitters")}
           className="emitter-editor"
         >
+          {!state.emitter.enabled && emitterConsumerActive && (
+            <div className="control-warning">
+              <strong>⚠️ This renderer requires an active emitter field.</strong>
+              {eligibleGlyphs.length > 0
+                ? <button type="button" onClick={() => patchEmitter({ enabled: true })}>Enable field</button>
+                : <span>No eligible glyph found for current text/font.</span>}
+            </div>
+          )}
           <div className="field compact-field">
             <span>Emitter mode</span>
             <div className="mode-switch" aria-label="Emitter mode">
@@ -271,7 +300,35 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
           </div>
 
           {state.emitterMode === "single" ? (
-            <small className="inactive-hint">Single mode uses the existing source and field controls below.</small>
+            <div className="emitter-row">
+              <div className="section-subheading">Single emitter</div>
+              <label className="debug-toggle">
+                <input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} />
+                <span>Emitter enabled</span>
+              </label>
+              <label className="field compact-field">
+                <span>Source glyph</span>
+                <select value={state.emitter.glyphId ?? ""} onChange={(event) => patchEmitter({ glyphId: event.target.value || null })}>
+                  <option value="">First eligible glyph</option>
+                  <option value="auto-o-middle">Auto · O/o/0 or middle glyph</option>
+                  {eligibleGlyphs.map((glyph) => <option key={glyph.glyphId} value={glyph.glyphId}>{getGlyphDisplayLabel(glyph)}</option>)}
+                </select>
+              </label>
+              <label className="field compact-field">
+                <span>Source mode</span>
+                <select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}>
+                  <option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option>
+                </select>
+              </label>
+              <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
+              <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
+              <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
+              <Range label="Radius" value={state.emitter.radius} min={20} max={1000} step={10} onChange={(radius) => patchEmitter({ radius })} />
+              <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
+              <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
+              <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
+              <label className="field compact-field"><span>Blend</span><select value={state.emitter.blendMode} onChange={(event) => patchEmitter({ blendMode: event.target.value as ProjectState["emitter"]["blendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
+            </div>
           ) : (
             <>
               {eligibleGlyphs.length === 0 && (
@@ -354,6 +411,28 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
               >
                 Add emitter · {state.emitters.length}/{MAX_EMITTER_ROWS}
               </button>
+              <div className="control-group nested-group">
+                <div className="section-subheading">Global field shaping · all emitters</div>
+                <small className="inactive-hint">These shared controls intentionally affect every enabled emitter row.</small>
+                <label className="debug-toggle">
+                  <input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} />
+                  <span>Global field enabled</span>
+                </label>
+                <label className="field compact-field">
+                  <span>Shared source mode</span>
+                  <select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}>
+                    <option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option>
+                  </select>
+                </label>
+                <Range label="Global strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
+                <Range label="Global wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
+                <Range label="Global phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
+                <Range label="Global base radius" value={state.emitter.radius} min={20} max={1000} step={10} onChange={(radius) => patchEmitter({ radius })} />
+                <label className="field compact-field"><span>Global falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
+                <Range label="Global self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
+                <Range label="Global neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
+                <label className="field compact-field"><span>Global composition</span><select value={state.fieldBlendMode} onChange={(event) => patchField({ fieldBlendMode: event.target.value as ProjectState["fieldBlendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
+              </div>
             </>
           )}
         </Accordion>
@@ -362,7 +441,7 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
           <>
             <label className="field compact-field"><span>Diffuser domain</span><select value={state.diffuserDomain} onChange={(event) => patchField({ diffuserDomain: event.target.value as ProjectState["diffuserDomain"] })}><option value="inside-text">Inside text</option><option value="halo">Emitter halo</option><option value="text-halo">Text + halo</option></select></label>
             <label className="field compact-field"><span>Composition</span><select value={state.diffuserComposition} onChange={(event) => patchField({ diffuserComposition: event.target.value as ProjectState["diffuserComposition"] })}><option value="behind-text">Behind text</option><option value="through-text">Through text</option><option value="text-reactive">Text-reactive edges</option><option value="edge-eroded">Edge-eroded overlay</option><option value="clipped">Clipped to text</option></select></label>
-            <Range label="Dot radius" value={state.diffuserDotRadius} min={0.4} max={8} step={0.1} onChange={(diffuserDotRadius) => patchField({ diffuserDotRadius })} />
+            <Range label="Dot radius" value={state.diffuserDotRadius} defaultValue={baseState.diffuserDotRadius} min={0.4} max={8} step={0.1} onChange={(diffuserDotRadius) => patchField({ diffuserDotRadius })} />
           </>
         )}
       </section>
@@ -414,34 +493,6 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
         <Accordion title="Advanced Parameters" isOpen={isOpen("advanced")} onToggle={() => toggleGroup("advanced")}>
           <Range label="Max nodes / marks" value={state.maxNodes} min={400} max={5000} step={100} onChange={(maxNodes) => patchField({ maxNodes })} />
 
-          {state.emitter.enabled && (state.renderer === "glyph-diffuser" || state.renderer === "wave-contours") && (
-            <div className="control-group nested-group">
-              <div className="section-subheading">Emitter Settings</div>
-              <label className="field compact-field">
-                <span>Source glyph</span>
-                <select value={state.emitter.glyphId ?? ""} onChange={(event) => patchEmitter({ glyphId: event.target.value || null })}>
-                  <option value="">First eligible glyph</option>
-                  <option value="auto-o-middle">Auto · O/o/0 or middle glyph</option>
-                  {emitterGlyphs.filter((glyph) => glyph.emitterEligible).map((glyph) => <option key={glyph.glyphId} value={glyph.glyphId}>{getGlyphDisplayLabel(glyph)}</option>)}
-                </select>
-              </label>
-              <label className="field compact-field">
-                <span>Source mode</span>
-                <select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}>
-                  <option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option>
-                </select>
-              </label>
-              <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
-              <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
-              <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-              <Range label="Radius" value={state.emitter.radius} min={20} max={1000} step={10} onChange={(radius) => patchEmitter({ radius })} />
-              <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
-              <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
-              <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
-              <label className="field compact-field"><span>Blend</span><select value={state.emitter.blendMode} onChange={(event) => patchEmitter({ blendMode: event.target.value as ProjectState["emitter"]["blendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
-            </div>
-          )}
-
           {state.renderer === "glyph-diffuser" && (
             <div className="control-group nested-group">
               <div className="section-subheading">Diffuser Detail</div>
@@ -467,7 +518,7 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
             <div className="control-group nested-group">
               <div className="section-subheading">Wave Details</div>
               <Range label="Dot spacing" value={state.waveDotSpacing} min={3} max={40} onChange={(waveDotSpacing) => patchField({ waveDotSpacing })} />
-              <Range label="Dot radius" value={state.waveDotRadius} min={0.4} max={8} step={0.1} onChange={(waveDotRadius) => patchField({ waveDotRadius })} />
+              <Range label="Dot radius" value={state.waveDotRadius} defaultValue={baseState.waveDotRadius} min={0.4} max={8} step={0.1} onChange={(waveDotRadius) => patchField({ waveDotRadius })} />
             </div>
           )}
         </Accordion>
@@ -478,6 +529,18 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
         <div className="mode-switch" style={{ marginBottom: "16px" }}>
           <button className={state.exportMode === "artwork" ? "active" : ""} onClick={() => patch({ exportMode: "artwork" })}>Final artwork</button>
           <button className={state.exportMode === "editable" ? "active" : ""} onClick={() => patch({ exportMode: "editable" })}>Editable text</button>
+        </div>
+        <div className="control-group nested-group appearance-controls">
+          <div className="section-subheading">Artwork appearance</div>
+          <div className="color-control-grid">
+            <ColorControl label="Primary" value={state.primaryColor} onChange={(primaryColor) => patch({ primaryColor })} />
+            <ColorControl label="Outline" value={state.outlineColor} onChange={(outlineColor) => patch({ outlineColor })} />
+            <ColorControl label="Background" value={state.backgroundColor} onChange={(backgroundColor) => patch({ backgroundColor })} />
+          </div>
+          <label className="debug-toggle">
+            <input type="checkbox" checked={state.transparentBackground} onChange={(event) => patch({ transparentBackground: event.target.checked })} />
+            <span>Transparent background</span>
+          </label>
         </div>
         
         <Accordion title="Advanced Output" isOpen={isOpen("output")} onToggle={() => toggleGroup("output")}>
@@ -596,11 +659,34 @@ export const Controls = memo(function Controls({ state, setState, fileRef, onImp
   && previous.diagnosticsExpanded === next.diagnosticsExpanded
 ));
 
-function Range({ label, value, min, max, step = 1, disabled = false, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; onChange: (value: number) => void }) {
+function Range({ label, value, min, max, step = 1, disabled = false, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; defaultValue?: number; onChange: (value: number) => void }) {
+  const resetValue = defaultValue ?? rangeDefaults[label];
   return (
     <label className={`range${disabled ? " disabled" : ""}`}>
       <span>{label}<output>{disabled ? "N/A" : value}</output></span>
-      <input disabled={disabled} type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
+      <input
+        disabled={disabled}
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        title={resetValue === undefined ? undefined : "Double-click to reset"}
+        onDoubleClick={() => {
+          if (!disabled && resetValue !== undefined) onChange(resetValue);
+        }}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </label>
+  );
+}
+
+function ColorControl({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="color-control">
+      <span>{label}</span>
+      <input type="color" value={value} aria-label={`${label} artwork color`} onChange={(event) => onChange(event.target.value)} />
+      <output>{value.toUpperCase()}</output>
     </label>
   );
 }

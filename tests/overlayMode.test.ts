@@ -81,8 +81,9 @@ describe("Text overlay modes", () => {
     expect(innerGroup!.getAttribute("fill")).toBe("none");
     expect(innerGroup!.getAttribute("stroke")).toBe(COLORS.artwork);
     expect(innerGroup!.getAttribute("stroke-width")).toBe("1.5");
-    // No fill-rule on the regular-outline branch (only warped-outline sets evenodd).
-    expect(innerGroup!.getAttribute("fill-rule")).toBeNull();
+    expect(innerGroup!.getAttribute("fill-rule")).toBe("evenodd");
+    expect(innerGroup!.getAttribute("stroke-linejoin")).toBe("round");
+    expect(innerGroup!.getAttribute("stroke-linecap")).toBe("round");
     // No edge-erosion mask should be applied to the outline overlay.
     expect(innerGroup!.getAttribute("mask")).toBeNull();
   });

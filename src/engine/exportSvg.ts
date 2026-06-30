@@ -1,4 +1,4 @@
-import { APP_NAME, APP_VERSION, COLORS, SVG_IDS, VIEWPORT } from "./constants";
+import { APP_NAME, APP_VERSION, SVG_IDS, VIEWPORT } from "./constants";
 import type { GeometryGroup, VectorGeometry } from "./geometry";
 import { getRenderer } from "./renderers";
 import { getTextLayout } from "./textLayout";
@@ -6,7 +6,7 @@ import type { TextGeometry } from "./glyphGeometry";
 import type { ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
 import { generateEdgeErosionMarks } from "./edgeErosion";
-import { generateWarpedOutline } from "./outlineWarp";
+import { generateWarpedOutline, getFinalOutlineGeometry } from "./outlineWarp";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -48,6 +48,7 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
   const exportContext = context.textGeometry === textGeometry ? context : { ...context, textGeometry };
   const warpedOutline = generateWarpedOutline(state, exportContext);
   const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
+  const finalOutline = getFinalOutlineGeometry(textGeometry, warpedOutline, hasWarpedOutline);
   const timestamp = new Date().toISOString();
   const metadata = {
     appName: APP_NAME,
@@ -64,13 +65,15 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
   };
 
-  const background = `<g id="${SVG_IDS.background}"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="${COLORS.background}"/></g>`;
-  const editable = `<g id="${SVG_IDS.artwork}">${serializeText(state, COLORS.artwork, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
+  const background = state.transparentBackground
+    ? ""
+    : `<g id="${SVG_IDS.background}"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="${state.backgroundColor}"/></g>`;
+  const editable = `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines
     ? `<g fill="white">${serializeGlyphPaths(textGeometry)}</g>`
     : serializeText(state, "white", undefined, false);
   const outline = textGeometry?.hasOutlines
-    ? `<g id="${SVG_IDS.substrateOutline}" visibility="hidden" fill="none" stroke="${COLORS.artwork}">${serializeGlyphPaths(textGeometry)}</g>`
+    ? `<g id="${SVG_IDS.substrateOutline}" visibility="hidden" fill="none" stroke="${state.outlineColor}">${serializeGlyphPaths(textGeometry)}</g>`
     : "";
   const clipArtwork = renderer.clipPreviewToText?.(state) ?? true;
   const erodeOverlay = state.diffuserComposition === "edge-eroded" && state.edgeErosionAmount > 0 && state.edgeErosionWidth > 0;
@@ -79,33 +82,30 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     `<circle cx="${mark.x}" cy="${mark.y}" r="${mark.radius}" opacity="${mark.opacity}"/>`,
   ).join("");
   const overlayMaskContent = textGeometry?.hasOutlines
-    ? `<g fill="white" stroke="none" fill-rule="${hasWarpedOutline ? "evenodd" : "nonzero"}">${hasWarpedOutline
-      ? warpedOutline.paths.map((path) => `<path data-warped-glyph="${path.glyphIndex}" d="${escape(path.d)}"/>`).join("")
-      : serializeGlyphPaths(textGeometry)}</g><g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`
+    ? `<g fill="white" stroke="none" fill-rule="evenodd">${finalOutline.paths.map((path) => `<path d="${escape(path.d)}"/>`).join("")}</g><g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`
     : `${serializeText(state, "white", undefined, false)}<g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`;
   const overlayMask = renderer.showTextOverlay?.(state) && erodeOverlay
     ? `<mask id="diffuser-overlay-mask"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="black"/>${overlayMaskContent}</mask>`
     : "";
-  const overlayFill = state.overlayMode === "knockout" ? COLORS.background : COLORS.artwork;
+  const overlayFill = state.overlayMode === "knockout" ? state.backgroundColor : state.primaryColor;
   // Regular Outline mode renders each positioned glyph path as a clean, stroke-only
   // vector outline. It must NOT reuse the erosion-width setting as its stroke width
   // (the default erosion width of 16 SVG units would collapse the glyph fills).
   // `outlineStrokeWidth` is a dedicated, stable control clamped to [0.25, 16].
   const outlineStrokeWidth = Number.isFinite(state.outlineStrokeWidth) ? Math.max(0.25, state.outlineStrokeWidth) : 1.5;
   const overlayStyle = state.overlayMode === "outline"
-    ? `fill="none" stroke="${COLORS.artwork}" stroke-width="${outlineStrokeWidth}"`
+    ? `fill="none" stroke="${state.outlineColor}" stroke-width="${outlineStrokeWidth}" stroke-linejoin="round" stroke-linecap="round"`
     : `fill="${overlayFill}" stroke="none"`;
   const textOverlay = renderer.showTextOverlay?.(state)
     ? textGeometry?.hasOutlines
-      ? `<g id="diffuser-text-overlay" opacity="${renderer.textOverlayOpacity?.(state) ?? 1}"><g ${overlayStyle}${hasWarpedOutline ? ' fill-rule="evenodd"' : ""}${erodeOverlay && state.overlayMode !== "outline" ? ' mask="url(#diffuser-overlay-mask)"' : ""}>${hasWarpedOutline
-        ? warpedOutline.paths.map((path) => `<path data-warped-glyph="${path.glyphIndex}" data-character-index="${path.textIndex}" d="${escape(path.d)}"/>`).join("")
-        : serializeGlyphPaths(textGeometry)}</g></g>`
+      ? `<g id="diffuser-text-overlay" opacity="${renderer.textOverlayOpacity?.(state) ?? 1}"><g ${overlayStyle} fill-rule="evenodd"${erodeOverlay && state.overlayMode !== "outline" ? ' mask="url(#diffuser-overlay-mask)"' : ""}>${finalOutline.paths
+        .map((path) => `<path${hasWarpedOutline ? ` data-warped-glyph="${path.glyphIndex}"` : ""} data-character-index="${path.textIndex}" data-glyph-index="${path.glyphIndex}" d="${escape(path.d)}"/>`).join("")}</g></g>`
       : `<g id="diffuser-text-overlay" opacity="${renderer.textOverlayOpacity?.(state) ?? 1}"><g ${overlayStyle}${erodeOverlay && state.overlayMode !== "outline" ? ' mask="url(#diffuser-overlay-mask)"' : ""}>${serializeText(state, state.overlayMode === "outline" ? "none" : overlayFill, undefined, false)}</g></g>`
     : "";
   const artwork = [
     `<defs><mask id="${SVG_IDS.mask}"><g id="${SVG_IDS.substrateMask}"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="black"/>${substrate}</g></mask>${overlayMask}</defs>`,
     outline,
-    `<g id="${SVG_IDS.artwork}"${clipArtwork ? ` mask="url(#${SVG_IDS.mask})"` : ""} fill="${COLORS.artwork}" stroke="${COLORS.artwork}" stroke-width="1.15" stroke-linecap="round">${serializeGeometry(geometry, state.precision)}</g>`,
+    `<g id="${SVG_IDS.artwork}"${clipArtwork ? ` mask="url(#${SVG_IDS.mask})"` : ""} fill="${state.primaryColor}" stroke="${state.primaryColor}" stroke-width="1.15" stroke-linecap="round">${serializeGeometry(geometry, state.precision)}</g>`,
     textOverlay,
     `<g id="${SVG_IDS.sourceText}">${serializeText(state, "none", "hidden")}</g>`,
   ].join("");

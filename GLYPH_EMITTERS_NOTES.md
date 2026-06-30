@@ -40,7 +40,9 @@ The field uses the existing bounded substrate resolution. Points outside the tex
 
 Source-glyph membership is currently a glyph-bounds approximation. This can classify counters and overlapping glyph extents imperfectly; diagnostics report the approximation explicitly.
 
-Multiple sources use the shared field blend mode and bounded normalization. A single unit-weight source retains the legacy field calculation.
+Multiple sources use the shared field blend mode with raw, unnormalized local
+contributions. This keeps one row's weight from rescaling another row's standalone
+region. A single unit-weight source retains the legacy field calculation.
 
 ## Consumers and presets
 

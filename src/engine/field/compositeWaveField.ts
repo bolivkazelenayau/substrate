@@ -27,6 +27,7 @@ export interface CompositeWaveField {
   contributionAverage: number;
   contributionMax: number;
   contributionsFinite: boolean;
+  normalizationMode: "none";
 }
 
 export interface GlyphFieldGradient { x: number; y: number; magnitude: number; finite: boolean }
@@ -45,6 +46,7 @@ export interface GlyphFieldDiagnostics {
   contributionsFinite: boolean;
   finiteGradientSamples: number;
   invalidGradientSamples: number;
+  normalizationMode: "none";
 }
 
 export function getFalloffWeight(normalized: number, falloff: GlyphEmitterFalloff) {
@@ -77,7 +79,7 @@ export function getEmitterContributionAtPoint(
 
 function buildLegacyCompositeWaveField(state: ProjectState, context: RenderContext): CompositeWaveField | null {
   const substrate = context.substrateData;
-  if (!state.emitter.enabled || !substrate || substrate.substrateType === "empty") return null;
+  if (!state.emitter.enabled || state.emitter.amplitude <= 0 || !substrate || substrate.substrateType === "empty") return null;
   const glyphs = getGlyphEmitterMetadata(state, context.textGeometry ?? null).filter((glyph) => glyph.emitterEligible);
   const sourceGlyph = resolveEmitterGlyph(glyphs, state.emitter.glyphId);
   if (!sourceGlyph) return null;
@@ -134,6 +136,7 @@ function buildLegacyCompositeWaveField(state: ProjectState, context: RenderConte
     contributionAverage: contributionCount > 0 ? absoluteTotal / contributionCount : 0,
     contributionMax,
     contributionsFinite: true,
+    normalizationMode: "none",
   };
 }
 
@@ -162,19 +165,18 @@ function getMultiEmitterContribution(
 
 function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext): CompositeWaveField | null {
   const substrate = context.substrateData;
-  if (!state.emitter.enabled || !substrate || substrate.substrateType === "empty") return null;
+  if (!state.emitter.enabled || state.emitter.amplitude <= 0 || !substrate || substrate.substrateType === "empty") return null;
   const resolution = resolveGlyphEmitterSources(state, context.textGeometry ?? null);
-  if (resolution.sources.length === 0) return null;
+  const contributingSources = resolution.sources.filter((source) => source.weight > 0);
+  if (contributingSources.length === 0) return null;
 
   const started = performance.now();
   const data = new Float32Array(substrate.width * substrate.height);
-  const weightMagnitude = Math.sqrt(resolution.sources.reduce((sum, source) => sum + source.weight ** 2, 0));
-  const normalization = state.fieldBlendMode === "add" ? Math.max(1, weightMagnitude) : 1;
   const basePeak = Math.abs(state.emitter.amplitude * state.amplitude / 22)
     * Math.max(0, state.emitter.selfInfluence, state.emitter.neighborInfluence);
   const outlierLimit = state.fieldBlendMode === "add"
-    ? Math.max(0.001, basePeak * Math.max(1, Math.sqrt(resolution.sources.length)))
-    : Math.max(0.001, basePeak * Math.max(...resolution.sources.map((source) => source.weight)));
+    ? Math.max(0.001, basePeak * Math.max(1, Math.sqrt(contributingSources.length)))
+    : Math.max(0.001, basePeak * Math.max(...contributingSources.map((source) => source.weight)));
   let min = Infinity;
   let max = -Infinity;
   let absoluteTotal = 0;
@@ -190,15 +192,14 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
       const worldX = x / Math.max(1, substrate.width - 1) * substrate.viewportWidth;
       let value = 0;
       if (state.fieldBlendMode === "max") {
-        for (const source of resolution.sources) {
+        for (const source of contributingSources) {
           const contribution = getMultiEmitterContribution(state, source, worldX, worldY);
           if (Math.abs(contribution) > Math.abs(value)) value = contribution;
         }
       } else {
-        for (const source of resolution.sources) {
+        for (const source of contributingSources) {
           value += getMultiEmitterContribution(state, source, worldX, worldY);
         }
-        value /= normalization;
       }
       if (!Number.isFinite(value)) {
         contributionsFinite = false;
@@ -214,7 +215,7 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
     }
   }
 
-  const primary = resolution.sources[0];
+  const primary = contributingSources[0];
   return {
     width: substrate.width,
     height: substrate.height,
@@ -226,12 +227,13 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
     anchor: primary.anchor,
     sourceGlyph: primary.glyph,
     buildTimeMs: Math.max(0, performance.now() - started),
-    sources: resolution.sources,
+    sources: contributingSources,
     skippedSources: resolution.skipped,
     compositionMode: state.fieldBlendMode,
     contributionAverage: contributionCount > 0 ? absoluteTotal / contributionCount : 0,
     contributionMax,
     contributionsFinite,
+    normalizationMode: "none",
   };
 }
 
@@ -291,6 +293,7 @@ export function createGlyphFieldContext(field: CompositeWaveField | null) {
     contributionsFinite: field.contributionsFinite,
     finiteGradientSamples,
     invalidGradientSamples,
+    normalizationMode: field.normalizationMode,
   };
   return {
     glyphField: field,

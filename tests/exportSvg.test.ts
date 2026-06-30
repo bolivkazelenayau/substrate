@@ -55,6 +55,51 @@ describe("SVG export", () => {
     expect(validation.document?.querySelector("mask")).toBeNull();
   });
 
+  it("applies appearance colors and omits only a transparent background", () => {
+    const opaque = new DOMParser().parseFromString(createSvg({
+      ...lightState,
+      primaryColor: "#123456",
+      outlineColor: "#abcdef",
+      backgroundColor: "#654321",
+      overlayMode: "outline",
+    }, context, null), "image/svg+xml");
+    expect(opaque.querySelector("#background rect")?.getAttribute("fill")).toBe("#654321");
+    expect(opaque.querySelector("#generated-artwork")?.getAttribute("fill")).toBe("#123456");
+
+    const transparent = new DOMParser().parseFromString(createSvg({
+      ...lightState,
+      transparentBackground: true,
+    }, context, null), "image/svg+xml");
+    expect(transparent.querySelector("#background")).toBeNull();
+    expect(transparent.documentElement.getAttribute("viewBox")).toBe("0 0 1200 720");
+  });
+
+  it("keeps Editable Text native and applies its configured primary color", () => {
+    const document = new DOMParser().parseFromString(createSvg({
+      ...lightState,
+      exportMode: "editable",
+      primaryColor: "#22aa66",
+      transparentBackground: true,
+    }, context, null), "image/svg+xml");
+    expect(document.querySelectorAll("#generated-artwork text")).toHaveLength(1);
+    expect(document.querySelector("#generated-artwork text")?.getAttribute("fill")).toBe("#22aa66");
+    expect(document.querySelector("#background")).toBeNull();
+  });
+
+  it("does not change generated geometry when only appearance changes", () => {
+    const first = new DOMParser().parseFromString(createSvg(lightState, context, null), "image/svg+xml");
+    const second = new DOMParser().parseFromString(createSvg({
+      ...lightState,
+      primaryColor: "#ff0000",
+      outlineColor: "#00ff00",
+      backgroundColor: "#0000ff",
+      transparentBackground: true,
+    }, context, null), "image/svg+xml");
+    const geometry = (document: Document) => [...document.querySelectorAll("#generated-artwork circle, #generated-artwork path, #generated-artwork polyline")]
+      .map((node) => ["d", "cx", "cy", "r", "points"].map((name) => node.getAttribute(name)).join("|"));
+    expect(geometry(second)).toEqual(geometry(first));
+  });
+
   it("keeps typography-enhanced Editable Text as one honest native text element", () => {
     const state = {
       ...lightState,
@@ -93,7 +138,7 @@ describe("SVG export", () => {
       sourceText: "TYPE",
       substrateType: "glyph-paths",
       font: { family: "Basic-Regular", fileName: "Basic-Regular.ttf" },
-      project: { version: 6, text: "TYPE" },
+      project: { version: 7, text: "TYPE" },
     });
     expect(metadata.exportTimestamp).toBeTypeOf("string");
     expect(getSvgDiagnostics(svg)).toMatchObject({

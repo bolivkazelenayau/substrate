@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { COLORS, SVG_IDS, VIEWPORT } from "../engine/constants";
+import { SVG_IDS, VIEWPORT } from "../engine/constants";
 import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
 import { getRenderer } from "../engine/renderers";
 import { getTextBounds, getTextLayout, textAttributes } from "../engine/textLayout";
@@ -18,7 +18,7 @@ import type { PreviewBackend } from "../engine/previewBackend";
 import { formatFps, getFramePacingStatus } from "../engine/animationTiming";
 import { useWaveFieldDebugImage } from "../hooks/useWaveFieldDebugImage";
 import { generateEdgeErosionMarks } from "../engine/edgeErosion";
-import { generateWarpedOutline, outlineWarpCacheKey } from "../engine/outlineWarp";
+import { generateWarpedOutline, getFinalOutlineGeometry, outlineWarpCacheKey } from "../engine/outlineWarp";
 import { getControlActivity } from "../engine/controlOwnership";
 
 interface ViewportProps {
@@ -44,7 +44,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   const rendererTiming = getRendererTiming(geometry);
   const showOverlay = renderer.showTextOverlay?.(state) ?? false;
   const erodeOverlay = showOverlay && state.diffuserComposition === "edge-eroded" && state.edgeErosionAmount > 0 && state.edgeErosionWidth > 0;
-  const overlayFill = state.overlayMode === "knockout" ? COLORS.background : COLORS.artwork;
+  const overlayFill = state.overlayMode === "knockout" ? state.backgroundColor : state.primaryColor;
   // Regular Outline renderings use the dedicated `outlineStrokeWidth` control,
   // NOT the erosion-width setting (which defaults to 16 and visually collapses
   // glyph fills).  The mask/erosion path stays fully disabled for outline.
@@ -59,6 +59,10 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
     [warpCacheKey, context.glyphField, context.substrateData, context.textGeometry],
   );
   const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
+  const finalOutline = useMemo(
+    () => getFinalOutlineGeometry(textGeometry, warpedOutline, hasWarpedOutline),
+    [textGeometry, warpedOutline, hasWarpedOutline],
+  );
   const previousFrame = useRef({
     geometry,
     warpedOutline,
@@ -92,6 +96,12 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
 
   return (
     <div className="stage">
+      <div
+        className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
+        data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
+        style={state.transparentBackground ? undefined : { backgroundColor: state.backgroundColor }}
+        aria-hidden="true"
+      />
       <div className="stage-meta top"><span>FIELD / {state.renderer.toUpperCase()}</span><span>{VIEWPORT.width} × {VIEWPORT.height}</span></div>
       {previewBackend === "canvas-2d" && (
         <CanvasFlowPreview
@@ -105,6 +115,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         />
       )}
       <svg className="artboard" viewBox={`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`} aria-label={`Generative preview of ${state.text}`}>
+        {previewBackend !== "canvas-2d" && !state.transparentBackground && (
+          <rect data-preview-artwork-background="" width={VIEWPORT.width} height={VIEWPORT.height} fill={state.backgroundColor} />
+        )}
         <defs>
           <mask id={SVG_IDS.mask}>
             <g id={SVG_IDS.substrateMask}>
@@ -119,9 +132,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
               <rect width={VIEWPORT.width} height={VIEWPORT.height} fill="black" />
               {hasGlyphPaths
                 ? <>
-                    <g fill="white" stroke="none" fillRule="evenodd">{hasWarpedOutline
-                      ? warpedOutline.paths.map((path) => <path key={`warp-mask-${path.textIndex}`} d={path.d} />)
-                      : textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={`fill-${glyph.textIndex}`} d={glyph.path.d} />)}</g>
+                    <g fill="white" stroke="none" fillRule="evenodd">
+                      {finalOutline.paths.map((path) => <path key={`overlay-mask-${path.textIndex}`} d={path.d} />)}
+                    </g>
                   </>
                 : <>
                     <text {...textAttributes(layout)} fill="white" stroke="none">{layout.text}</text>
@@ -132,7 +145,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
             </mask>
           )}
         </defs>
-        <g id={SVG_IDS.artwork} mask={(renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks">
+        <g id={SVG_IDS.artwork} mask={(renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }}>
           {state.renderer === "flow" && previewBackend === "svg-dom"
             ? <FlowPreview geometry={geometry} />
             : state.renderer !== "flow"
@@ -141,10 +154,10 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         </g>
         {showOverlay && <g className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1}>
           {hasGlyphPaths
-            ? <g style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? COLORS.artwork : "none" }} fillRule={hasWarpedOutline ? "evenodd" : undefined} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined}>{hasWarpedOutline
-                ? warpedOutline.paths.map((path) => <path key={`warp-${path.textIndex}`} d={path.d} data-warped-glyph={path.glyphIndex} />)
-                : textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
-            : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? COLORS.artwork : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{layout.text}</text>}
+            ? <g style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} fillRule="evenodd" strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} strokeLinejoin="round" strokeLinecap="round" mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined}>
+                {finalOutline.paths.map((path) => <path key={`overlay-${path.textIndex}`} d={path.d} data-warped-glyph={hasWarpedOutline ? path.glyphIndex : undefined} />)}
+              </g>
+            : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{layout.text}</text>}
         </g>}
         {hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
@@ -229,6 +242,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           {diagnosticsExpanded && geometry.diagnostics.requestedDots !== undefined
             ? <>
                 <span>DOTS {geometry.diagnostics.acceptedDots} / {geometry.diagnostics.requestedDots}</span>
+                {geometry.diagnostics.preCapAcceptedCount !== undefined && <span>ACCEPTED RAW {geometry.diagnostics.preCapAcceptedCount}</span>}
+                {geometry.diagnostics.cappedCount !== undefined && <span>CAPPED {geometry.diagnostics.cappedCount}</span>}
+                {geometry.diagnostics.effectiveDensity !== undefined && <span>EFFECTIVE DENSITY {(geometry.diagnostics.effectiveDensity * 100).toFixed(2)}%</span>}
                 <span>OUT {geometry.diagnostics.rejectedOutsideMask}</span>
                 <span>SPACE {geometry.diagnostics.rejectedBySpacing}</span>
                 {geometry.diagnostics.rejectedByInfluence !== undefined && <span>FIELD REJECT {geometry.diagnostics.rejectedByInfluence}</span>}
@@ -294,6 +310,11 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {diagnosticsExpanded && geometry.diagnostics?.waveOutputCount !== undefined && <span>OUTPUT {geometry.diagnostics.waveOutputCount}</span>}
         {diagnosticsExpanded && geometry.diagnostics?.diffuserDomain && <span>DOMAIN {geometry.diagnostics.diffuserDomain.toUpperCase()}</span>}
         {diagnosticsExpanded && geometry.diagnostics?.diffuserComposition && <span>COMPOSE {geometry.diagnostics.diffuserComposition.toUpperCase()}</span>}
+        {diagnosticsExpanded && hasGlyphPaths && <span>OUTLINE PATHS {finalOutline.diagnostics.pathCount}</span>}
+        {diagnosticsExpanded && hasGlyphPaths && <span>SUBPATHS {finalOutline.diagnostics.subpathCount}</span>}
+        {diagnosticsExpanded && hasGlyphPaths && <span>OPEN CONTOURS {finalOutline.diagnostics.openContourCount}</span>}
+        {diagnosticsExpanded && hasGlyphPaths && <span>SIMPLIFIED {finalOutline.diagnostics.simplificationApplied ? "YES" : "NO"}</span>}
+        {diagnosticsExpanded && hasGlyphPaths && <span>OUTLINE CLIPPED {finalOutline.diagnostics.clippingApplied ? "YES" : "NO"}</span>}
         {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>OVERLAY WARPED-OUTLINE</span>}
         {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>REQUESTED {warpedOutline.diagnostics.requestedOverlay.toUpperCase()}</span>}
         {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>EFFECTIVE {warpedOutline.diagnostics.effectiveOverlay.toUpperCase()}</span>}

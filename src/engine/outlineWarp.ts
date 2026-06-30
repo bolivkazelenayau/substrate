@@ -1,5 +1,6 @@
 import type { ProjectState, RenderContext } from "../types";
 import type { GlyphPathCommand, PositionedGlyph } from "./glyphGeometry";
+import type { TextGeometry } from "./glyphGeometry";
 import { getFalloffWeight, sampleGlyphField, sampleGlyphFieldGradient } from "./field/compositeWaveField";
 import { sampleDistanceGradient } from "./substrate";
 
@@ -34,6 +35,55 @@ export interface OutlineWarpDiagnostics {
 export interface WarpedOutlineResult {
   paths: WarpedGlyphPath[];
   diagnostics: OutlineWarpDiagnostics;
+}
+
+export interface FinalOutlineGeometry {
+  paths: WarpedGlyphPath[];
+  diagnostics: {
+    pathCount: number;
+    subpathCount: number;
+    openContourCount: number;
+    clippingApplied: boolean;
+    simplificationApplied: boolean;
+    source: "parsed" | "warped";
+  };
+}
+
+function countPathContours(d: string) {
+  const subpathCount = (d.match(/[Mm](?=\s*-?\d|\s*\.)/g) ?? []).length;
+  const closedCount = (d.match(/[Zz]/g) ?? []).length;
+  return { subpathCount, openContourCount: Math.max(0, subpathCount - closedCount) };
+}
+
+function closePathSubpaths(d: string) {
+  return (d.match(/[Mm][^Mm]*/g) ?? [])
+    .map((subpath) => /[Zz]\s*$/.test(subpath) ? subpath : `${subpath}Z`)
+    .join("");
+}
+
+export function getFinalOutlineGeometry(
+  textGeometry: TextGeometry | null,
+  warpedOutline: WarpedOutlineResult,
+  useWarped: boolean,
+): FinalOutlineGeometry {
+  const sourcePaths = useWarped && warpedOutline.paths.length > 0
+    ? warpedOutline.paths
+    : (textGeometry?.glyphs ?? [])
+      .filter((glyph) => glyph.path.d.length > 0)
+      .map((glyph) => ({ glyphIndex: glyph.glyphIndex, textIndex: glyph.textIndex, d: glyph.path.d }));
+  const paths = sourcePaths.map((path) => ({ ...path, d: closePathSubpaths(path.d) }));
+  const contourDiagnostics = paths.map((path) => countPathContours(path.d));
+  return {
+    paths,
+    diagnostics: {
+      pathCount: paths.length,
+      subpathCount: contourDiagnostics.reduce((sum, item) => sum + item.subpathCount, 0),
+      openContourCount: contourDiagnostics.reduce((sum, item) => sum + item.openContourCount, 0),
+      clippingApplied: false,
+      simplificationApplied: false,
+      source: useWarped && warpedOutline.paths.length > 0 ? "warped" : "parsed",
+    },
+  };
 }
 
 export const NATIVE_OUTLINE_WARP_WARNING = "Warped outline requires a loaded .ttf/.otf font. Native SVG text uses solid fallback.";

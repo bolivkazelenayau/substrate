@@ -165,7 +165,7 @@ describe("Wave Contours renderer", () => {
     expect(Array.from(buildCompositeWaveField(multiState, context)!.data)).toEqual(Array.from(two.data));
   });
 
-  it("normalizes additive sums and ignores disabled or invalid rows", () => {
+  it("uses raw additive sums and ignores disabled or invalid rows", () => {
     const glyph = getGlyphEmitterMetadata(state, context.textGeometry!)[0];
     const unit = {
       id: "unit-1",
@@ -182,7 +182,8 @@ describe("Wave Contours renderer", () => {
       ...oneState,
       emitters: [unit, { ...unit, id: "unit-2" }],
     }, context)!;
-    expect(doubled.contributionMax).toBeLessThanOrEqual(one.contributionMax * Math.sqrt(2) + 1e-6);
+    expect(doubled.normalizationMode).toBe("none");
+    expect(doubled.contributionMax).toBeGreaterThan(one.contributionMax);
 
     const ignored = buildCompositeWaveField({
       ...oneState,
@@ -194,6 +195,71 @@ describe("Wave Contours renderer", () => {
     }, context)!;
     expect(Array.from(ignored.data)).toEqual(Array.from(one.data));
     expect(ignored.skippedSources.map((source) => source.reason)).toEqual(["disabled", "invalid-glyph"]);
+  });
+
+  it("keeps a far emitter region stable when another row's radius or weight changes", () => {
+    const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
+    const first = {
+      ...state.emitters[0],
+      id: "first",
+      glyphId: glyphs[0].glyphId,
+      label: "First",
+    };
+    const last = {
+      ...first,
+      id: "last",
+      glyphId: glyphs[glyphs.length - 1].glyphId,
+      label: "Last",
+    };
+    const farState = {
+      ...state,
+      emitter: { ...state.emitter, radius: 90, neighborInfluence: 1 },
+      emitterMode: "multiple" as const,
+      emitters: [first, last],
+    };
+    const baseline = buildCompositeWaveField(farState, context)!;
+    const radiusChanged = buildCompositeWaveField({
+      ...farState,
+      emitters: [first, { ...last, radiusMultiplier: 0.5 }],
+    }, context)!;
+    const weightChanged = buildCompositeWaveField({
+      ...farState,
+      emitters: [first, { ...last, weight: 0.2 }],
+    }, context)!;
+    const nearFirst = baseline.sources[0].anchor;
+    expect(sampleGlyphField(radiusChanged, nearFirst.x, nearFirst.y))
+      .toBeCloseTo(sampleGlyphField(baseline, nearFirst.x, nearFirst.y), 6);
+    expect(sampleGlyphField(weightChanged, nearFirst.x, nearFirst.y))
+      .toBeCloseTo(sampleGlyphField(baseline, nearFirst.x, nearFirst.y), 6);
+  });
+
+  it("changes an overlap region when another row's radius or weight changes", () => {
+    const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
+    const first = { ...state.emitters[0], id: "first", glyphId: glyphs[0].glyphId, label: "First" };
+    const last = { ...first, id: "last", glyphId: glyphs[glyphs.length - 1].glyphId, label: "Last" };
+    const overlapState = {
+      ...state,
+      emitter: { ...state.emitter, radius: 600, neighborInfluence: 1 },
+      emitterMode: "multiple" as const,
+      emitters: [first, last],
+    };
+    const baseline = buildCompositeWaveField(overlapState, context)!;
+    const midpoint = {
+      x: (baseline.sources[0].anchor.x + baseline.sources[1].anchor.x) / 2,
+      y: (baseline.sources[0].anchor.y + baseline.sources[1].anchor.y) / 2,
+    };
+    const radiusChanged = buildCompositeWaveField({
+      ...overlapState,
+      emitters: [first, { ...last, radiusMultiplier: 0.25 }],
+    }, context)!;
+    const weightChanged = buildCompositeWaveField({
+      ...overlapState,
+      emitters: [first, { ...last, weight: 0.15 }],
+    }, context)!;
+    expect(sampleGlyphField(radiusChanged, midpoint.x, midpoint.y))
+      .not.toBeCloseTo(sampleGlyphField(baseline, midpoint.x, midpoint.y), 5);
+    expect(sampleGlyphField(weightChanged, midpoint.x, midpoint.y))
+      .not.toBeCloseTo(sampleGlyphField(baseline, midpoint.x, midpoint.y), 5);
   });
 
   it("returns a zero-safe context with no active emitters and finite multi diagnostics", () => {
@@ -228,6 +294,22 @@ describe("Wave Contours renderer", () => {
     field.data.forEach((value) => expect(Number.isFinite(value)).toBe(true));
     const gradient = sampleGlyphFieldGradient(field, field.anchor.x + 8, field.anchor.y + 8);
     expect([gradient.x, gradient.y, gradient.magnitude].every(Number.isFinite)).toBe(true);
+  });
+
+  it("returns no composite field for zero single strength or all-zero row weights", () => {
+    expect(buildCompositeWaveField({
+      ...state,
+      emitter: { ...state.emitter, enabled: true, amplitude: 0 },
+    }, context)).toBeNull();
+    expect(buildCompositeWaveField({
+      ...state,
+      emitterMode: "multiple",
+      emitter: { ...state.emitter, enabled: true, amplitude: 1 },
+      emitters: [
+        { ...state.emitters[0], id: "zero-a", enabled: true, weight: 0 },
+        { ...state.emitters[0], id: "zero-b", enabled: true, weight: 0 },
+      ],
+    }, context)).toBeNull();
   });
 
   it("responds to amplitude, frequency, radius, falloff, and self influence", () => {

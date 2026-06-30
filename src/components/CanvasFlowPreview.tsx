@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import { consumeFrameBudget, updateTimingAverage } from "../engine/animationTiming";
-import { COLORS, VIEWPORT } from "../engine/constants";
+import { VIEWPORT } from "../engine/constants";
 import type { LineSegment } from "../engine/geometry";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import { generateRendererGeometry } from "../engine/rendererRuntime";
@@ -69,9 +69,13 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       const geometry = generateRendererGeometry(state, renderContext);
       context2d.setTransform(ratio, 0, 0, ratio, 0, 0);
       context2d.clearRect(0, 0, VIEWPORT.width, VIEWPORT.height);
+      if (!state.transparentBackground) {
+        context2d.fillStyle = state.backgroundColor;
+        context2d.fillRect(0, 0, VIEWPORT.width, VIEWPORT.height);
+      }
       context2d.save();
       if (glyphClip) context2d.clip(glyphClip);
-      context2d.strokeStyle = COLORS.artwork;
+      context2d.strokeStyle = state.primaryColor;
       context2d.lineWidth = 1.4;
       context2d.lineCap = "round";
       for (const line of geometry.geometries as LineSegment[]) {

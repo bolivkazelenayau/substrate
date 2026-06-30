@@ -16,12 +16,12 @@ beforeAll(() => {
 });
 
 describe("glyph emitter schema and metadata", () => {
-  it("migrates schema v3 to v6 with safe default emitter state", () => {
+  it("migrates schema v3 to v7 with safe default emitter state", () => {
     const { project, warnings } = validateProject({ version: 3, text: "OLD" });
-    expect(project.version).toBe(6);
+    expect(project.version).toBe(7);
     expect(project.emitter).toEqual(baseState.emitter);
     expect(project.emitter.enabled).toBe(false);
-    expect(warnings).toContain("Project was migrated to schema version 6.");
+    expect(warnings).toContain("Project was migrated to schema version 7.");
   });
 
   it("preserves emitter settings through JSON save/load validation", () => {

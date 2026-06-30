@@ -3,14 +3,14 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
-  it("migrates version 1 projects to version 6", () => {
+  it("migrates version 1 projects to version 7", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(6);
+    expect(result.project.version).toBe(7);
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 6.");
+    expect(result.warnings).toContain("Project was migrated to schema version 7.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -19,7 +19,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(6);
+    expect(result.project.version).toBe(7);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -75,10 +75,38 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
+  it("migrates v6 projects to persisted artwork appearance defaults", () => {
+    const { project, warnings } = validateProject({ ...baseState, version: 6 });
+    expect(project).toMatchObject({
+      version: 7,
+      primaryColor: "#e8ff45",
+      outlineColor: "#e8ff45",
+      backgroundColor: "#11110f",
+      transparentBackground: false,
+    });
+    expect(warnings).toContain("Project was migrated to schema version 7.");
+  });
+
+  it("preserves valid appearance colors and rejects invalid color strings", () => {
+    expect(validateProject({
+      ...baseState,
+      primaryColor: "#Aa11CC",
+      outlineColor: "#123456",
+      backgroundColor: "#fedcba",
+      transparentBackground: true,
+    }).project).toMatchObject({
+      primaryColor: "#aa11cc",
+      outlineColor: "#123456",
+      backgroundColor: "#fedcba",
+      transparentBackground: true,
+    });
+    expect(validateProject({ ...baseState, primaryColor: "red" }).project.primaryColor).toBe(baseState.primaryColor);
+  });
+
   it("migrates version 5 typography fields to layout-preserving defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 5 });
     expect(project).toMatchObject({
-      version: 6,
+      version: 7,
       kerningMode: "font",
       kerningStrength: 1,
       opticalSpacing: false,
@@ -86,7 +114,7 @@ describe("project schema", () => {
       textAlign: "center",
       textOffsetY: 0,
     });
-    expect(warnings).toContain("Project was migrated to schema version 6.");
+    expect(warnings).toContain("Project was migrated to schema version 7.");
   });
 
   it("validates and clamps typography controls", () => {
