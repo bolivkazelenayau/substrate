@@ -24,10 +24,10 @@ const canvasFactory: RasterSurfaceFactory = (width, height) => {
 let exportsSet: ReturnType<typeof generateCompatibilityExportSet>;
 let substrateDiagnostics: RenderContext["substrateData"] extends infer _ ? ReturnType<typeof buildSubstrate>["data"]["diagnostics"] : never;
 
-beforeAll(() => {
+beforeAll(async () => {
   const bytes = readFileSync(resolve("tests/fixtures/Basic-Regular.ttf"));
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const loaded = parseFontBuffer(buffer, "Basic-Regular.ttf");
+  const loaded = await parseFontBuffer(buffer, "Basic-Regular.ttf");
   const state = { ...baseState, text: "FORM", font: loaded.metadata, density: 24, maxNodes: 500 };
   const textGeometry = layoutGlyphs(state, loaded);
   const layout = getTextLayout(state, true);

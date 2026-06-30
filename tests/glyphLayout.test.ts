@@ -11,10 +11,10 @@ import { getTextBounds, getTextLayout, getTypographyLimitations } from "../src/e
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
 let loaded: LoadedFont;
 
-beforeAll(() => {
+beforeAll(async () => {
   const bytes = readFileSync(fixturePath);
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  loaded = parseFontBuffer(buffer, "Basic-Regular.ttf");
+  loaded = await parseFontBuffer(buffer, "Basic-Regular.ttf");
 });
 
 describe("font and glyph layout", () => {

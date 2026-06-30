@@ -1,8 +1,9 @@
-import { parse, type Font } from "opentype.js";
 import type { FontMetadata } from "../types";
+import type { ParsedFont } from "./fonts/fontEngineTypes";
+import { loadFontEngine } from "./fonts/loadFontEngine";
 
 export interface LoadedFont {
-  font: Font;
+  font: ParsedFont;
   metadata: FontMetadata;
 }
 
@@ -11,13 +12,14 @@ function localizedName(names: Record<string, string> | undefined, fallback: stri
   return names.en ?? Object.values(names)[0] ?? fallback;
 }
 
-export function parseFontBuffer(buffer: ArrayBuffer, fileName: string): LoadedFont {
+export async function parseFontBuffer(buffer: ArrayBuffer, fileName: string): Promise<LoadedFont> {
   if (!/\.(ttf|otf)$/i.test(fileName)) {
     throw new Error("Choose a .ttf or .otf font file.");
   }
-  let font: Font;
+  let font: ParsedFont;
   try {
-    font = parse(buffer);
+    const engine = await loadFontEngine();
+    font = engine.parse(buffer);
   } catch {
     throw new Error("The selected file could not be parsed as an OpenType font.");
   }
@@ -43,7 +45,7 @@ export function parseFontBuffer(buffer: ArrayBuffer, fileName: string): LoadedFo
 
 export async function loadFontFile(file: File): Promise<LoadedFont> {
   const buffer = await file.arrayBuffer();
-  const loaded = parseFontBuffer(buffer, file.name);
+  const loaded = await parseFontBuffer(buffer, file.name);
   try {
     const face = new FontFace(loaded.metadata.family, buffer.slice(0));
     await face.load();

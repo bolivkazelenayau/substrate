@@ -25,9 +25,9 @@ let loaded: LoadedFont;
 let state: ProjectState;
 let context: RenderContext;
 
-beforeAll(() => {
+beforeAll(async () => {
   const bytes = readFileSync(resolve("tests/fixtures/Basic-Regular.ttf"));
-  loaded = parseFontBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "Basic-Regular.ttf");
+  loaded = await parseFontBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "Basic-Regular.ttf");
   state = {
     ...baseState,
     text: "FORM",

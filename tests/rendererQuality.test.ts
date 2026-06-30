@@ -26,10 +26,10 @@ const canvasFactory: RasterSurfaceFactory = (width, height) => {
 
 let context: RenderContext;
 
-beforeAll(() => {
+beforeAll(async () => {
   const bytes = readFileSync(resolve("tests/fixtures/Basic-Regular.ttf"));
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-  const loaded = parseFontBuffer(buffer, "Basic-Regular.ttf");
+  const loaded = await parseFontBuffer(buffer, "Basic-Regular.ttf");
   const state = { ...baseState, text: "TYPE", font: loaded.metadata };
   const textGeometry = layoutGlyphs(state, loaded);
   const layout = getTextLayout(state, true);

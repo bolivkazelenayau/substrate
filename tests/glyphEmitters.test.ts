@@ -10,9 +10,9 @@ import { addEmitterRow, duplicateEmitterRow, MAX_EMITTER_ROWS, removeEmitterRow,
 
 let loaded: LoadedFont;
 
-beforeAll(() => {
+beforeAll(async () => {
   const bytes = readFileSync(resolve("tests/fixtures/Basic-Regular.ttf"));
-  loaded = parseFontBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "Basic-Regular.ttf");
+  loaded = await parseFontBuffer(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, "Basic-Regular.ttf");
 });
 
 describe("glyph emitter schema and metadata", () => {

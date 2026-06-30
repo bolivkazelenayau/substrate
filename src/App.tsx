@@ -309,6 +309,7 @@ export default function App() {
   const uploadFont = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    setMessage("Loading font engineâ€¦");
     try {
       const loaded = await loadFontFile(file);
       if (!validateLoadedFont(loaded)) throw new Error("The parsed font did not pass validation.");
