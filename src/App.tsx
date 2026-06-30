@@ -17,7 +17,7 @@ import { requestedMarkCount } from "./engine/renderers/types";
 import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
 import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
 import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
-import { buildCompositeWaveField, createGlyphFieldContext } from "./engine/field/compositeWaveField";
+import { createStaticRenderContext, selectEstimateContext, selectExportContext } from "./engine/renderContextLifecycle";
 import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
 import { CanvasNavigation } from "./components/CanvasNavigation";
 import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetExportability";
@@ -150,16 +150,10 @@ export default function App() {
   }, [setState]);
   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
-  const staticRenderContext: RenderContext = useMemo(() => {
-    const base: RenderContext = {
-      timeMs: 0,
-      frame: 0,
-      textGeometry,
-      substrateData: substrateBuild.data,
-      viewport: VIEWPORT,
-    };
-    return { ...base, ...createGlyphFieldContext(buildCompositeWaveField(state, base)) };
-  }, [state, textGeometry, substrateBuild.data]);
+  const staticRenderContext: RenderContext = useMemo(
+    () => createStaticRenderContext(state, textGeometry, substrateBuild.data),
+    [state, textGeometry, substrateBuild.data]
+  );
   const renderContext: RenderContext = useMemo(() => ({
     ...staticRenderContext,
     ...activeClockContext,
@@ -167,9 +161,7 @@ export default function App() {
     substrateData: substrateBuild.data,
     viewport: VIEWPORT,
   }), [activeClockContext, staticRenderContext, textGeometry, substrateBuild.data]);
-  const exportContext: RenderContext = state.exportFrameMode === "current"
-    ? renderContext
-    : { ...renderContext, timeMs: 0, frame: 0 };
+  const exportContext: RenderContext = selectExportContext(state, renderContext, staticRenderContext);
   const geometryStateKey = rendererGeometryStateKey(state);
   const geometry = useMemo(
     () => {
@@ -197,11 +189,7 @@ export default function App() {
       : [],
     [state.substrateQuality, substrateBuild.data],
   );
-  const estimateContext: RenderContext = useMemo(() => ({
-    ...renderContext,
-    timeMs: 0,
-    frame: 0,
-  }), [renderContext]);
+  const estimateContext: RenderContext = selectEstimateContext(staticRenderContext);
   // Compute the estimate geometry through the renderer cache (cheap, identity-stable
   // across debug/preview-only changes); then derive byte-size diagnostics from it.
   // The serialization + DOMParser only run when the cached geometry identity changes.
