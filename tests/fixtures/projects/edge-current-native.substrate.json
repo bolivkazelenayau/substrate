@@ -1,0 +1,16 @@
+{
+  "version": 7,
+  "text": "CURRENT",
+  "renderer": "flow",
+  "preset": "Edge Current",
+  "seed": 11031,
+  "density": 24,
+  "amplitude": 18,
+  "frequency": 16,
+  "turbulence": 28,
+  "edgeInfluence": 64,
+  "maxNodes": 800,
+  "substrateQuality": "low",
+  "exportMode": "artwork",
+  "font": null
+}

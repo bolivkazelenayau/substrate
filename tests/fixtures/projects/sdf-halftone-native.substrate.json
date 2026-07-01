@@ -1,0 +1,15 @@
+{
+  "version": 7,
+  "text": "HALFTONE",
+  "renderer": "sdf-halftone",
+  "preset": "Halftone Press",
+  "seed": 44071,
+  "density": 36,
+  "amplitude": 22,
+  "turbulence": 14,
+  "edgeInfluence": 44,
+  "maxNodes": 1200,
+  "substrateQuality": "low",
+  "exportMode": "artwork",
+  "font": null
+}

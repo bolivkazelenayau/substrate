@@ -1,0 +1,28 @@
+{
+  "version": 7,
+  "text": "WAVE",
+  "renderer": "wave-contours",
+  "preset": "Glyph Ripple",
+  "seed": 55073,
+  "density": 32,
+  "amplitude": 24,
+  "frequency": 18,
+  "edgeInfluence": 45,
+  "maxNodes": 1200,
+  "substrateQuality": "low",
+  "exportMode": "artwork",
+  "font": null,
+  "emitter": {
+    "enabled": true,
+    "sourceMode": "counter-center",
+    "amplitude": 1,
+    "frequency": 0.09,
+    "phase": 0,
+    "radius": 360,
+    "falloff": "smoothstep",
+    "selfInfluence": 1,
+    "neighborInfluence": 0.62,
+    "customX": 600,
+    "customY": 360
+  }
+}

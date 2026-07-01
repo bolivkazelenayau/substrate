@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "update:export-fixtures": "node scripts/updateExportFixtures.mjs",
     "compatibility:check": "vitest run tests/compatibilityExports.test.ts"
   },
   "dependencies": {
@@ -25,6 +26,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@napi-rs/canvas": "^1.0.1",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^26.0.1",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",

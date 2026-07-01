@@ -1,0 +1,13 @@
+{
+  "version": 7,
+  "text": "SIGNAL",
+  "renderer": "dots",
+  "preset": "Signal Dust",
+  "seed": 22047,
+  "density": 28,
+  "edgeInfluence": 52,
+  "maxNodes": 900,
+  "substrateQuality": "low",
+  "exportMode": "artwork",
+  "font": null
+}

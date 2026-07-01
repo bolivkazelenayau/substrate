@@ -1,0 +1,15 @@
+{
+  "version": 7,
+  "text": "CONTOUR",
+  "renderer": "sdf-contours",
+  "preset": "Topographic Type",
+  "seed": 33059,
+  "density": 34,
+  "amplitude": 26,
+  "turbulence": 6,
+  "edgeInfluence": 38,
+  "maxNodes": 1200,
+  "substrateQuality": "low",
+  "exportMode": "artwork",
+  "font": null
+}

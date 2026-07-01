@@ -1,0 +1,15 @@
+{
+  "viewBox": "0 0 1200 720",
+  "elementCounts": {
+    "path": 0,
+    "circle": 204,
+    "line": 0,
+    "polyline": 0,
+    "image": 0,
+    "canvas": 0,
+    "foreignObject": 0
+  },
+  "hasDataImage": false,
+  "hasBase64": false,
+  "canonicalHash": "70b879d377d2da2acca5a8613c981002c77cf8c0a55d20dbb616b166d3bd8fe8"
+}
