@@ -96,6 +96,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
   // that ensure adjacent numeric fields cannot collide. Field order matters.
   return [
     state.renderer,
+    `${state.artboard.width}x${state.artboard.height}`,
     substrate,
     state.text,
     state.font?.fileName ?? "native",

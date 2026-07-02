@@ -1,4 +1,4 @@
-import { APP_NAME, APP_VERSION, SVG_IDS, VIEWPORT } from "./constants";
+import { APP_NAME, APP_VERSION, SVG_IDS } from "./constants";
 import type { GeometryGroup, VectorGeometry } from "./geometry";
 import { getRenderer } from "./renderers";
 import { getTextLayout } from "./textLayout";
@@ -9,6 +9,7 @@ import { generateEdgeErosionMarks } from "./edgeErosion";
 import { generateWarpedOutline, getFinalOutlineGeometry } from "./outlineWarp";
 import { assertPresetExportable } from "./presetExportability";
 import { assertVectorOnlySvg } from "./svgValidation";
+import { DEFAULT_CONTOUR_STROKE_WIDTH, LEGACY_EXPORT_STROKE_WIDTH } from "./contourStroke";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -45,6 +46,8 @@ function serializeGlyphPaths(textGeometry: TextGeometry) {
 }
 
 export function createSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup): string {
+  const { width, height } = state.artboard;
+  const dimensionAttributes = width === 1200 && height === 720 ? "" : ` width="${width}" height="${height}"`;
   assertPresetExportable(state.preset, state.exportMode);
   const renderer = getRenderer(state.renderer);
   const geometry = generatedGeometry ?? renderer.generateGeometry(state, context);
@@ -53,6 +56,15 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
   const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
   const finalOutline = getFinalOutlineGeometry(textGeometry, warpedOutline, hasWarpedOutline);
   const timestamp = new Date().toISOString();
+  const metadataProject = width === 1200 && height === 720
+    ? (() => {
+        const { artboard: _artboard, version: _version, contourStrokeWidth, ...legacyProject } = state;
+        if (contourStrokeWidth !== DEFAULT_CONTOUR_STROKE_WIDTH) {
+          return { version: 7, ...legacyProject, contourStrokeWidth };
+        }
+        return { version: 7, ...legacyProject };
+      })()
+    : state;
   const metadata = {
     appName: APP_NAME,
     appVersion: APP_VERSION,
@@ -64,13 +76,13 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     sourceText: state.text,
     font: state.font,
     substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
-    project: state,
+    project: metadataProject,
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
   };
 
   const background = state.transparentBackground
     ? ""
-    : `<g id="${SVG_IDS.background}"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="${state.backgroundColor}"/></g>`;
+    : `<g id="${SVG_IDS.background}"><rect width="${width}" height="${height}" fill="${state.backgroundColor}"/></g>`;
   const editable = `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines
     ? `<g fill="white">${serializeGlyphPaths(textGeometry)}</g>`
@@ -88,7 +100,7 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     ? `<g fill="white" stroke="none" fill-rule="evenodd">${finalOutline.paths.map((path) => `<path d="${escape(path.d)}"/>`).join("")}</g><g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`
     : `${serializeText(state, "white", undefined, false)}<g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`;
   const overlayMask = renderer.showTextOverlay?.(state) && erodeOverlay
-    ? `<mask id="diffuser-overlay-mask"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="black"/>${overlayMaskContent}</mask>`
+    ? `<mask id="diffuser-overlay-mask"><rect width="${width}" height="${height}" fill="black"/>${overlayMaskContent}</mask>`
     : "";
   const overlayFill = state.overlayMode === "knockout" ? state.backgroundColor : state.primaryColor;
   // Regular Outline mode renders each positioned glyph path as a clean, stroke-only
@@ -106,14 +118,14 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
       : `<g id="diffuser-text-overlay" opacity="${renderer.textOverlayOpacity?.(state) ?? 1}"><g ${overlayStyle}${erodeOverlay && state.overlayMode !== "outline" ? ' mask="url(#diffuser-overlay-mask)"' : ""}>${serializeText(state, state.overlayMode === "outline" ? "none" : overlayFill, undefined, false)}</g></g>`
     : "";
   const artwork = [
-    `<defs><mask id="${SVG_IDS.mask}"><g id="${SVG_IDS.substrateMask}"><rect width="${VIEWPORT.width}" height="${VIEWPORT.height}" fill="black"/>${substrate}</g></mask>${overlayMask}</defs>`,
+    `<defs><mask id="${SVG_IDS.mask}"><g id="${SVG_IDS.substrateMask}"><rect width="${width}" height="${height}" fill="black"/>${substrate}</g></mask>${overlayMask}</defs>`,
     outline,
-    `<g id="${SVG_IDS.artwork}"${clipArtwork ? ` mask="url(#${SVG_IDS.mask})"` : ""} fill="${state.primaryColor}" stroke="${state.primaryColor}" stroke-width="1.15" stroke-linecap="round">${serializeGeometry(geometry, state.precision)}</g>`,
+    `<g id="${SVG_IDS.artwork}"${clipArtwork ? ` mask="url(#${SVG_IDS.mask})"` : ""} fill="${state.primaryColor}" stroke="${state.primaryColor}" stroke-width="${renderer.strokeWidth?.(state) ?? LEGACY_EXPORT_STROKE_WIDTH}" stroke-linecap="round">${serializeGeometry(geometry, state.precision)}</g>`,
     textOverlay,
     `<g id="${SVG_IDS.sourceText}">${serializeText(state, "none", "hidden")}</g>`,
   ].join("");
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEWPORT.width} ${VIEWPORT.height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg"${dimensionAttributes} viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
   assertVectorOnlySvg(svg);
   return svg;
 }

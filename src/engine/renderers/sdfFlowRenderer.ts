@@ -1,9 +1,10 @@
-import { VIEWPORT } from "../constants";
 import type { LineSegment } from "../geometry";
 import { createSeededRandom } from "../random";
 import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { requestedMarkCount, simpleCost } from "./types";
+import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
+import { contextArtboard } from "../artboard";
 
 export const sdfFlowRenderer: VectorRenderer = {
   id: "sdf-flow",
@@ -14,6 +15,7 @@ export const sdfFlowRenderer: VectorRenderer = {
   usesSubstrate: true,
   estimateCost: (state) => simpleCost(state, "paths"),
   generateGeometry(state, context) {
+    const artboard = contextArtboard(context);
     const substrate = context.substrateData;
     if (!substrate || substrate.substrateType === "empty" || substrate.diagnostics.maskCoverage <= 0) {
       return {
@@ -38,16 +40,21 @@ export const sdfFlowRenderer: VectorRenderer = {
     const edgeBand = Math.max(2, state.fontSize * (0.42 - influence * 0.34));
     const bounds = substrate.bounds;
     const minX = Math.max(0, (bounds?.x ?? 0) - 8);
-    const maxX = Math.min(VIEWPORT.width, (bounds ? bounds.x + bounds.width : VIEWPORT.width) + 8);
+    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + 8);
     const minY = Math.max(0, (bounds?.y ?? 0) - 8);
-    const maxY = Math.min(VIEWPORT.height, (bounds ? bounds.y + bounds.height : VIEWPORT.height) + 8);
+    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + 8);
+    const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    });
     let attempts = 0;
     let sampledDistanceTotal = 0;
 
     while (geometries.length < target && attempts < maxAttempts) {
       attempts += 1;
-      const x = minX + random() * Math.max(1, maxX - minX);
-      const y = minY + random() * Math.max(1, maxY - minY);
+      const { x, y } = sampleBoundsFairly(samplingBounds, attempts - 1, random);
       const mask = sampleMask(substrate, x, y);
       const distance = sampleDistance(substrate, x, y);
       const edge = sampleEdge(substrate, x, y);

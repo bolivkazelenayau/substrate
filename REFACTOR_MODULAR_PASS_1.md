@@ -2,6 +2,12 @@
 
 Date: 2026-06-30
 
+> 2026-07-01 addendum: UX Disclosure Pass 1 reordered the existing panel
+> modules into the fixed `01`–`07` creative path, made detailed typography,
+> emitters, preview, export, and diagnostics opt-in, and moved dev launchers
+> into Diagnostics. Module ownership and parent-owned mutation semantics remain
+> unchanged. See `docs/UX_DISCLOSURE_PASS_1.md`.
+
 ## Summary
 
 This pass separates serialized artwork state from runtime-only preview and
@@ -80,6 +86,9 @@ type DiagnosticsMode = "off" | "compact" | "full";
 `DiagnosticsMode` is owned by `useDiagnosticsState` and is not serialized.
 WebGPU diagnostics remain explicitly labelled preview/debug-only and
 not-export.
+
+New sessions now default to `off`. `compact` and `full` remain explicit runtime
+choices and are still excluded from project serialization.
 
 ### Focused hooks introduced
 

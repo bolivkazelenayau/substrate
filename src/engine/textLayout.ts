@@ -1,5 +1,7 @@
 import { TEXT_LAYOUT, VIEWPORT } from "./constants";
 import type { ProjectState } from "../types";
+import type { TextGeometry } from "./glyphGeometry";
+import { projectArtboard } from "./artboard";
 
 export interface TextLayout {
   x: number;
@@ -12,19 +14,20 @@ export interface TextLayout {
   text: string;
 }
 
-function estimatedTextWidth(state: ProjectState) {
-  return Math.min(VIEWPORT.width, state.text.length * state.fontSize * 0.66
-    + Math.max(0, state.text.length - 1) * state.tracking);
+function estimatedTextAdvance(state: ProjectState) {
+  return state.text.length * state.fontSize * 0.66
+    + Math.max(0, state.text.length - 1) * state.tracking;
 }
 
 function alignedBoundsX(state: ProjectState, width: number) {
+  const artboard = projectArtboard(state);
   if (state.textAlign === "left") return VIEWPORT.paddingX;
-  if (state.textAlign === "right") return VIEWPORT.width - VIEWPORT.paddingX - width;
-  return VIEWPORT.centerX - width / 2;
+  if (state.textAlign === "right") return artboard.width - VIEWPORT.paddingX - width;
+  return artboard.centerX - width / 2;
 }
 
 export function getTextLayout(state: ProjectState, useCustomFont = true): TextLayout {
-  const width = estimatedTextWidth(state);
+  const width = estimatedTextAdvance(state);
   const boundsX = alignedBoundsX(state, width);
   return {
     ...TEXT_LAYOUT,
@@ -37,13 +40,52 @@ export function getTextLayout(state: ProjectState, useCustomFont = true): TextLa
   };
 }
 
-export function getTextBounds(state: ProjectState) {
-  const estimatedWidth = estimatedTextWidth(state);
+export function getTextLayoutBounds(state: ProjectState) {
+  const estimatedWidth = estimatedTextAdvance(state);
   return {
     x: alignedBoundsX(state, estimatedWidth),
     y: TEXT_LAYOUT.baselineY + state.textOffsetY - state.fontSize,
     width: estimatedWidth,
     height: state.fontSize * 1.18,
+  };
+}
+
+export function getApproximateTextInkBounds(state: ProjectState) {
+  const layoutBounds = getTextLayoutBounds(state);
+  const horizontalOverhang = state.fontSize * 0.08;
+  const verticalOverhang = state.fontSize * 0.04;
+  return {
+    x: layoutBounds.x - horizontalOverhang,
+    y: layoutBounds.y - verticalOverhang,
+    width: layoutBounds.width + horizontalOverhang * 2,
+    height: layoutBounds.height + verticalOverhang * 2,
+  };
+}
+
+/** @deprecated Prefer the explicitly named layout/ink bounds helpers. */
+export const getTextBounds = getApproximateTextInkBounds;
+
+export function centerPreservingTypographySizePatch(
+  state: ProjectState,
+  nextFontSize: number,
+  textGeometry: TextGeometry | null,
+): Pick<ProjectState, "fontSize" | "textOffsetY"> {
+  if (!Number.isFinite(nextFontSize) || nextFontSize <= 0 || nextFontSize === state.fontSize) {
+    return { fontSize: state.fontSize, textOffsetY: state.textOffsetY };
+  }
+  const currentBounds = textGeometry?.bounds ?? getTextBounds(state);
+  const currentCenterY = currentBounds.y + currentBounds.height / 2;
+  let projectedCenterY: number;
+  if (textGeometry?.bounds && state.fontSize > 0) {
+    const scale = nextFontSize / state.fontSize;
+    projectedCenterY = textGeometry.baselineY + (currentCenterY - textGeometry.baselineY) * scale;
+  } else {
+    const projectedBounds = getTextBounds({ ...state, fontSize: nextFontSize });
+    projectedCenterY = projectedBounds.y + projectedBounds.height / 2;
+  }
+  return {
+    fontSize: nextFontSize,
+    textOffsetY: state.textOffsetY + currentCenterY - projectedCenterY,
   };
 }
 

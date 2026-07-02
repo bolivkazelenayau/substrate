@@ -4,6 +4,7 @@ import { buildEdgeMap } from "./edgeMap";
 import { rasterizeGlyphs, type RasterSurfaceFactory } from "./rasterizeGlyphs";
 import type { SubstrateBuildInput, SubstrateBuildResult, SubstrateData } from "./types";
 import { measure } from "../performance";
+import { DEFAULT_ARTBOARD } from "../artboard";
 
 export const DEFAULT_SUBSTRATE_RESOLUTION = {
   width: 384,
@@ -20,9 +21,11 @@ export const SUBSTRATE_RESOLUTIONS = {
 const now = () => typeof performance !== "undefined" ? performance.now() : Date.now();
 
 function emptySubstrate(input: SubstrateBuildInput, buildTimeMs: number): SubstrateData {
+  const viewport = input.viewport ?? DEFAULT_ARTBOARD;
+  const domain = input.domainBounds ?? { x: 0, y: 0, width: viewport.width, height: viewport.height };
   const count = input.resolution.width * input.resolution.height;
-  const scaleX = VIEWPORT.width / input.resolution.width;
-  const scaleY = VIEWPORT.height / input.resolution.height;
+  const scaleX = domain.width / input.resolution.width;
+  const scaleY = domain.height / input.resolution.height;
   const mask = { ...input.resolution, data: new Float32Array(count) };
   const edge = { ...input.resolution, data: new Float32Array(count) };
   const distance = buildSignedDistanceField(mask, edge, scaleX, scaleY);
@@ -34,8 +37,8 @@ function emptySubstrate(input: SubstrateBuildInput, buildTimeMs: number): Substr
   }
   return {
     ...input.resolution,
-    viewportWidth: VIEWPORT.width,
-    viewportHeight: VIEWPORT.height,
+    viewportWidth: viewport.width,
+    viewportHeight: viewport.height,
     scaleX,
     scaleY,
     sourceText: input.sourceText,
@@ -44,6 +47,7 @@ function emptySubstrate(input: SubstrateBuildInput, buildTimeMs: number): Substr
     edge,
     distance,
     bounds: input.bounds,
+    domainBounds: domain,
     diagnostics: {
       maskCoverage: 0,
       edgePixelCount: 0,
@@ -60,12 +64,14 @@ function emptySubstrate(input: SubstrateBuildInput, buildTimeMs: number): Substr
 export function buildSubstrate(input: SubstrateBuildInput, factory?: RasterSurfaceFactory): SubstrateBuildResult {
   const started = now();
   try {
+    const viewport = input.viewport ?? DEFAULT_ARTBOARD;
     const rasterTiming = measure(() => rasterizeGlyphs(input, factory));
     const raster = rasterTiming.value;
     const edgeTiming = measure(() => buildEdgeMap(raster.mask));
     const edge = edgeTiming.value;
-    const scaleX = VIEWPORT.width / input.resolution.width;
-    const scaleY = VIEWPORT.height / input.resolution.height;
+    const domain = input.domainBounds ?? { x: 0, y: 0, width: viewport.width, height: viewport.height };
+    const scaleX = domain.width / input.resolution.width;
+    const scaleY = domain.height / input.resolution.height;
     const distanceTiming = measure(() => buildSignedDistanceField(raster.mask, edge, scaleX, scaleY));
     const distance = distanceTiming.value;
     let coverageTotal = 0;
@@ -81,8 +87,8 @@ export function buildSubstrate(input: SubstrateBuildInput, factory?: RasterSurfa
     return {
       data: {
         ...input.resolution,
-        viewportWidth: VIEWPORT.width,
-        viewportHeight: VIEWPORT.height,
+        viewportWidth: viewport.width,
+        viewportHeight: viewport.height,
         scaleX,
         scaleY,
         sourceText: input.sourceText,
@@ -91,6 +97,7 @@ export function buildSubstrate(input: SubstrateBuildInput, factory?: RasterSurfa
         edge,
         distance,
         bounds: input.bounds,
+        domainBounds: domain,
         diagnostics: {
           maskCoverage: coverageTotal / raster.mask.data.length,
           edgePixelCount,

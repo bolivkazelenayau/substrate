@@ -4,6 +4,7 @@ import type { GlyphBounds, GlyphPathCommand, PositionedGlyph, TextGeometry } fro
 import { unionBounds } from "./glyphGeometry";
 import type { ProjectState } from "../types";
 import { getTextLayout } from "./textLayout";
+import { projectArtboard } from "./artboard";
 
 function pathBounds(box: { x1: number; y1: number; x2: number; y2: number }, hasPath: boolean): GlyphBounds | null {
   if (!hasPath || ![box.x1, box.y1, box.x2, box.y2].every(Number.isFinite)) return null;
@@ -41,11 +42,12 @@ export function layoutGlyphs(state: ProjectState, loaded: LoadedFont): TextGeome
     + kernings.reduce((sum, kerning) => sum + kerning, 0)
     + opticalAdjustments.reduce((sum, adjustment) => sum + adjustment, 0)
     + Math.max(0, glyphs.length - 1) * state.tracking;
+  const artboard = projectArtboard(state);
   const originX = state.textAlign === "left"
     ? VIEWPORT.paddingX
     : state.textAlign === "right"
-      ? VIEWPORT.width - VIEWPORT.paddingX - totalAdvance
-      : VIEWPORT.centerX - totalAdvance / 2;
+      ? artboard.width - VIEWPORT.paddingX - totalAdvance
+      : artboard.centerX - totalAdvance / 2;
   const layout = getTextLayout(state);
   const baselineY = layout.baselineY;
   let cursorX = originX;

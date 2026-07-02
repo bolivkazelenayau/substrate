@@ -1,6 +1,7 @@
 import type { CircleMark, Point, Polyline, RendererDiagnostics } from "../geometry";
 import { buildCompositeWaveField, type CompositeWaveField } from "../field/compositeWaveField";
 import type { VectorRenderer } from "./types";
+import { configuredContourStrokeWidth } from "../contourStroke";
 
 interface Segment { a: Point; b: Point }
 
@@ -22,6 +23,7 @@ function segments(field: CompositeWaveField, level: number): Segment[] {
   const data = field.data;
   const invWidthMinusOne = 1 / (width - 1);
   const invHeightMinusOne = 1 / (height - 1);
+  const domain = field.worldBounds;
   for (let y = 0; y < height - 1; y += 1) {
     for (let x = 0; x < width - 1; x += 1) {
       const idx = y * width + x;
@@ -44,15 +46,15 @@ function segments(field: CompositeWaveField, level: number): Segment[] {
       if (above00 !== above10) {
         const denom = v10 - v00;
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v00) / denom));
-        c0x = (x + amount) * invWidthMinusOne * field.viewportWidth;
-        c0y = y * invHeightMinusOne * field.viewportHeight;
+        c0x = domain.x + (x + amount) * invWidthMinusOne * domain.width;
+        c0y = domain.y + y * invHeightMinusOne * domain.height;
         crossingCount = 1;
       }
       if (above10 !== above11) {
         const denom = v11 - v10;
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v10) / denom));
-        const px = (x + 1) * invWidthMinusOne * field.viewportWidth;
-        const py = (y + amount) * invHeightMinusOne * field.viewportHeight;
+        const px = domain.x + (x + 1) * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + amount) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else { c1x = px; c1y = py; crossingCount = 2; }
       }
@@ -61,8 +63,8 @@ function segments(field: CompositeWaveField, level: number): Segment[] {
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v11) / denom));
         // Edge goes from corner2=(x+1, y+1) toward corner3=(x, y+1); the along-edge
         // position is (x+1) - amount, with y fixed at y+1.
-        const px = (x + 1 - amount) * invWidthMinusOne * field.viewportWidth;
-        const py = (y + 1) * invHeightMinusOne * field.viewportHeight;
+        const px = domain.x + (x + 1 - amount) * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + 1) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
         else { c2x = px; c2y = py; crossingCount = 3; }
@@ -72,8 +74,8 @@ function segments(field: CompositeWaveField, level: number): Segment[] {
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v01) / denom));
         // Edge goes from corner3=(x, y+1) toward corner0=(x, y); the along-edge
         // position is (y+1) - amount, with x fixed at x.
-        const px = x * invWidthMinusOne * field.viewportWidth;
-        const py = (y + 1 - amount) * invHeightMinusOne * field.viewportHeight;
+        const px = domain.x + x * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + 1 - amount) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
         else if (crossingCount === 2) { c2x = px; c2y = py; crossingCount = 3; }
@@ -159,6 +161,9 @@ export const waveContoursRenderer: VectorRenderer = {
   svgElementType: "mixed",
   usesTime: false,
   usesSubstrate: true,
+  strokeWidth: (state) => state.waveContourMode === "continuous"
+    ? configuredContourStrokeWidth(state)
+    : undefined,
   estimateCost: (state) => ({ marks: Math.round(state.density / 5), nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} nodes` }),
   generateGeometry(state, context) {
     const field = context.glyphField ?? buildCompositeWaveField(state, context);

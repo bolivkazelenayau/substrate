@@ -1,10 +1,10 @@
 import { memo, useEffect, useRef } from "react";
 import { consumeFrameBudget, updateTimingAverage } from "../engine/animationTiming";
-import { VIEWPORT } from "../engine/constants";
 import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../engine/flowPreviewFrame";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
+import { projectArtboard } from "../engine/artboard";
 
 export interface CanvasPreviewSample {
   context: RenderContext;
@@ -40,8 +40,9 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       return;
     }
     const ratio = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.round(VIEWPORT.width * ratio);
-    canvas.height = Math.round(VIEWPORT.height * ratio);
+    const artboard = projectArtboard(state);
+    canvas.width = Math.round(artboard.width * ratio);
+    canvas.height = Math.round(artboard.height * ratio);
     let glyphClip: Path2D | null = null;
     if (textGeometry?.hasOutlines && typeof Path2D !== "undefined") {
       try {
@@ -64,13 +65,13 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
 
     const draw = (timeMs: number, frameNumber: number) => {
       const started = performance.now();
-      const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: VIEWPORT };
+      const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: artboard };
       const previewFrame = createFlowPreviewFrame(state, renderContext);
       context2d.setTransform(ratio, 0, 0, ratio, 0, 0);
-      context2d.clearRect(0, 0, VIEWPORT.width, VIEWPORT.height);
+      context2d.clearRect(0, 0, artboard.width, artboard.height);
       if (!previewFrame.appearance.transparentBackground) {
         context2d.fillStyle = previewFrame.appearance.backgroundColor;
-        context2d.fillRect(0, 0, VIEWPORT.width, VIEWPORT.height);
+        context2d.fillRect(0, 0, artboard.width, artboard.height);
       }
       context2d.save();
       if (glyphClip) context2d.clip(glyphClip);

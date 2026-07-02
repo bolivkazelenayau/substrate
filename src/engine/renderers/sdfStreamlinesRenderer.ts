@@ -1,9 +1,10 @@
-import { VIEWPORT } from "../constants";
 import type { Point, Polyline, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
 import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask, type SubstrateData } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
+import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
+import { contextArtboard } from "../artboard";
 
 const OCCUPANCY_CELL_SIZE = 11;
 const MIN_POLYLINE_POINTS = 4;
@@ -60,6 +61,7 @@ function traceHalf(
   glyphDisplacement: number,
   glyphStats: { valueTotal: number; displacementTotal: number; samples: number },
   distanceAccumulator: { value: number },
+  artboard: ReturnType<typeof contextArtboard>,
 ) {
   const points: Point[] = [];
   let current = seedPoint;
@@ -92,7 +94,7 @@ function traceHalf(
       x: current.x + Math.cos(angle) * stepSize,
       y: current.y + Math.sin(angle) * stepSize,
     };
-    if (next.x < 0 || next.x > VIEWPORT.width || next.y < 0 || next.y > VIEWPORT.height || sampleMask(substrate, next.x, next.y) < 0.5) {
+    if (next.x < 0 || next.x > artboard.width || next.y < 0 || next.y > artboard.height || sampleMask(substrate, next.x, next.y) < 0.5) {
       counters.stoppedOutsideMask += 1;
       break;
     }
@@ -143,6 +145,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
     return { marks: requested, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} points` };
   },
   generateGeometry(state, context) {
+    const artboard = contextArtboard(context);
     const substrate = context.substrateData;
     if (!substrate || substrate.substrateType === "empty" || substrate.diagnostics.maskCoverage <= 0) {
       return { id: "sdf-streamlines", geometries: [], diagnostics: fallbackDiagnostics("SDF Streamlines requires a non-empty substrate.") };
@@ -154,16 +157,22 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
     const maxSteps = Math.max(6, Math.min(48, Math.round(5 + state.amplitude * 0.95)));
     const stepSize = Math.max(1.5, 2.2 + state.amplitude * 0.09);
     const maxSeedAttempts = requestedStreamlines * 35;
-    const occupancyWidth = Math.ceil(VIEWPORT.width / OCCUPANCY_CELL_SIZE);
-    const occupancyHeight = Math.ceil(VIEWPORT.height / OCCUPANCY_CELL_SIZE);
+    const occupancyWidth = Math.ceil(artboard.width / OCCUPANCY_CELL_SIZE);
+    const occupancyHeight = Math.ceil(artboard.height / OCCUPANCY_CELL_SIZE);
     const occupancy = new Uint8Array(occupancyWidth * occupancyHeight);
     const influence = state.edgeInfluence / 100;
     const edgeBand = Math.max(2, state.fontSize * (0.46 - influence * 0.37));
     const bounds = substrate.bounds;
     const minX = Math.max(0, (bounds?.x ?? 0) - 5);
-    const maxX = Math.min(VIEWPORT.width, (bounds ? bounds.x + bounds.width : VIEWPORT.width) + 5);
+    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + 5);
     const minY = Math.max(0, (bounds?.y ?? 0) - 5);
-    const maxY = Math.min(VIEWPORT.height, (bounds ? bounds.y + bounds.height : VIEWPORT.height) + 5);
+    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + 5);
+    const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    });
     const polylines: Polyline[] = [];
     const counters: TraceCounters = { stoppedOutsideMask: 0, stoppedInvalidGradient: 0, occupancyRejections: 0 };
     let rejectedSeeds = 0;
@@ -175,10 +184,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
 
     while (polylines.length < requestedStreamlines && attempts < maxSeedAttempts && state.maxNodes - totalPoints >= MIN_POLYLINE_POINTS) {
       attempts += 1;
-      const seedPoint = {
-        x: minX + random() * Math.max(1, maxX - minX),
-        y: minY + random() * Math.max(1, maxY - minY),
-      };
+      const seedPoint = sampleBoundsFairly(samplingBounds, attempts - 1, random);
       const mask = sampleMask(substrate, seedPoint.x, seedPoint.y);
       const distance = sampleDistance(substrate, seedPoint.x, seedPoint.y);
       const edge = sampleEdge(substrate, seedPoint.x, seedPoint.y);
@@ -213,9 +219,9 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
       // every emitted point after the streamline is accepted. The seed point's
       // distance was sampled above and is added separately below.
       const streamlineDistance = { value: 0 };
-      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, counters, halfBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance);
+      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, counters, halfBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance, artboard);
       const backwardBudget = Math.max(0, remaining - 1 - forward.length);
-      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, counters, backwardBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance);
+      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, counters, backwardBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance, artboard);
       const points = [...backward.reverse(), seedPoint, ...forward];
       if (points.length < MIN_POLYLINE_POINTS) {
         rejectedSeeds += 1;

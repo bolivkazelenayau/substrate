@@ -1,6 +1,35 @@
 import type { PresetId, ProjectState } from "../types";
 import { COLORS } from "./constants";
 
+type BuiltInPresetId = Exclude<PresetId, "Custom">;
+
+export type PresetFamily =
+  | "trace"
+  | "wave"
+  | "field"
+  | "sdf"
+  | "contour"
+  | "halftone"
+  | "diffuser"
+  | "flow"
+  | "warp"
+  | "resonance"
+  | "custom";
+
+export type PresetMetadata =
+  | {
+      studyCode: string;
+      legacyName: BuiltInPresetId;
+      family: Exclude<PresetFamily, "custom">;
+      description: string;
+    }
+  | {
+      studyCode?: never;
+      legacyName: "Custom";
+      family: "custom";
+      description: string;
+    };
+
 export const defaultDebugSettings: ProjectState["debug"] = {
   substrateMode: "none",
   maskBounds: false,
@@ -17,7 +46,8 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 7,
+  version: 8,
+  artboard: { width: 1200, height: 720 },
   text: "SUBSTRATE",
   fontSize: 148,
   tracking: -3,
@@ -65,6 +95,7 @@ export const baseState: ProjectState = {
   emitters: [{ id: "emitter-1", glyphId: null, enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Emitter 1" }],
   fieldBlendMode: "add",
   waveContourMode: "continuous",
+  contourStrokeWidth: 1.15,
   waveDotSpacing: 11,
   waveDotRadius: 1.8,
   diffuserDomain: "text-halo",
@@ -269,7 +300,124 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
   },
 };
 
+// Presentation only: the legacy preset name remains the persisted compatibility
+// ID, while `presets` above remains the sole source of rendering state.
+export const presetMetadata: Record<PresetId, PresetMetadata> = {
+  "Edge Current": {
+    studyCode: "TRACE / 01",
+    legacyName: "Edge Current",
+    family: "trace",
+    description: "Masked flow lines shaped by glyph-edge field pressure.",
+  },
+  "Sonic Ripple": {
+    studyCode: "ARC / 02",
+    legacyName: "Sonic Ripple",
+    family: "wave",
+    description: "Radial wave interference around typographic mass.",
+  },
+  "Signal Dust": {
+    studyCode: "DUST / 03",
+    legacyName: "Signal Dust",
+    family: "field",
+    description: "Sparse particle field disturbed by the source glyphs.",
+  },
+  "SDF Current": {
+    studyCode: "CURRENT / 04",
+    legacyName: "SDF Current",
+    family: "sdf",
+    description: "Distance-field current lines flowing around letterforms.",
+  },
+  "Contour Thread": {
+    studyCode: "THREAD / 05",
+    legacyName: "Contour Thread",
+    family: "contour",
+    description: "Fine contour threads tracing the inner field structure.",
+  },
+  "Topographic Type": {
+    studyCode: "STRATA / 06",
+    legacyName: "Topographic Type",
+    family: "contour",
+    description: "Layered topographic contour bands inside typographic space.",
+  },
+  "Halftone Press": {
+    studyCode: "PRESS / 07",
+    legacyName: "Halftone Press",
+    family: "halftone",
+    description: "Print-like halftone pressure mapped through the glyph field.",
+  },
+  "Glyph Ripple": {
+    studyCode: "RIPPLE / 08",
+    legacyName: "Glyph Ripple",
+    family: "wave",
+    description: "Glyph-driven ripple structure with strong internal rhythm.",
+  },
+  "Dotted Diffuser": {
+    studyCode: "DIFFUSE / 09",
+    legacyName: "Dotted Diffuser",
+    family: "diffuser",
+    description: "Dot-field diffusion radiating from typographic structure.",
+  },
+  "Sonic Halftone": {
+    studyCode: "HALFTONE / 10",
+    legacyName: "Sonic Halftone",
+    family: "halftone",
+    description: "Sonic field modulation expressed as halftone density.",
+  },
+  "Sonic Contours": {
+    studyCode: "CONTOUR / 11",
+    legacyName: "Sonic Contours",
+    family: "contour",
+    description: "Sonic contour bands wrapping and cutting through glyph space.",
+  },
+  "Sonic Stream": {
+    studyCode: "STREAM / 12",
+    legacyName: "Sonic Stream",
+    family: "flow",
+    description: "Streamline field behavior driven by sonic typography.",
+  },
+  "Sonic Diffuser": {
+    studyCode: "HALO / 13",
+    legacyName: "Sonic Diffuser",
+    family: "diffuser",
+    description: "Diffused halo field surrounding the typographic source.",
+  },
+  "Sonic Warp": {
+    studyCode: "WARP / 14",
+    legacyName: "Sonic Warp",
+    family: "warp",
+    description: "Warped typographic field with distorted vector structure.",
+  },
+  "Sonic Interference": {
+    studyCode: "INTERFERENCE / 15",
+    legacyName: "Sonic Interference",
+    family: "wave",
+    description: "Crossing wave systems creating interference around the text.",
+  },
+  "Counter Resonance": {
+    studyCode: "COUNTER / 16",
+    legacyName: "Counter Resonance",
+    family: "resonance",
+    description: "Resonant field behavior focused on counters and internal forms.",
+  },
+  "Split Field": {
+    studyCode: "SPLIT / 17",
+    legacyName: "Split Field",
+    family: "field",
+    description: "Divided field behavior with separated typographic force zones.",
+  },
+  Custom: {
+    legacyName: "Custom",
+    family: "custom",
+    description: "User-modified project state.",
+  },
+};
+
 export const presetIds = [...Object.keys(presets), "Custom"] as PresetId[];
+
+export function getPresetDisplayLabel(preset: PresetId) {
+  const metadata = presetMetadata[preset];
+  return metadata.studyCode ? `${metadata.studyCode} — ${metadata.legacyName}` : metadata.legacyName;
+}
 
 export function applyPreset(state: ProjectState, preset: PresetId): ProjectState {
   if (preset === "Custom") return { ...state, preset };

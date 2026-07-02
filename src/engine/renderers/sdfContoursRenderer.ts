@@ -2,11 +2,18 @@ import type { Point, Polyline, RendererDiagnostics } from "../geometry";
 import { sampleDistanceGradient, sampleMask, type SubstrateData } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
+import { budgetContourFragmentsFairly } from "../contourBudget";
+import { configuredContourStrokeWidth } from "../contourStroke";
 
 interface Segment {
   a: Point;
   b: Point;
 }
+
+// Preserve the historical budget selection for projects that were representable
+// before contextual typography sizing. Fair decimation applies only to the newly
+// reachable large-type range, keeping canonical exports byte-stable.
+const LEGACY_CONTOUR_BUDGET_SIZE_LIMIT = 220;
 
 // Numeric hash for a quantized point coordinate. Same quantization as the previous
 // `${Math.round(point.x*100)},${Math.round(point.y*100)}` string key, packed into
@@ -25,6 +32,7 @@ function extractSegments(substrate: SubstrateData, level: number): Segment[] {
   const values = substrate.distance.data;
   const invWidthMinusOne = 1 / Math.max(1, width - 1);
   const invHeightMinusOne = 1 / Math.max(1, height - 1);
+  const domain = substrate.domainBounds ?? { x: 0, y: 0, width: substrate.viewportWidth, height: substrate.viewportHeight };
   for (let y = 0; y < height - 1; y += 1) {
     for (let x = 0; x < width - 1; x += 1) {
       const idx = y * width + x;
@@ -48,15 +56,15 @@ function extractSegments(substrate: SubstrateData, level: number): Segment[] {
       if (above00 !== above10) {
         const denom = v10 - v00;
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v00) / denom));
-        c0x = (x + amount) * invWidthMinusOne * substrate.viewportWidth;
-        c0y = y * invHeightMinusOne * substrate.viewportHeight;
+        c0x = domain.x + (x + amount) * invWidthMinusOne * domain.width;
+        c0y = domain.y + y * invHeightMinusOne * domain.height;
         crossingCount = 1;
       }
       if (above10 !== above11) {
         const denom = v11 - v10;
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v10) / denom));
-        const px = (x + 1) * invWidthMinusOne * substrate.viewportWidth;
-        const py = (y + amount) * invHeightMinusOne * substrate.viewportHeight;
+        const px = domain.x + (x + 1) * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + amount) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else { c1x = px; c1y = py; crossingCount = 2; }
       }
@@ -65,8 +73,8 @@ function extractSegments(substrate: SubstrateData, level: number): Segment[] {
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v11) / denom));
         // Edge goes from corner2=(x+1, y+1) toward corner3=(x, y+1); the along-edge
         // position is (x+1) - amount, with y fixed at y+1.
-        const px = (x + 1 - amount) * invWidthMinusOne * substrate.viewportWidth;
-        const py = (y + 1) * invHeightMinusOne * substrate.viewportHeight;
+        const px = domain.x + (x + 1 - amount) * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + 1) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
         else { c2x = px; c2y = py; crossingCount = 3; }
@@ -76,8 +84,8 @@ function extractSegments(substrate: SubstrateData, level: number): Segment[] {
         const amount = Math.abs(denom) < 1e-8 ? 0.5 : Math.max(0, Math.min(1, (level - v01) / denom));
         // Edge goes from corner3=(x, y+1) toward corner0=(x, y); the along-edge
         // position is (y+1) - amount, with x fixed at x.
-        const px = x * invWidthMinusOne * substrate.viewportWidth;
-        const py = (y + 1 - amount) * invHeightMinusOne * substrate.viewportHeight;
+        const px = domain.x + x * invWidthMinusOne * domain.width;
+        const py = domain.y + (y + 1 - amount) * invHeightMinusOne * domain.height;
         if (crossingCount === 0) { c0x = px; c0y = py; crossingCount = 1; }
         else if (crossingCount === 1) { c1x = px; c1y = py; crossingCount = 2; }
         else if (crossingCount === 2) { c2x = px; c2y = py; crossingCount = 3; }
@@ -222,6 +230,7 @@ export const sdfContoursRenderer: VectorRenderer = {
   svgElementType: "polyline",
   usesTime: false,
   usesSubstrate: true,
+  strokeWidth: configuredContourStrokeWidth,
   estimateCost: (state) => ({ marks: Math.max(2, Math.round(1 + state.density / 7)), nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} points` }),
   generateGeometry(state, context) {
     const substrate = context.substrateData;
@@ -241,12 +250,10 @@ export const sdfContoursRenderer: VectorRenderer = {
       return minimumLevel + (maximumLevel - minimumLevel) * Math.pow(amount, 1 + influence * 1.8);
     });
 
-    const geometries: Polyline[] = [];
-    let totalPoints = 0;
+    const candidates: Array<{ points: Point[]; payload: { level: number; levelIndex: number } }> = [];
     let skippedFragments = 0;
     let extractedFragments = 0;
     let totalFragmentLength = 0;
-    let maxNodesClipped = false;
     let sampledDistanceTotal = 0;
     let fieldValueTotal = 0;
     let displacementTotal = 0;
@@ -282,25 +289,47 @@ export const sdfContoursRenderer: VectorRenderer = {
           skippedFragments += 1;
           return;
         }
-        if (totalPoints + displaced.length > state.maxNodes) {
-          skippedFragments += 1;
-          maxNodesClipped = true;
-          return;
-        }
         if (!displaced.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))) {
           skippedFragments += 1;
           return;
         }
-        geometries.push({
-          type: "polyline",
-          points: displaced,
-          opacity: Math.min(0.92, 0.42 + influence * 0.28 + levelIndex / Math.max(1, levels.length - 1) * 0.16),
-        });
-        totalPoints += displaced.length;
-        totalFragmentLength += length;
-        sampledDistanceTotal += level * displaced.length;
+        candidates.push({ points: displaced, payload: { level, levelIndex } });
       });
     });
+    const usesFairBudget = state.fontSize > LEGACY_CONTOUR_BUDGET_SIZE_LIMIT;
+    const budgeted = usesFairBudget
+      ? budgetContourFragmentsFairly(candidates, state.maxNodes)
+      : (() => {
+          const fragments = [];
+          let retainedPointCount = 0;
+          let budgetLimited = false;
+          for (const candidate of candidates) {
+            if (retainedPointCount + candidate.points.length > state.maxNodes) {
+              budgetLimited = true;
+              continue;
+            }
+            fragments.push(candidate);
+            retainedPointCount += candidate.points.length;
+          }
+          return {
+            fragments,
+            originalFragmentCount: candidates.length,
+            retainedFragmentCount: fragments.length,
+            originalPointCount: candidates.reduce((sum, candidate) => sum + candidate.points.length, 0),
+            retainedPointCount,
+            budgetLimited,
+            strategy: "none" as const,
+          };
+        })();
+    const geometries: Polyline[] = budgeted.fragments.map(({ points, payload }) => ({
+      type: "polyline",
+      points,
+      opacity: Math.min(0.92, 0.42 + influence * 0.28 + payload.levelIndex / Math.max(1, levels.length - 1) * 0.16),
+    }));
+    const totalPoints = budgeted.retainedPointCount;
+    skippedFragments += budgeted.originalFragmentCount - budgeted.retainedFragmentCount;
+    totalFragmentLength = budgeted.fragments.reduce((sum, fragment) => sum + fragmentLength(fragment.points), 0);
+    sampledDistanceTotal = budgeted.fragments.reduce((sum, fragment) => sum + fragment.payload.level * fragment.points.length, 0);
 
     return {
       id: "sdf-contours",
@@ -317,7 +346,7 @@ export const sdfContoursRenderer: VectorRenderer = {
         skippedFragments,
         maxPositiveDistance,
         averageFragmentLength: geometries.length > 0 ? totalFragmentLength / geometries.length : 0,
-        maxNodesClipped,
+        maxNodesClipped: budgeted.budgetLimited,
         glyphFieldEnabled: glyph.enabled,
         selectedGlyph: glyph.field ? `${glyph.field.sourceGlyph.textIndex + 1} · ${glyph.field.sourceGlyph.character}` : undefined,
         glyphFieldMode: state.glyphFieldMode,
@@ -325,7 +354,11 @@ export const sdfContoursRenderer: VectorRenderer = {
         averageGlyphFieldDisplacement: fieldSamples ? displacementTotal / fieldSamples : 0,
         rejectedDisplacedCandidates,
         fieldInfluencedAcceptanceCount: 0,
-        warning: maxNodesClipped ? "Contour fragments were clipped by the maxNodes point budget." : undefined,
+        warning: budgeted.budgetLimited
+          ? usesFairBudget
+            ? "Contour detail was reduced by the maxNodes point budget."
+            : "Contour fragments were clipped by the maxNodes point budget."
+          : undefined,
       },
     };
   },

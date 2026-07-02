@@ -51,4 +51,19 @@ describe("production import boundaries", () => {
     expect(app).toContain('lazy(() => import("./components/dev/WebGpuFieldOverlay")');
     expect(app).toContain('lazy(() => import("./components/dev/PreviewPerformanceMeter")');
   });
+
+  it("keeps the graph executor out of app, preview, and SVG export production paths", () => {
+    const files = [
+      resolve(root, "App.tsx"),
+      resolve(root, "components/Viewport.tsx"),
+      resolve(root, "components/FlowPreview.tsx"),
+      resolve(root, "components/CanvasFlowPreview.tsx"),
+      resolve(root, "engine/exportSvg.ts"),
+    ];
+    const violations = files.flatMap((file) => importsOf(file)
+      .map((specifier) => resolvedImport(file, specifier))
+      .filter((specifier) => /(?:^|\/)graph\/graphExecution$/.test(specifier))
+      .map((specifier) => `${relative(root, file)} -> ${specifier}`));
+    expect(violations).toEqual([]);
+  });
 });

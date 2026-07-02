@@ -1,6 +1,6 @@
-import { VIEWPORT } from "../constants";
 import type { CircleMark, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
+import { contextArtboard, projectArtboard } from "../artboard";
 import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
@@ -38,13 +38,15 @@ export const sdfHalftoneRenderer: VectorRenderer = {
   usesTime: false,
   usesSubstrate: true,
   estimateCost(state) {
+    const artboard = projectArtboard(state);
     const density = Math.max(10, Math.min(80, state.density));
     const spacing = 26 - (density - 10) / 70 * 18;
-    const boundsArea = VIEWPORT.width * VIEWPORT.height * 0.38;
+    const boundsArea = artboard.width * artboard.height * 0.38;
     const marks = Math.min(state.maxNodes, Math.ceil(boundsArea / (spacing * spacing)));
     return { marks, nodes: marks, label: `${marks.toLocaleString()} circles` };
   },
   generateGeometry(state, context) {
+    const artboard = contextArtboard(context);
     const substrate = context.substrateData;
     if (!substrate || substrate.substrateType === "empty" || substrate.diagnostics.maskCoverage <= 0 || substrate.diagnostics.maxDistance <= 0) {
       return {
@@ -66,9 +68,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const edgeBand = Math.max(spacing, substrate.diagnostics.maxDistance * (0.72 - influence * 0.52));
     const bounds = substrate.bounds;
     const minX = Math.max(0, (bounds?.x ?? 0) - spacing);
-    const maxX = Math.min(VIEWPORT.width, (bounds ? bounds.x + bounds.width : VIEWPORT.width) + spacing);
+    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + spacing);
     const minY = Math.max(0, (bounds?.y ?? 0) - spacing);
-    const maxY = Math.min(VIEWPORT.height, (bounds ? bounds.y + bounds.height : VIEWPORT.height) + spacing);
+    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + spacing);
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;

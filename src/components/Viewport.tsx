@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef } from "react";
-import { SVG_IDS, VIEWPORT } from "../engine/constants";
+import { createPortal } from "react-dom";
+import { SVG_IDS } from "../engine/constants";
 import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
 import { getRenderer } from "../engine/renderers";
-import { getTextBounds, getTextLayout, textAttributes } from "../engine/textLayout";
+import { getTextLayout, textAttributes } from "../engine/textLayout";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import type { SvgDiagnostics } from "../engine/svgValidation";
 import { sampleDistanceGradient } from "../engine/substrate";
@@ -23,6 +24,11 @@ import { generateEdgeErosionMarks } from "../engine/edgeErosion";
 import { generateWarpedOutline, getFinalOutlineGeometry, outlineWarpCacheKey } from "../engine/outlineWarp";
 import { getControlActivity } from "../engine/controlOwnership";
 import { DEFAULT_SVG_TRACE_CONFIG, type SvgTraceConfig } from "../engine/previewTraceConfig";
+import { useViewportHudHost } from "./viewportHudContext";
+import { buildGlyphSamplingDiagnostics } from "../engine/rendererSampling";
+import { resolveTextBoundsModel } from "../engine/textBounds";
+import { projectArtboard } from "../engine/artboard";
+import type { ArtboardExpansionPlan } from "../engine/artboardExpansion";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -32,14 +38,29 @@ interface ViewportProps {
   previewRunning: boolean; canvasSample: CanvasPreviewSample | null;
   onCanvasSample: (sample: CanvasPreviewSample) => void; onCanvasFailure: () => void;
   diagnosticsMode: DiagnosticsMode;
+  artboardExpansionPlan?: ArtboardExpansionPlan | null;
+  onExpandArtboardToText?: () => void;
   svgTraceConfig?: SvgTraceConfig;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, artboardExpansionPlan = null, onExpandArtboardToText, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
   recordViewportRender();
+  const hudHost = useViewportHudHost();
+  const diagnosticsVisible = diagnosticsMode !== "off";
   const diagnosticsExpanded = diagnosticsMode === "full";
   const renderer = getRenderer(state.renderer);
+  const artboard = projectArtboard(state);
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
+  const samplingDiagnostics = useMemo(() => {
+    if (!diagnosticsExpanded || !textGeometry?.hasOutlines) return [];
+    const origins = geometry.geometries.flatMap((item) => {
+      if (item.type === "circle") return [item.center];
+      if (item.type === "line") return [item.start];
+      if (item.type === "polyline" && item.points.length > 0) return [item.points[0]];
+      return [];
+    });
+    return buildGlyphSamplingDiagnostics(context, [], origins);
+  }, [context, diagnosticsExpanded, geometry, textGeometry?.hasOutlines]);
   // Gate 7.8 — flow preview instrumentation. Held in a ref so per-frame
   // `FlowPreview` update summaries surface in the diagnostic surface without
   // committing additional React state during the animation loop. The callback
@@ -51,7 +72,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
     flowPreviewStatsRef.current = stats;
   }, []);
   const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
-  const bounds = textGeometry?.bounds ?? getTextBounds(state);
+  const textBounds = resolveTextBoundsModel(state, textGeometry);
+  const bounds = textBounds.inkBounds;
   const hasGlyphPaths = Boolean(textGeometry?.hasOutlines);
   const controlActivity = getControlActivity(state, hasGlyphPaths);
   const substrate = context.substrateData ?? null;
@@ -94,8 +116,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   const gradientVectors = useMemo(() => {
     if (!substrate || state.debug.substrateMode !== "gradient") return [];
     const vectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    for (let y = 45; y < VIEWPORT.height; y += 45) {
-      for (let x = 45; x < VIEWPORT.width; x += 45) {
+    for (let y = 45; y < artboard.height; y += 45) {
+      for (let x = 45; x < artboard.width; x += 45) {
         const gradient = sampleDistanceGradient(substrate, x, y);
         if (gradient.magnitude < 0.01) continue;
         const length = 14;
@@ -108,17 +130,16 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
       }
     }
     return vectors;
-  }, [substrate, state.debug.substrateMode]);
+  }, [artboard.height, artboard.width, substrate, state.debug.substrateMode]);
 
   return (
-    <div className={`stage diagnostics-${diagnosticsMode}`}>
+    <div className={`stage diagnostics-${diagnosticsMode}`} data-viewport-space="artwork" style={{ aspectRatio: `${artboard.width} / ${artboard.height}` }}>
       <div
         className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
         data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
         style={state.transparentBackground ? undefined : { backgroundColor: state.backgroundColor }}
         aria-hidden="true"
       />
-      <div className="stage-meta top"><span>FIELD / {state.renderer.toUpperCase()}</span><span>{VIEWPORT.width} × {VIEWPORT.height}</span></div>
       {previewBackend === "canvas-2d" && (
         <CanvasFlowPreview
           state={state}
@@ -130,14 +151,14 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           onFailure={onCanvasFailure}
         />
       )}
-      <svg className="artboard" viewBox={`0 0 ${VIEWPORT.width} ${VIEWPORT.height}`} aria-label={`Generative preview of ${state.text}`}>
+      <svg className="artboard" viewBox={`0 0 ${artboard.width} ${artboard.height}`} aria-label={`Generative preview of ${state.text}`}>
         {previewBackend !== "canvas-2d" && !state.transparentBackground && (
-          <rect data-preview-artwork-background="" width={VIEWPORT.width} height={VIEWPORT.height} fill={state.backgroundColor} />
+          <rect data-preview-artwork-background="" width={artboard.width} height={artboard.height} fill={state.backgroundColor} />
         )}
         <defs>
           <mask id={SVG_IDS.mask}>
             <g id={SVG_IDS.substrateMask}>
-              <rect width={VIEWPORT.width} height={VIEWPORT.height} fill="black" />
+              <rect width={artboard.width} height={artboard.height} fill="black" />
               {hasGlyphPaths
                 ? textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} fill="white" />)
                 : <text {...textAttributes(layout)} fill="white">{layout.text}</text>}
@@ -145,7 +166,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           </mask>
           {erodeOverlay && (
             <mask id="diffuser-overlay-mask">
-              <rect width={VIEWPORT.width} height={VIEWPORT.height} fill="black" />
+              <rect width={artboard.width} height={artboard.height} fill="black" />
               {hasGlyphPaths
                 ? <>
                     <g fill="white" stroke="none" fillRule="evenodd">
@@ -161,7 +182,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
             </mask>
           )}
         </defs>
-        <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }}>
+        <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }} strokeWidth={renderer.strokeWidth?.(state)}>
           {state.renderer === "flow" && previewBackend === "svg-dom"
             ? <FlowPreview
                 geometry={geometry}
@@ -187,8 +208,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
           : <text className="ghost-text" {...textAttributes(layout)}>{layout.text}</text>}
-        {debugImage.url && <image className="debug-raster" href={debugImage.url} x="0" y="0" width={VIEWPORT.width} height={VIEWPORT.height} preserveAspectRatio="none" />}
-        {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x="0" y="0" width={VIEWPORT.width} height={VIEWPORT.height} preserveAspectRatio="none" />}
+        {debugImage.url && <image className="debug-raster" href={debugImage.url} x={substrate?.domainBounds?.x ?? 0} y={substrate?.domainBounds?.y ?? 0} width={substrate?.domainBounds?.width ?? artboard.width} height={substrate?.domainBounds?.height ?? artboard.height} preserveAspectRatio="none" />}
+        {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x={context.glyphField?.worldBounds.x ?? 0} y={context.glyphField?.worldBounds.y ?? 0} width={context.glyphField?.worldBounds.width ?? artboard.width} height={context.glyphField?.worldBounds.height ?? artboard.height} preserveAspectRatio="none" />}
         {state.debug.substrateMode === "gradient" && (
           <g className="debug-gradient">
             {gradientVectors.map((vector, index) => <line key={index} {...vector} />)}
@@ -206,8 +227,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
             ))}
           </g>
         )}
+        {state.debug.maskBounds && diagnosticsExpanded && <rect className="debug-layout-bounds" x={textBounds.layoutBounds.x} y={textBounds.layoutBounds.y} width={textBounds.layoutBounds.width} height={textBounds.layoutBounds.height} />}
         {state.debug.maskBounds && <rect className="debug-line" x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} />}
-        {state.debug.baseline && <line className="debug-baseline" x1="0" y1={layout.baselineY} x2={VIEWPORT.width} y2={layout.baselineY} />}
+        {state.debug.baseline && <line className="debug-baseline" x1="0" y1={layout.baselineY} x2={artboard.width} y2={layout.baselineY} />}
         {state.debug.glyphOrigins && hasGlyphPaths && (
           <g className="debug-glyph-origins">
             {textGeometry!.glyphs.map((glyph) => <circle key={glyph.textIndex} cx={glyph.x} cy={glyph.y} r="3" />)}
@@ -223,7 +245,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         )}
         {state.debug.emitter && (
           <g className="debug-emitter">
-            <circle cx={geometry.diagnostics?.emitterAnchorX ?? VIEWPORT.centerX} cy={geometry.diagnostics?.emitterAnchorY ?? VIEWPORT.centerY} r="12" />
+            <circle cx={geometry.diagnostics?.emitterAnchorX ?? artboard.centerX} cy={geometry.diagnostics?.emitterAnchorY ?? artboard.centerY} r="12" />
             {geometry.diagnostics?.emitterAnchorX !== undefined && geometry.diagnostics?.emitterAnchorY !== undefined && (
               <>
                 <circle cx={geometry.diagnostics.emitterAnchorX} cy={geometry.diagnostics.emitterAnchorY} r={state.emitter.radius} />
@@ -233,15 +255,17 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           </g>
         )}
       </svg>
-      <div className="coordinates">
+      {hudHost && createPortal(<div className={`viewport-hud-content diagnostics-${diagnosticsMode}`} data-viewport-space="screen" style={{ aspectRatio: `${artboard.width} / ${artboard.height}` }}>
+        <div className="stage-meta top"><span>FIELD / {state.renderer.toUpperCase()}</span><span>{artboard.width} × {artboard.height}</span></div>
+        <div className="coordinates">
         <span>0,0</span>
         <span>
           {state.debug.markCount && `${geometry.geometries.length} MARKS`}
           {state.debug.frameTime && ` · F${context.frame} / ${Math.round(context.timeMs)}MS`}
           {state.debug.costEstimate && exportDiagnostics && ` · ${exportDiagnostics.glyphPaths} GLYPHS · ${exportDiagnostics.generatedMarks} MARKS · ${exportDiagnostics.elementCount} EL · ${formatBytes(exportDiagnostics.byteSize)} · ${exportDiagnostics.substrateType.toUpperCase()}`}
         </span>
-        <span>{VIEWPORT.width},{VIEWPORT.height}</span>
-      </div>
+        <span>{artboard.width},{artboard.height}</span>
+        </div>
       {substrate && state.debug.substrateMode !== "none" && (
         <div className="substrate-diagnostics">
           <strong>{substrate.substrateType}</strong>
@@ -257,13 +281,15 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           <span>DEBUG {debugImage.pending ? "PENDING" : `${debugImage.durationMs.toFixed(1)}MS`}</span>
         </div>
       )}
-      <div className={`backend-diagnostics ${substrateBackendStatus.phase}`}>
+      {(diagnosticsVisible || substrateBackendStatus.phase !== "ready") && <div className={`backend-diagnostics ${substrateBackendStatus.phase}`}>
         <strong>BACKEND</strong>
         {(diagnosticsExpanded || substrateBackendStatus.phase !== "ready") && getBackendDiagnosticItems(substrateBackendStatus).map((item) => <span key={item}>{item}</span>)}
-      </div>
-      {geometry.diagnostics && (
+      </div>}
+      {geometry.diagnostics && (diagnosticsVisible || geometry.diagnostics.fallback) && (
         <div className={`renderer-diagnostics${geometry.diagnostics.fallback ? " warning" : ""}`}>
           <strong>{renderer.label.toUpperCase()}</strong>
+          {!diagnosticsExpanded && <span>MARKS {geometrySummary.elementCount}</span>}
+          {!diagnosticsExpanded && <span>GLYPHS {textGeometry?.glyphs.length ?? 0}</span>}
           {diagnosticsExpanded && geometry.diagnostics.requestedDots !== undefined
             ? <>
                 <span>DOTS {geometry.diagnostics.acceptedDots} / {geometry.diagnostics.requestedDots}</span>
@@ -304,14 +330,39 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
                   <span>R {geometry.diagnostics.rejectedCandidates}</span>
                   </>
                 : null}
-          {!diagnosticsExpanded && geometry.diagnostics.maxNodesClipped && <span>CLIPPED YES</span>}
+          {!diagnosticsExpanded && <span>CLIPPED {geometry.diagnostics.maxNodesClipped ? "YES" : "NO"}</span>}
           {diagnosticsExpanded && <span>AVG D {geometry.diagnostics.averageSampledDistance.toFixed(1)}</span>}
           {diagnosticsExpanded && <span>SUBSTRATE {geometry.diagnostics.substrateAvailable ? "YES" : "NO"}</span>}
           {(diagnosticsExpanded || geometry.diagnostics.fallback) && <span>FALLBACK {geometry.diagnostics.fallback ? "YES" : "NO"}</span>}
           {(diagnosticsExpanded || geometry.diagnostics.warning) && geometry.diagnostics.warning && <span>{geometry.diagnostics.warning}</span>}
         </div>
       )}
-      <div className="renderer-diagnostics instrument-diagnostics">
+      {diagnosticsExpanded && (
+        <div className="sampling-diagnostics">
+          <strong>SAMPLING</strong>
+          {geometry.diagnostics ? (
+            <>
+              <span>CANDIDATES {geometry.diagnostics.acceptedCandidates + geometry.diagnostics.rejectedCandidates}</span>
+              <span>RETAINED {geometry.diagnostics.acceptedCandidates}</span>
+              <span>DROPPED {geometry.diagnostics.rejectedCandidates}</span>
+              <span>MAX NODES {state.maxNodes}</span>
+              <span>BUDGET {geometry.diagnostics.maxNodesClipped ? "CLIPPED" : "OK"}</span>
+              <span>ARTBOARD 0,0 {textBounds.artboardBounds.width}×{textBounds.artboardBounds.height}</span>
+              <span>LAYOUT {textBounds.layoutBounds.x.toFixed(0)},{textBounds.layoutBounds.y.toFixed(0)} {textBounds.layoutBounds.width.toFixed(0)}×{textBounds.layoutBounds.height.toFixed(0)}</span>
+              <span>INK {textBounds.inkBounds.x.toFixed(0)},{textBounds.inkBounds.y.toFixed(0)} {textBounds.inkBounds.width.toFixed(0)}×{textBounds.inkBounds.height.toFixed(0)} · {textBounds.inkBoundsSource === "parsed-glyph-union" ? "EXACT" : "APPROX"}</span>
+              {substrate?.domainBounds && <span>DOMAIN {substrate.domainBounds.x.toFixed(0)},{substrate.domainBounds.y.toFixed(0)} {substrate.domainBounds.width.toFixed(0)}×{substrate.domainBounds.height.toFixed(0)}</span>}
+            </>
+          ) : <span>Renderer sampling diagnostics unavailable</span>}
+          {!textGeometry?.hasOutlines
+            ? <span>Sampling diagnostics unavailable: native-text fallback</span>
+            : samplingDiagnostics.map((glyph) => (
+                <span key={`${glyph.textIndex}-${glyph.glyphIndex}`}>
+                  G{glyph.textIndex + 1} {glyph.character || "?"} · {glyph.visibility.toUpperCase()} · MARKS {glyph.generatedMarkCount} · AREA {glyph.visibleArea.toFixed(0)} · DENSITY {glyph.retainedDensity.toFixed(4)}
+                </span>
+              ))}
+        </div>
+      )}
+      {diagnosticsVisible && <div className="renderer-diagnostics instrument-diagnostics">
         <strong>INSTRUMENTS</strong>
         {diagnosticsExpanded && <span>TYPE {geometrySummary.geometryType.toUpperCase()}</span>}
         <span>EL {geometrySummary.elementCount}</span>
@@ -355,8 +406,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {diagnosticsExpanded && state.overlayMode === "warped-outline" && <span>WARP CACHE {warpRegenerated ? "MISS" : "HIT"}</span>}
         {(diagnosticsExpanded || warpedOutline.diagnostics.warning) && warpedOutline.diagnostics.warning && <span>WARP WARNING</span>}
         {(diagnosticsExpanded || warpedOutline.diagnostics.inactiveReason) && warpedOutline.diagnostics.inactiveReason && <span>REASON {warpedOutline.diagnostics.inactiveReason.toUpperCase()}</span>}
-      </div>
-      <div className="renderer-diagnostics control-diagnostics">
+      </div>}
+      {diagnosticsVisible && <div className="renderer-diagnostics control-diagnostics">
         <strong>ACTIVE CONTROLS</strong>
         {diagnosticsExpanded && <span>RENDERER {controlActivity.renderer.toUpperCase()}</span>}
         <span>OVERLAY {controlActivity.overlayMode.toUpperCase()}</span>
@@ -374,8 +425,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {(diagnosticsExpanded || controlActivity.disabledReason) && controlActivity.disabledReason && <span>REASON {controlActivity.disabledReason.toUpperCase()}</span>}
         {diagnosticsExpanded && state.overlayMode === "outline" && state.diffuserComposition === "edge-eroded" && <span>NOTE EROSION IGNORED FOR OUTLINE</span>}
         {(diagnosticsExpanded || (!controlActivity.parsedFontPaths && controlActivity.outlineActive)) && controlActivity.outlineActive && !controlActivity.parsedFontPaths && <span>FALLBACK NATIVE TEXT OUTLINE</span>}
-      </div>
-      <div className="renderer-diagnostics animation-diagnostics">
+      </div>}
+      {diagnosticsVisible && <div className="renderer-diagnostics animation-diagnostics">
         <strong>ANIMATION</strong>
         <span>{formatFps(previewDiagnostics.frameTimeMs, previewDiagnostics.timingValidity)}</span>
         {diagnosticsExpanded && <span>CAP {previewSettings.fpsCap}</span>}
@@ -401,10 +452,22 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {diagnosticsExpanded && <span>CLIP {previewBackend === "canvas-2d" && canvasSample?.clippingActive ? "ACTIVE" : "SVG"}</span>}
         {(diagnosticsExpanded || (state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom")) && <span>SVG FALLBACK {state.renderer === "flow" && previewBackend === "svg-dom" && previewSettings.backend !== "svg-dom" ? "ACTIVE" : "NO"}</span>}
         {(diagnosticsExpanded || previewDiagnostics.timingValidity !== "valid") && previewDiagnostics.timingValidity !== "valid" && <span>TIMING {previewDiagnostics.timingValidity.toUpperCase()}</span>}
-      </div>
-      {exportWarnings.length > 0 && <div className="export-warnings"><strong>EXPORT CHECK</strong> {exportWarnings.join(" ")}</div>}
+      </div>}
+        {exportWarnings.length > 0 && <div className="export-warnings">
+          <strong>EXPORT CHECK</strong>
+          <span>{exportWarnings.join(" ")}</span>
+          {artboardExpansionPlan && onExpandArtboardToText && <button
+            type="button"
+            className="expand-artboard-action is-interactive"
+            disabled={!artboardExpansionPlan.available || !artboardExpansionPlan.changed}
+            title={artboardExpansionPlan.reason}
+            onClick={onExpandArtboardToText}
+          >Expand artboard to text</button>}
+          {artboardExpansionPlan?.reason && <span>{artboardExpansionPlan.reason}</span>}
+        </div>}
       {performanceWarnings.length > 0 && <div className="performance-warnings"><strong>PERFORMANCE</strong> {performanceWarnings.join(" ")}</div>}
-      {(substrateError || debugImage.error) && <div className="substrate-error">{substrateError ?? debugImage.error}</div>}
+        {(substrateError || debugImage.error) && <div className="substrate-error">{substrateError ?? debugImage.error}</div>}
+      </div>, hudHost)}
     </div>
   );
 }

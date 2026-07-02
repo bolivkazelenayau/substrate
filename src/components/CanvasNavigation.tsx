@@ -14,6 +14,7 @@ import {
   recordViewportActiveUpdate,
   recordWheelEvent,
 } from "../dev/viewportNavigationInstrumentation";
+import { ViewportHudHostContext } from "./viewportHudContext";
 
 interface CanvasNavigationProps {
   children: ReactNode;
@@ -32,6 +33,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
   const [spacePressed, setSpacePressed] = useState(false);
   const [panning, setPanning] = useState(false);
   const [activeInteraction, setActiveInteraction] = useState(false);
+  const [hudHost, setHudHost] = useState<HTMLDivElement | null>(null);
   // Read the runtime compositing mode once per mount. The mode is intentionally
   // not reactive: switching it requires a re-mount and is a dev-only escape
   // hatch (see `viewportNavigationInstrumentation.ts`). The default `"crisp"`
@@ -221,19 +223,23 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
         setSpacePressed(false);
       }}
     >
-      <div
-        className={`canvas-navigation-transform${compositedClassName}${interactionClassName}`}
-        data-canvas-zoom={viewport.zoom}
-        data-navigation-compositing={composited ? "composited" : "crisp"}
-        style={{ transform }}
-      >
-        {children}
-      </div>
-      <div className="canvas-navigation-controls" aria-label="Canvas zoom controls">
-        <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)}>−</button>
-        <output aria-live="polite" aria-label="Canvas zoom">{Math.round(viewport.zoom * 100)}%</output>
-        <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)}>+</button>
-        <button type="button" aria-label="Fit canvas" title="Reset zoom and pan" onClick={() => applyViewportSync(resetViewportNavigation())}>FIT</button>
+      <ViewportHudHostContext.Provider value={hudHost}>
+        <div
+          className={`canvas-navigation-transform${compositedClassName}${interactionClassName}`}
+          data-canvas-zoom={viewport.zoom}
+          data-navigation-compositing={composited ? "composited" : "crisp"}
+          style={{ transform }}
+        >
+          {children}
+        </div>
+      </ViewportHudHostContext.Provider>
+      <div className="viewport-hud-layer" ref={setHudHost}>
+        <div className="canvas-navigation-controls is-interactive" aria-label="Canvas zoom controls">
+          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)}>−</button>
+          <output aria-live="polite" aria-label="Canvas zoom">{Math.round(viewport.zoom * 100)}%</output>
+          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)}>+</button>
+          <button type="button" aria-label="Fit canvas" title="Reset zoom and pan" onClick={() => applyViewportSync(resetViewportNavigation())}>FIT</button>
+        </div>
       </div>
     </div>
   );

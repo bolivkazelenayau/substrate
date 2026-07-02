@@ -20,6 +20,7 @@ export interface VectorRenderer {
   clipPreviewToText?: (state: ProjectState) => boolean;
   showTextOverlay?: (state: ProjectState) => boolean;
   textOverlayOpacity?: (state: ProjectState) => number;
+  strokeWidth?: (state: ProjectState) => number | undefined;
   generateGeometry(state: ProjectState, context: RenderContext): GeometryGroup;
   estimateCost(state: ProjectState): CostEstimate;
 }

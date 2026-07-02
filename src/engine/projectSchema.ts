@@ -1,5 +1,8 @@
 import { baseState, defaultDebugSettings, presetIds } from "./presets";
+import { SIZE_HARD_LIMITS } from "./numericBounds";
 import type { ExportFrameMode, ExportMode, FontMetadata, ProjectState, RendererId } from "../types";
+import { ARTBOARD_LIMITS, DEFAULT_ARTBOARD } from "./artboard";
+import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -28,7 +31,7 @@ export interface ProjectValidationResult {
 export function migrateProject(input: unknown): UnknownRecord {
   if (!isRecord(input)) throw new Error("Project must be a JSON object.");
   const version = typeof input.version === "number" ? input.version : 1;
-  if (version > 7) throw new Error(`Project version ${version} is newer than this app supports.`);
+  if (version > 8) throw new Error(`Project version ${version} is newer than this app supports.`);
   let migrated: UnknownRecord = { ...input };
   if (version <= 3) {
     migrated = {
@@ -79,6 +82,13 @@ export function migrateProject(input: unknown): UnknownRecord {
       outlineColor: migrated.outlineColor ?? baseState.outlineColor,
       backgroundColor: migrated.backgroundColor ?? baseState.backgroundColor,
       transparentBackground: migrated.transparentBackground ?? baseState.transparentBackground,
+    };
+  }
+  if (version <= 7) {
+    migrated = {
+      ...migrated,
+      version: 8,
+      artboard: DEFAULT_ARTBOARD,
     };
   }
   return migrated;
@@ -140,16 +150,20 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 7,
+    version: 8,
+    artboard: {
+      width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
+      height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
+    },
     text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
-    fontSize: clamp(source.fontSize, baseState.fontSize, 64, 220),
+    fontSize: clamp(source.fontSize, baseState.fontSize, 1, SIZE_HARD_LIMITS.typographySize),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
     kerningMode: enumValue(source.kerningMode, ["font", "none"], baseState.kerningMode),
     kerningStrength: clamp(source.kerningStrength, baseState.kerningStrength, 0, 2),
     opticalSpacing: typeof source.opticalSpacing === "boolean" ? source.opticalSpacing : baseState.opticalSpacing,
     opticalSpacingStrength: clamp(source.opticalSpacingStrength, baseState.opticalSpacingStrength, 0, 1),
     textAlign: enumValue(source.textAlign, ["left", "center", "right"], baseState.textAlign),
-    textOffsetY: clamp(source.textOffsetY, baseState.textOffsetY, -120, 120),
+    textOffsetY: clamp(source.textOffsetY, baseState.textOffsetY, -SIZE_HARD_LIMITS.textOffset, SIZE_HARD_LIMITS.textOffset),
     renderer: enumValue(source.renderer, rendererIds, baseState.renderer),
     seed: clamp(source.seed, baseState.seed, 0, 999999, true),
     density: clamp(source.density, baseState.density, 10, 80),
@@ -178,7 +192,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
       amplitude: clamp(emitterSource.amplitude, baseState.emitter.amplitude, 0, 4),
       frequency: clamp(emitterSource.frequency, baseState.emitter.frequency, 0.005, 0.5),
       phase: clamp(emitterSource.phase, baseState.emitter.phase, -Math.PI * 4, Math.PI * 4),
-      radius: clamp(emitterSource.radius, baseState.emitter.radius, 20, 1400),
+      radius: clamp(emitterSource.radius, baseState.emitter.radius, 20, SIZE_HARD_LIMITS.emitterRadius),
       falloff: enumValue(emitterSource.falloff, ["smoothstep", "gaussian", "linear"], baseState.emitter.falloff),
       selfInfluence: clamp(emitterSource.selfInfluence, baseState.emitter.selfInfluence, 0, 3),
       neighborInfluence: clamp(emitterSource.neighborInfluence, baseState.emitter.neighborInfluence, 0, 3),
@@ -190,11 +204,12 @@ export function validateProject(input: unknown): ProjectValidationResult {
     emitters: validateEmitterInstances(source.emitters),
     fieldBlendMode: enumValue(source.fieldBlendMode, ["add", "max"], baseState.fieldBlendMode),
     waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
+    contourStrokeWidth: clamp(source.contourStrokeWidth, baseState.contourStrokeWidth, CONTOUR_STROKE_WIDTH_LIMITS.min, CONTOUR_STROKE_WIDTH_LIMITS.max),
     waveDotSpacing: clamp(source.waveDotSpacing, baseState.waveDotSpacing, 3, 40),
-    waveDotRadius: clamp(source.waveDotRadius, baseState.waveDotRadius, 0.4, 8),
+    waveDotRadius: clamp(source.waveDotRadius, baseState.waveDotRadius, 0.1, SIZE_HARD_LIMITS.dotRadius),
     diffuserDomain: enumValue(source.diffuserDomain, ["inside-text", "halo", "text-halo"], baseState.diffuserDomain),
     diffuserComposition: enumValue(source.diffuserComposition, ["clipped", "behind-text", "through-text", "text-reactive", "edge-eroded"], baseState.diffuserComposition),
-    diffuserDotRadius: clamp(source.diffuserDotRadius, baseState.diffuserDotRadius, 0.4, 8),
+    diffuserDotRadius: clamp(source.diffuserDotRadius, baseState.diffuserDotRadius, 0.1, SIZE_HARD_LIMITS.dotRadius),
     diffuserRingContrast: clamp(source.diffuserRingContrast, baseState.diffuserRingContrast, 0, 1),
     ringSharpness: clamp(source.ringSharpness, baseState.ringSharpness, 0.5, 8),
     bandWidth: clamp(source.bandWidth, baseState.bandWidth, 0.05, 0.8),
@@ -204,12 +219,12 @@ export function validateProject(input: unknown): ProjectValidationResult {
     edgeErosionWidth: clamp(source.edgeErosionWidth, baseState.edgeErosionWidth, 0, 64),
     interiorProtection: clamp(source.interiorProtection, baseState.interiorProtection, 0, 1),
     overlayMode: enumValue(source.overlayMode, ["solid", "outline", "knockout", "hidden", "warped-outline"], baseState.overlayMode),
-    outlineStrokeWidth: clamp(source.outlineStrokeWidth, baseState.outlineStrokeWidth, 0.25, 16),
+    outlineStrokeWidth: clamp(source.outlineStrokeWidth, baseState.outlineStrokeWidth, 0.25, SIZE_HARD_LIMITS.outlineWidth),
     outlineWarpAmount: clamp(source.outlineWarpAmount, baseState.outlineWarpAmount, 0, 60),
     outlineWarpScale: clamp(source.outlineWarpScale, baseState.outlineWarpScale, 0.25, 3),
     outlineWarpSmoothing: clamp(source.outlineWarpSmoothing, baseState.outlineWarpSmoothing, 0, 1),
     outlineWarpEdgeBias: clamp(source.outlineWarpEdgeBias, baseState.outlineWarpEdgeBias, 0, 1),
-    outlineWarpMaxDisplacement: clamp(source.outlineWarpMaxDisplacement, baseState.outlineWarpMaxDisplacement, 0, 80),
+    outlineWarpMaxDisplacement: clamp(source.outlineWarpMaxDisplacement, baseState.outlineWarpMaxDisplacement, 0, SIZE_HARD_LIMITS.displacement),
     preserveCounters: typeof source.preserveCounters === "boolean" ? source.preserveCounters : baseState.preserveCounters,
     glyphFieldMode: enumValue(source.glyphFieldMode, ["off", "subtle", "strong"], baseState.glyphFieldMode),
     glyphFieldInfluence: clamp(source.glyphFieldInfluence, baseState.glyphFieldInfluence, 0, 100),
@@ -234,7 +249,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     font,
   };
 
-  if (originalVersion < 7) warnings.push("Project was migrated to schema version 7.");
+  if (originalVersion < 8) warnings.push("Project was migrated to schema version 8.");
   if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
   return { project, warnings };
 }

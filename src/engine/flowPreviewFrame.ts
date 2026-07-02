@@ -1,8 +1,8 @@
-import { VIEWPORT } from "./constants";
 import type { GeometryGroup, LineSegment } from "./geometry";
 import type { TextGeometry } from "./glyphGeometry";
 import { generateRendererGeometry } from "./rendererRuntime";
 import type { ProjectState, RenderContext } from "../types";
+import { contextArtboard } from "./artboard";
 
 export interface FlowPreviewAppearance {
   primaryColor: string;
@@ -24,7 +24,7 @@ export interface FlowPreviewFrame {
   geometry: GeometryGroup;
   lines: LineSegment[];
   appearance: FlowPreviewAppearance;
-  bounds: typeof VIEWPORT;
+  bounds: ReturnType<typeof contextArtboard>;
   textGeometry: TextGeometry | null;
 }
 
@@ -70,7 +70,7 @@ export function createFlowPreviewFrame(
       transparentBackground: state.transparentBackground,
       strokeWidth: 1.4,
     },
-    bounds: VIEWPORT,
+    bounds: contextArtboard(context),
     textGeometry: context.textGeometry ?? null,
   };
 }

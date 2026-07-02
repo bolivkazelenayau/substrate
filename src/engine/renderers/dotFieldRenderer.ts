@@ -1,8 +1,9 @@
-import { VIEWPORT } from "../constants";
 import { createSeededRandom } from "../random";
 import type { CircleMark } from "../geometry";
 import type { VectorRenderer } from "./types";
 import { requestedMarkCount, simpleCost } from "./types";
+import { resolveSimpleMarkBounds, resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
+import { contextArtboard } from "../artboard";
 
 export const dotFieldRenderer: VectorRenderer = {
   id: "dots",
@@ -12,13 +13,14 @@ export const dotFieldRenderer: VectorRenderer = {
   usesTime: false,
   usesSubstrate: false,
   estimateCost: (state) => simpleCost(state, "circles"),
-  generateGeometry(state) {
+  generateGeometry(state, context) {
+    const artboard = contextArtboard(context);
     const random = createSeededRandom(state.seed);
+    const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state));
     const geometries: CircleMark[] = [];
     for (let i = 0; i < requestedMarkCount(state); i += 1) {
-      const x = VIEWPORT.paddingX + random() * (VIEWPORT.width - VIEWPORT.paddingX * 2);
-      const y = VIEWPORT.paddingY + random() * (VIEWPORT.height - VIEWPORT.paddingY * 2);
-      const edgeBand = Math.abs(y - VIEWPORT.centerY) < state.fontSize * 0.48 ? 1 : 0.28;
+      const { x, y } = sampleBoundsFairly(bounds, i, random);
+      const edgeBand = Math.abs(y - artboard.centerY) < state.fontSize * 0.48 ? 1 : 0.28;
       geometries.push({
         type: "circle",
         center: { x, y },

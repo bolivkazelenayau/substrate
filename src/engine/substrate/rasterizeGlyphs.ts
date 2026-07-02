@@ -1,4 +1,5 @@
 import type { RasterMask, SubstrateBuildInput, SubstrateType } from "./types";
+import { DEFAULT_ARTBOARD } from "../artboard";
 
 export interface RasterContext {
   fillStyle: string | CanvasGradient | CanvasPattern;
@@ -36,13 +37,15 @@ export function rasterizeGlyphs(input: SubstrateBuildInput, factory: RasterSurfa
   const { width, height } = input.resolution;
   const surface = factory(width, height);
   const context = surface.context;
-  const scaleX = width / 1200;
-  const scaleY = height / 720;
+  const viewport = input.viewport ?? DEFAULT_ARTBOARD;
+  const domain = input.domainBounds ?? { x: 0, y: 0, width: viewport.width, height: viewport.height };
+  const scaleX = width / domain.width;
+  const scaleY = height / domain.height;
 
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.fillStyle = "black";
   context.fillRect(0, 0, width, height);
-  context.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+  context.setTransform(scaleX, 0, 0, scaleY, -domain.x * scaleX, -domain.y * scaleY);
   context.fillStyle = "white";
 
   let substrateType: SubstrateType = "empty";

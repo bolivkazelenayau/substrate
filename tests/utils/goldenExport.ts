@@ -50,10 +50,10 @@ export function readGoldenProject(name: GoldenProjectName): ProjectState {
   return migrateAndRepairProject(input).project;
 }
 
-export async function generateGoldenExport(name: GoldenProjectName): Promise<{
+export async function buildGoldenRenderInput(name: GoldenProjectName): Promise<{
   project: ProjectState;
-  svg: string;
-  summary: SvgExportSummary;
+  context: RenderContext;
+  geometry: ReturnType<typeof generateRendererGeometry>;
 }> {
   const project = readGoldenProject(name);
   const referenceFont = await loadReferenceFont();
@@ -81,6 +81,15 @@ export async function generateGoldenExport(name: GoldenProjectName): Promise<{
   const field = buildCompositeWaveField(project, baseContext);
   const context: RenderContext = { ...baseContext, ...createGlyphFieldContext(field) };
   const geometry = generateRendererGeometry(project, context);
+  return { project, context, geometry };
+}
+
+export async function generateGoldenExport(name: GoldenProjectName): Promise<{
+  project: ProjectState;
+  svg: string;
+  summary: SvgExportSummary;
+}> {
+  const { project, context, geometry } = await buildGoldenRenderInput(name);
 
   // The checked-in projects use native fallback. Reference geometry stabilizes
   // the test substrate only and is deliberately not passed to SVG serialization.

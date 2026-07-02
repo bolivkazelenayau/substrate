@@ -15,9 +15,10 @@ function bilinear(data: Float32Array, width: number, height: number, x: number, 
 }
 
 function worldToRaster(substrate: SubstrateData, x: number, y: number) {
+  const domain = substrate.domainBounds ?? { x: 0, y: 0, width: substrate.viewportWidth, height: substrate.viewportHeight };
   return {
-    x: x / substrate.viewportWidth * (substrate.width - 1),
-    y: y / substrate.viewportHeight * (substrate.height - 1),
+    x: (x - domain.x) / domain.width * (substrate.width - 1),
+    y: (y - domain.y) / domain.height * (substrate.height - 1),
   };
 }
 

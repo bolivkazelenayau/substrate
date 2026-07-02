@@ -57,6 +57,7 @@ export interface SubstrateData {
   edge: EdgeMap;
   distance: DistanceField;
   bounds: GlyphBounds | null;
+  domainBounds?: GlyphBounds;
   diagnostics: SubstrateDiagnostics;
 }
 
@@ -77,4 +78,9 @@ export interface SubstrateBuildInput {
   kerningMode?: KerningMode;
   resolution: SubstrateResolution;
   bounds: GlyphBounds | null;
+  domainBounds?: GlyphBounds;
+  viewport?: {
+    width: number;
+    height: number;
+  };
 }

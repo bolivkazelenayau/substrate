@@ -1,14 +1,14 @@
 import { memo, useState, type ChangeEvent, type RefObject } from "react";
-import { applyPreset, baseState, presetIds } from "../../engine/presets";
+import { applyPreset, baseState, getPresetDisplayLabel, presetIds } from "../../engine/presets";
 import { getRenderer, rendererList } from "../../engine/renderers";
-import type { DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
+import type { ArtboardOverflowMode, DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
 import type { GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
+import type { TextGeometry } from "../../engine/glyphGeometry";
 import { getControlActivity } from "../../engine/controlOwnership";
 import { FieldPanel } from "./PanelSection";
 import { OutputPanels } from "./OutputPanels";
 import { ArtworkTypographyPanels } from "./ArtworkTypographyPanels";
 import { AdvancedFieldPanel } from "./AdvancedFieldPanel";
-import { DiffuserAppearancePanel } from "./DiffuserAppearancePanel";
 import { EmitterControls } from "./EmitterControls";
 
 export interface FieldControlsProps {
@@ -24,8 +24,15 @@ export interface FieldControlsProps {
   previewSettings: PreviewSettings;
   onPreviewSettingsChange: (settings: PreviewSettings) => void;
   emitterGlyphs: GlyphEmitterMetadata[];
+  textGeometry?: TextGeometry | null;
   diagnosticsMode: DiagnosticsMode;
   onDiagnosticsModeChange: (mode: DiagnosticsMode) => void;
+  artboardOverflowMode?: ArtboardOverflowMode;
+  onArtboardOverflowModeChange?: (mode: ArtboardOverflowMode) => void;
+  webGpuOverlayOpen?: boolean;
+  fpsMeterOpen?: boolean;
+  onToggleWebGpuOverlay?: () => void;
+  onToggleFpsMeter?: () => void;
 }
 
 const fieldControls: Array<{ id: FieldControlId; label: string; min: number; max: number; step?: number }> = [
@@ -84,7 +91,7 @@ const rangeDefaults: Record<string, number> = {
   "Dot spacing": baseState.waveDotSpacing,
 };
 
-export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, diagnosticsMode, onDiagnosticsModeChange }: FieldControlsProps) {
+export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, artboardOverflowMode = "clip", onArtboardOverflowModeChange = () => undefined, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter }: FieldControlsProps) {
   const renderer = getRenderer(state.renderer);
   const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
   const emitterConsumerActive = state.renderer === "glyph-diffuser"
@@ -93,7 +100,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const defaultOpen = {
     advanced: false,
-    emitters: true,
+    emitters: false,
     output: false,
     debug: false,
   };
@@ -120,22 +127,18 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         onFontUpload={onFontUpload}
         onClearFont={onClearFont}
         fontLoaded={fontLoaded}
+        textGeometry={textGeometry}
       />
 
-      <FieldPanel>
+      <FieldPanel className="preset-renderer-section">
         <div className="section-heading">
           <span>02</span>
-          <h2>
-            {state.renderer === "glyph-diffuser" ? "Diffuser Settings" : 
-             state.renderer === "wave-contours" ? "Wave Settings" : 
-             state.renderer.startsWith("sdf") ? "Halftone Settings" : 
-             "Field"}
-          </h2>
+          <h2>Preset / Renderer</h2>
         </div>
         <label className="field">
           <span>Preset</span>
           <select value={state.preset} onChange={(event) => setState(applyPreset(state, event.target.value as ProjectState["preset"]))}>
-            {presetIds.map((name) => <option key={name} value={name}>{name}</option>)}
+            {presetIds.map((name) => <option key={name} value={name}>{getPresetDisplayLabel(name)}</option>)}
           </select>
         </label>
         <div className="segmented" aria-label="Renderer">
@@ -145,30 +148,12 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
             </button>
           ))}
         </div>
+      </FieldPanel>
 
-        {state.renderer === "wave-contours" && (
-          <label className="field compact-field" style={{ marginTop: "16px" }}>
-            <span>Contour mode</span>
-            <select value={state.waveContourMode} onChange={(event) => patchField({ waveContourMode: event.target.value as ProjectState["waveContourMode"] })}>
-              <option value="continuous">Continuous</option>
-              <option value="dotted">Dotted</option>
-            </select>
-          </label>
-        )}
-
-        {state.renderer.startsWith("sdf") && (
-          <label className="field compact-field" style={{ marginTop: "16px" }}>
-            <span>Modulation Mode</span>
-            <select value={state.glyphFieldMode} onChange={(event) => patchField({ glyphFieldMode: event.target.value as ProjectState["glyphFieldMode"] })}>
-              <option value="off">Off</option>
-              <option value="subtle">Subtle</option>
-              <option value="strong">Strong</option>
-            </select>
-          </label>
-        )}
-
-        <div style={{ marginTop: "16px" }}>
-          {fieldControls.map((control) => (
+      <FieldPanel>
+        <div className="section-heading"><span>03</span><h2>Core Field</h2></div>
+        <div>
+          {fieldControls.filter(({ id }) => id === "density" || id === "amplitude").map((control) => (
             renderer.supportedControls.includes(control.id) && (
               <Range
                 key={control.id}
@@ -184,17 +169,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         </div>
 
         <EmitterControls state={state} setState={setState} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
-
-        {state.renderer === "glyph-diffuser" && (
-          <>
-            <label className="field compact-field"><span>Diffuser domain</span><select value={state.diffuserDomain} onChange={(event) => patchField({ diffuserDomain: event.target.value as ProjectState["diffuserDomain"] })}><option value="inside-text">Inside text</option><option value="halo">Emitter halo</option><option value="text-halo">Text + halo</option></select></label>
-            <label className="field compact-field"><span>Composition</span><select value={state.diffuserComposition} onChange={(event) => patchField({ diffuserComposition: event.target.value as ProjectState["diffuserComposition"] })}><option value="behind-text">Behind text</option><option value="through-text">Through text</option><option value="text-reactive">Text-reactive edges</option><option value="edge-eroded">Edge-eroded overlay</option><option value="clipped">Clipped to text</option></select></label>
-            <Range label="Dot radius" value={state.diffuserDotRadius} defaultValue={baseState.diffuserDotRadius} min={0.4} max={8} step={0.1} onChange={(diffuserDotRadius) => patchField({ diffuserDotRadius })} />
-          </>
-        )}
       </FieldPanel>
-
-      <DiffuserAppearancePanel state={state} setState={setState} parsedFontPathsAvailable={parsedFontPathsAvailable} />
 
       <AdvancedFieldPanel
         state={state}
@@ -212,8 +187,14 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         onPreviewSettingsChange={onPreviewSettingsChange}
         diagnosticsMode={diagnosticsMode}
         onDiagnosticsModeChange={onDiagnosticsModeChange}
+        artboardOverflowMode={artboardOverflowMode}
+        onArtboardOverflowModeChange={onArtboardOverflowModeChange}
         fileRef={fileRef}
         onImport={onImport}
+        webGpuOverlayOpen={webGpuOverlayOpen}
+        fpsMeterOpen={fpsMeterOpen}
+        onToggleWebGpuOverlay={onToggleWebGpuOverlay}
+        onToggleFpsMeter={onToggleFpsMeter}
       />
     </aside>
   );
@@ -222,8 +203,12 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   && previous.fontLoaded === next.fontLoaded
   && previous.parsedFontPathsAvailable === next.parsedFontPathsAvailable
   && previous.previewSettings === next.previewSettings
+  && previous.artboardOverflowMode === next.artboardOverflowMode
   && previous.emitterGlyphs === next.emitterGlyphs
+  && previous.textGeometry === next.textGeometry
   && previous.diagnosticsMode === next.diagnosticsMode
+  && previous.webGpuOverlayOpen === next.webGpuOverlayOpen
+  && previous.fpsMeterOpen === next.fpsMeterOpen
 ));
 
 function Range({ label, value, min, max, step = 1, disabled = false, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; defaultValue?: number; onChange: (value: number) => void }) {

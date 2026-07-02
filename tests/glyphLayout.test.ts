@@ -6,7 +6,7 @@ import { layoutGlyphs } from "../src/engine/glyphLayout";
 import { unionBounds, validateTextGeometry } from "../src/engine/glyphGeometry";
 import { baseState } from "../src/engine/presets";
 import { TEXT_LAYOUT, VIEWPORT } from "../src/engine/constants";
-import { getTextBounds, getTextLayout, getTypographyLimitations } from "../src/engine/textLayout";
+import { getTextLayoutBounds, getTextLayout, getTypographyLimitations } from "../src/engine/textLayout";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
 let loaded: LoadedFont;
@@ -131,8 +131,8 @@ describe("font and glyph layout", () => {
   it("aligns native fallback bounds and reports parsed-font-only limitations", () => {
     const left = { ...baseState, text: "TYPE", textAlign: "left" as const };
     const right = { ...baseState, text: "TYPE", textAlign: "right" as const, textOffsetY: -24 };
-    expect(getTextBounds(left).x).toBe(VIEWPORT.paddingX);
-    expect(getTextBounds(right).x + getTextBounds(right).width).toBe(VIEWPORT.width - VIEWPORT.paddingX);
+    expect(getTextLayoutBounds(left).x).toBe(VIEWPORT.paddingX);
+    expect(getTextLayoutBounds(right).x + getTextLayoutBounds(right).width).toBe(VIEWPORT.width - VIEWPORT.paddingX);
     expect(getTextLayout(right, false).baselineY).toBe(TEXT_LAYOUT.baselineY - 24);
     expect(getTypographyLimitations({
       ...baseState,

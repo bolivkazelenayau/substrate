@@ -6,22 +6,25 @@ import { loadFontFile, validateLoadedFont, type LoadedFont } from "./engine/font
 import { layoutGlyphs } from "./engine/glyphLayout";
 import { validateTextGeometry } from "./engine/glyphGeometry";
 import { getSvgDiagnostics, reportSvgValidation, type SvgDiagnostics } from "./engine/svgValidation";
-import { VIEWPORT } from "./engine/constants";
 import { useAnimationClock } from "./hooks/useAnimationClock";
-import type { PreviewDiagnostics, RenderContext } from "./types";
-import { emitterGeometryKey, generateRendererGeometry, rendererGeometryStateKey, summarizeGeometry } from "./engine/rendererRuntime";
+import type { ArtboardOverflowMode, PreviewDiagnostics, RenderContext } from "./types";
+import { emitterGeometryKey } from "./engine/rendererRuntime";
 import { getExportBudgetWarnings } from "./engine/exportBudget";
-import { getSubstratePerformanceWarnings, measure } from "./engine/performance";
+import { getSubstratePerformanceWarnings } from "./engine/performance";
+import { getTextArtboardOverflowWarning } from "./engine/contourDomain";
+import { NATIVE_TEXT_BOUNDS_WARNING } from "./engine/textBounds";
+import { projectArtboard } from "./engine/artboard";
+import { AUTO_GROW_ARTBOARD_WARNING } from "./engine/artboardExpansion";
 import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
 import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
 import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
 import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
-import { createStaticRenderContext, selectEstimateContext, selectExportContext } from "./engine/renderContextLifecycle";
+import { createStaticRenderContext } from "./engine/renderContextLifecycle";
 import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
 import { CanvasNavigation } from "./components/CanvasNavigation";
 import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetExportability";
-import { recordPreviewAppRender, recordPreviewGeometryBuild } from "./engine/previewRuntimeDiagnostics";
+import { recordPreviewAppRender } from "./engine/previewRuntimeDiagnostics";
 import { DEFAULT_SVG_TRACE_CONFIG, traceConfigForPreviewQuality, type SvgTraceConfig } from "./engine/previewTraceConfig";
 import { useProjectDocument, serializeProjectDocument } from "./hooks/useProjectDocument";
 import { usePreviewSettings } from "./hooks/usePreviewSettings";
@@ -29,6 +32,8 @@ import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
 import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
+import { useRendererRuntime } from "./hooks/useRendererRuntime";
+import { useAutoGrowArtboard } from "./hooks/useAutoGrowArtboard";
 
 const DevWebGpuFieldOverlay = import.meta.env.DEV
   ? lazy(() => import("./components/dev/WebGpuFieldOverlay").then(({ WebGpuFieldOverlay }) => ({ default: WebGpuFieldOverlay })))
@@ -51,6 +56,7 @@ export default function App() {
   const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
   const [webGpuOverlayOpen, setWebGpuOverlayOpen] = useState(false);
   const [fpsMeterOpen, setFpsMeterOpen] = useState(false);
+  const [artboardOverflowMode, setArtboardOverflowMode] = useState<ArtboardOverflowMode>("clip");
   const [svgTraceConfig, setSvgTraceConfig] = useState<SvgTraceConfig>(DEFAULT_SVG_TRACE_CONFIG);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
@@ -81,7 +87,7 @@ export default function App() {
         emitter: { ...state.emitter },
         emitters: state.emitters.map((emitter) => ({ ...emitter })),
       },
-      bounds: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      bounds: { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height },
       singleAnchor: singleGlyph
         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
             x: state.emitter.customX,
@@ -126,7 +132,7 @@ export default function App() {
         emitter: { ...state.emitter },
         emitters: state.emitters.map((emitter) => ({ ...emitter })),
       },
-      bounds: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      bounds: { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height },
       singleAnchor: singleGlyph
         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
             x: state.emitter.customX,
@@ -159,45 +165,56 @@ export default function App() {
     ...activeClockContext,
     textGeometry,
     substrateData: substrateBuild.data,
-    viewport: VIEWPORT,
-  }), [activeClockContext, staticRenderContext, textGeometry, substrateBuild.data]);
-  const exportContext: RenderContext = selectExportContext(state, renderContext, staticRenderContext);
-  const geometryStateKey = rendererGeometryStateKey(state);
-  const geometry = useMemo(
-    () => {
-      const timed = measure(() => generateRendererGeometry(state, renderContext));
-      recordPreviewGeometryBuild(timed.durationMs);
-      return timed.value;
-    },
-    // Appearance-only changes intentionally preserve generated geometry identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryStateKey, renderContext],
+    viewport: projectArtboard(state),
+  }), [activeClockContext, state, staticRenderContext, textGeometry, substrateBuild.data]);
+  const {
+    liveGeometry: geometry,
+    exportContext,
+    exportGeometry,
+    estimateContext,
+    estimateGeometry,
+    geometrySummary,
+  } = useRendererRuntime(state, renderContext, staticRenderContext);
+  const textOverflowWarning = useMemo(
+    () => getTextArtboardOverflowWarning(state, textGeometry),
+    [state, textGeometry],
   );
-  const exportGeometry = useMemo(
-    () => state.exportFrameMode === "current" ? geometry : generateRendererGeometry(state, exportContext),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryStateKey, state.exportFrameMode, exportContext, geometry],
-  );
-  const geometrySummary = useMemo(() => summarizeGeometry(exportGeometry), [exportGeometry]);
-  const exportWarnings = useMemo(() => getExportBudgetWarnings({
-    ...geometrySummary,
-    substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
-  }), [geometrySummary, textGeometry]);
+  const autoGrowArtboard = useAutoGrowArtboard({
+    mode: artboardOverflowMode,
+    project: state,
+    textGeometry,
+    updateProject: setState,
+  });
+  const artboardExpansionPlan = autoGrowArtboard.plan;
+  const displayedTextOverflowWarning = textOverflowWarning
+    ? artboardOverflowMode === "clip"
+      ? textOverflowWarning
+      : autoGrowArtboard.pending
+        ? null
+        : autoGrowArtboard.failureReason
+          ? AUTO_GROW_ARTBOARD_WARNING
+          : null
+    : null;
+  const expandArtboardToText = useCallback(() => {
+    if (!textOverflowWarning || !artboardExpansionPlan.available || !artboardExpansionPlan.changed) return;
+    setState(artboardExpansionPlan.nextState);
+  }, [artboardExpansionPlan, setState, textOverflowWarning]);
+  const exportWarnings = useMemo(() => [
+    ...getExportBudgetWarnings({
+      ...geometrySummary,
+      substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
+    }),
+    ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
+    ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
+  ], [displayedTextOverflowWarning, geometrySummary, textGeometry]);
   const performanceWarnings = useMemo(
     () => substrateBuild.data
       ? getSubstratePerformanceWarnings(substrateBuild.data.diagnostics.buildTimeMs, state.substrateQuality)
       : [],
     [state.substrateQuality, substrateBuild.data],
   );
-  const estimateContext: RenderContext = selectEstimateContext(staticRenderContext);
-  // Compute the estimate geometry through the renderer cache (cheap, identity-stable
-  // across debug/preview-only changes); then derive byte-size diagnostics from it.
-  // The serialization + DOMParser only run when the cached geometry identity changes.
-  const estimateGeometry = useMemo(
-    () => generateRendererGeometry(state, estimateContext),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryStateKey, estimateContext],
-  );
+  // Serialization + DOMParser only run when the runtime boundary's cached
+  // estimate geometry identity changes.
   const estimateExportKey = [
     state.exportMode,
     state.precision,
@@ -264,11 +281,15 @@ export default function App() {
     }
     download(svg, `${filename}.svg`, "image/svg+xml");
     const exactDiagnostics = getSvgDiagnostics(svg, timed.serializationTimeMs);
-    const exactWarnings = getExportBudgetWarnings({
-      ...geometrySummary,
-      substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
-      exactByteSize: exactDiagnostics.byteSize,
-    });
+    const exactWarnings = [
+      ...getExportBudgetWarnings({
+        ...geometrySummary,
+        substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
+        exactByteSize: exactDiagnostics.byteSize,
+      }),
+      ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
+      ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
+    ];
     setMessage(exactWarnings.length > 0
       ? `Exported ${formatBytes(exactDiagnostics.byteSize)} in ${timed.serializationTimeMs.toFixed(1)} ms. ${exactWarnings.join(" ")}`
       : `SVG exported · ${formatBytes(exactDiagnostics.byteSize)} · ${timed.serializationTimeMs.toFixed(1)} ms.`);
@@ -344,8 +365,15 @@ export default function App() {
           previewSettings={previewSettings}
           onPreviewSettingsChange={setPreviewSettings}
           emitterGlyphs={emitterGlyphs}
+          textGeometry={textGeometry}
           diagnosticsMode={diagnosticsState.mode}
           onDiagnosticsModeChange={diagnosticsState.setMode}
+          artboardOverflowMode={artboardOverflowMode}
+          onArtboardOverflowModeChange={setArtboardOverflowMode}
+          webGpuOverlayOpen={webGpuOverlayOpen}
+          fpsMeterOpen={fpsMeterOpen}
+          onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
+          onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
         />
         <section className="viewport-shell">
           <CanvasNavigation>
@@ -368,6 +396,8 @@ export default function App() {
             onCanvasSample={setCanvasSample}
             onCanvasFailure={handleCanvasFailure}
             diagnosticsMode={diagnosticsState.mode}
+            artboardExpansionPlan={artboardOverflowMode === "clip" && textOverflowWarning ? artboardExpansionPlan : null}
+            onExpandArtboardToText={expandArtboardToText}
             svgTraceConfig={activeSvgTraceConfig}
           />
           </CanvasNavigation>
@@ -383,27 +413,6 @@ export default function App() {
       </div>
       {import.meta.env.DEV && (
         <>
-          <button
-            type="button"
-            onClick={() => setWebGpuOverlayOpen((open) => !open)}
-            style={{
-              position: "fixed",
-              left: 16,
-              bottom: 16,
-              zIndex: 99999,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-              fontSize: 11,
-              color: webGpuOverlayOpen ? "#0a0c10" : "#d7ff00",
-              background: webGpuOverlayOpen ? "#d7ff00" : "rgba(8,10,14,0.85)",
-              border: "1px solid #d7ff00",
-              padding: "4px 8px",
-              cursor: "pointer",
-            }}
-            aria-label={webGpuOverlayOpen ? "Close WebGPU field debug overlay" : "Open WebGPU field debug overlay"}
-            title="Dev-only WebGPU field heatmap overlay (Ctrl/⌘+Shift+G) — not export, not production UI."
-          >
-            {webGpuOverlayOpen ? "✕ GPU DEBUG" : "▸ GPU FIELD DEBUG"}
-          </button>
           {webGpuOverlayOpen && DevWebGpuFieldOverlay && (
             <Suspense fallback={null}><DevWebGpuFieldOverlay
               getSnapshot={getWebGpuDevSnapshot}
@@ -422,27 +431,6 @@ export default function App() {
               onClose={() => setWebGpuOverlayOpen(false)}
             /></Suspense>
           )}
-          <button
-            type="button"
-            onClick={() => setFpsMeterOpen((open) => !open)}
-            style={{
-              position: "fixed",
-              left: 16,
-              bottom: 44,
-              zIndex: 99999,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-              fontSize: 11,
-              color: fpsMeterOpen ? "#0a0c10" : "#d7ff00",
-              background: fpsMeterOpen ? "#d7ff00" : "rgba(8,10,14,0.85)",
-              border: "1px solid #d7ff00",
-              padding: "4px 8px",
-              cursor: "pointer",
-            }}
-            aria-label={fpsMeterOpen ? "Close FPS meter overlay" : "Open FPS meter overlay"}
-            title="Dev-only Edge Current FPS meter (Gate 7.8A) — not export, not production UI."
-          >
-            {fpsMeterOpen ? "✕ FPS METER" : "▸ FPS METER"}
-          </button>
           {fpsMeterOpen && DevPreviewPerformanceMeter && (
             <Suspense fallback={null}><DevPreviewPerformanceMeter
               state={state}

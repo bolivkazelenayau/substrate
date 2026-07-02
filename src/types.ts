@@ -1,6 +1,7 @@
 export type RendererId = "flow" | "ripple" | "dots" | "sdf-flow" | "sdf-streamlines" | "sdf-contours" | "sdf-halftone" | "wave-contours" | "glyph-diffuser";
 export type ExportMode = "artwork" | "editable";
 export type ExportFrameMode = "current" | "time-zero";
+export type ArtboardOverflowMode = "clip" | "auto-grow";
 export type SubstrateQuality = "low" | "medium" | "high" | "ultra";
 export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Custom";
 export type FieldControlId = "density" | "amplitude" | "frequency" | "turbulence" | "edgeInfluence" | "maxNodes";
@@ -89,7 +90,11 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 7;
+  version: 8;
+  artboard: {
+    width: number;
+    height: number;
+  };
   text: string;
   fontSize: number;
   tracking: number;
@@ -121,6 +126,7 @@ export interface ProjectState {
   emitters: GlyphEmitterInstance[];
   fieldBlendMode: FieldBlendMode;
   waveContourMode: WaveContourMode;
+  contourStrokeWidth: number;
   waveDotSpacing: number;
   waveDotRadius: number;
   diffuserDomain: DiffuserDomainMode;

@@ -14,6 +14,7 @@ import { sampleMask } from "../src/engine/substrate/sampling";
 import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
 import type { ProjectState, RenderContext } from "../src/types";
+import { resolveContourDomain } from "../src/engine/contourDomain";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
@@ -131,6 +132,58 @@ describe("SDF Contours renderer", () => {
     const group = getRenderer("sdf-contours").generateGeometry({ ...state, maxNodes: 75 }, context);
     expect(geometryNodeCost(group)).toBeLessThanOrEqual(75);
     expect(group.diagnostics?.totalContourPoints).toBeLessThanOrEqual(75);
+    expect(group.diagnostics).toMatchObject({
+      maxNodesClipped: true,
+      warning: "Contour fragments were clipped by the maxNodes point budget.",
+    });
+  });
+
+  it("fairly reduces large-type contours across the full visible span", () => {
+    const largeState = { ...state, text: "SUBSTRATE", fontSize: 560, density: 58, maxNodes: 400 };
+    const textGeometry = layoutGlyphs(largeState, loaded);
+    const layout = getTextLayout(largeState, true);
+    const domain = resolveContourDomain(largeState, textGeometry, textGeometry.bounds);
+    const substrateData = buildSubstrate({
+      sourceText: largeState.text,
+      textGeometry,
+      fontSize: largeState.fontSize,
+      tracking: largeState.tracking,
+      fontFamily: layout.fontFamily,
+      fontWeight: layout.fontWeight,
+      baselineY: layout.baselineY,
+      textX: layout.x,
+      resolution: {
+        width: Math.round(192 * domain.resolutionScaleX),
+        height: Math.round(115 * domain.resolutionScaleY),
+      },
+      bounds: textGeometry.bounds,
+      domainBounds: domain.bounds,
+    }, canvasFactory).data;
+    const largeContext = { timeMs: 0, frame: 0, textGeometry, substrateData };
+    const renderer = getRenderer("sdf-contours");
+    const limited = renderer.generateGeometry(largeState, largeContext);
+    const complete = renderer.generateGeometry({ ...largeState, maxNodes: 5000 }, largeContext);
+    const limitedX = limited.geometries.flatMap((geometry) => geometry.type === "polyline" ? geometry.points.map((point) => point.x) : []);
+    const completeX = complete.geometries.flatMap((geometry) => geometry.type === "polyline" ? geometry.points.map((point) => point.x) : []);
+    const fullMin = Math.min(...completeX);
+    const fullMax = Math.max(...completeX);
+    const third = (fullMax - fullMin) / 3;
+
+    expect(limited.diagnostics?.maxNodesClipped).toBe(true);
+    expect(limited.diagnostics?.warning).toBe("Contour detail was reduced by the maxNodes point budget.");
+    expect(limitedX.some((x) => x <= fullMin + third)).toBe(true);
+    expect(limitedX.some((x) => x > fullMin + third && x < fullMax - third)).toBe(true);
+    expect(limitedX.some((x) => x >= fullMax - third)).toBe(true);
+    expect(Math.min(...limitedX)).toBeLessThanOrEqual(fullMin + third * 0.25);
+    expect(Math.max(...limitedX)).toBeGreaterThanOrEqual(fullMax - third * 0.25);
+    expect(renderer.generateGeometry(largeState, largeContext)).toEqual(limited);
+    expect(complete.diagnostics?.maxNodesClipped).toBe(false);
+    expect(substrateData.domainBounds!.x).toBeLessThan(textGeometry.bounds!.x);
+    expect(substrateData.domainBounds!.x + substrateData.domainBounds!.width).toBeGreaterThan(textGeometry.bounds!.x + textGeometry.bounds!.width);
+    expect(fullMin).toBeLessThan(0);
+    expect(fullMax).toBeGreaterThan(1200);
+    expect(fullMin - substrateData.domainBounds!.x).toBeGreaterThan(domain.padding * 0.25);
+    expect(substrateData.domainBounds!.x + substrateData.domainBounds!.width - fullMax).toBeGreaterThan(domain.padding * 0.25);
   });
 
   it("returns an explicit empty fallback without substrate", () => {

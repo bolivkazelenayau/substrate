@@ -70,6 +70,15 @@ describe("CanvasNavigation", () => {
     const controls = container.querySelector(".canvas-navigation-controls")!;
     expect(transform.contains(frame.querySelector("[data-testid='artwork']"))).toBe(true);
     expect(transform.contains(controls)).toBe(false);
+    expect(frame.querySelector(".viewport-hud-layer")?.contains(controls)).toBe(true);
+  });
+
+  it("keeps the screen-space HUD as a sibling of the artwork transform", () => {
+    const frame = container.querySelector(".canvas-navigation")!;
+    const transform = frame.querySelector(".canvas-navigation-transform")!;
+    const hud = frame.querySelector(".viewport-hud-layer")!;
+    expect(transform.contains(hud)).toBe(false);
+    expect(transform.parentElement).toBe(hud.parentElement);
   });
 
   it("coalesces a burst of wheel events into a single React commit per frame", async () => {

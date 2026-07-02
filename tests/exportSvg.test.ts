@@ -101,6 +101,46 @@ describe("SVG export", () => {
     expect(geometry(second)).toEqual(geometry(first));
   });
 
+  it("exports configured contour thickness as vector stroke width only for supported renderers", () => {
+    const geometry = {
+      id: "test-contour",
+      geometries: [{
+        type: "polyline" as const,
+        points: [{ x: 10, y: 20 }, { x: 30, y: 40 }, { x: 50, y: 20 }],
+        opacity: 0.8,
+      }],
+    };
+    const sdf = createSvg({
+      ...lightState,
+      renderer: "sdf-contours",
+      contourStrokeWidth: 3.25,
+    }, context, null, geometry);
+    const wave = createSvg({
+      ...lightState,
+      renderer: "wave-contours",
+      waveContourMode: "continuous",
+      contourStrokeWidth: 4,
+    }, context, null, geometry);
+    const dottedWave = createSvg({
+      ...lightState,
+      renderer: "wave-contours",
+      waveContourMode: "dotted",
+      contourStrokeWidth: 4,
+    }, context, null, geometry);
+    const flow = createSvg({
+      ...lightState,
+      renderer: "flow",
+      contourStrokeWidth: 4,
+    }, context, null, geometry);
+
+    expect(sdf).toContain('stroke-width="3.25"');
+    expect(wave).toContain('stroke-width="4"');
+    expect(dottedWave).toContain('stroke-width="1.15"');
+    expect(flow).toContain('stroke-width="1.15"');
+    expect(sdf).toContain("<polyline");
+    expect(sdf).not.toMatch(/<image|<canvas|<foreignObject|data:image/i);
+  });
+
   it("keeps typography-enhanced Editable Text as one honest native text element", () => {
     const state = {
       ...lightState,

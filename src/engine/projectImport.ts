@@ -6,13 +6,17 @@ const importedProjectSchema = v.looseObject({
   version: v.optional(v.number()),
 });
 
-const projectV7ShapeSchema = v.looseObject({
-  version: v.literal(7),
+const projectV8ShapeSchema = v.looseObject({
+  version: v.literal(8),
+  artboard: v.object({
+    width: v.number(),
+    height: v.number(),
+  }),
   text: v.string(),
   renderer: v.string(),
 });
 
-export type ProjectStateCandidate = v.InferOutput<typeof projectV7ShapeSchema>;
+export type ProjectStateCandidate = v.InferOutput<typeof projectV8ShapeSchema>;
 
 export function parseImportedProjectJson(input: unknown): unknown {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -21,9 +25,11 @@ export function parseImportedProjectJson(input: unknown): unknown {
   return v.parse(importedProjectSchema, input);
 }
 
-export function validateProjectV7Shape(input: unknown): ProjectStateCandidate {
-  return v.parse(projectV7ShapeSchema, input);
+export function validateProjectV8Shape(input: unknown): ProjectStateCandidate {
+  return v.parse(projectV8ShapeSchema, input);
 }
+
+export const validateProjectV7Shape = validateProjectV8Shape;
 
 export function migrateAndRepairProject(input: unknown): ProjectValidationResult {
   return validateProject(parseImportedProjectJson(input));

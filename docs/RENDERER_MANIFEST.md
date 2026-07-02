@@ -20,9 +20,11 @@ that complexity.
 ## Relationship to Graph IR
 
 `createRendererNodeDefinition()` reads the manifest to describe substrate,
-field, and time inputs and a `geometry` output. This remains definition-only:
-the Graph IR does not execute renderers, replace the registry, appear in the UI,
-or enter schema-v7 project files.
+field, and time inputs and a `geometry` output. The internal/test-only CPU Graph
+Evaluation Prototype can build a one-renderer graph and delegate its output
+node to the same synchronous registry renderer. It does not replace the
+registry, appear in the UI, enter schema-v7 project files, or run in production
+preview/export paths.
 
 ## Dependencies and cache identity
 
@@ -41,6 +43,12 @@ geometry. They are intentionally coarser than individual `ProjectState` keys.
 | `halftone` | density, amplitude, edge influence, seed, and glyph modulation |
 | `diffuser` | diffuser domain, composition, radius, ring, band, and halo settings |
 | `appearance` | not currently declared as geometry-affecting; color-only values are excluded |
+
+Contour stroke thickness is deliberately presentation-only: `contourStrokeWidth`
+does not change contour extraction, spacing, point count, or cache identity.
+`SDF Contours` and continuous `Wave Contours` resolve it through the renderer
+stroke-style hook for both SVG preview and Final Artwork export. Dotted Wave
+Contours and unrelated renderers retain the historical shared stroke width.
 | `warp` | not renderer geometry; handled by the separate outline/export stage |
 | `debug` | runtime-only and excluded from renderer geometry identity |
 

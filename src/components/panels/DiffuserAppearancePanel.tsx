@@ -1,5 +1,6 @@
 import { baseState } from "../../engine/presets";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { resolveDisplacementBounds, resolveOutlineWidthBounds } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
 
 interface DiffuserAppearancePanelProps {
@@ -25,10 +26,17 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
   if (state.renderer !== "glyph-diffuser") return null;
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const activity = getControlActivity(state, parsedFontPathsAvailable);
+  const boundsContext = {
+    artboardWidth: state.artboard.width,
+    artboardHeight: state.artboard.height,
+    typographySize: state.fontSize,
+  };
+  const outlineBounds = resolveOutlineWidthBounds({ ...boundsContext, currentValue: state.outlineStrokeWidth });
+  const displacementBounds = resolveDisplacementBounds({ ...boundsContext, currentValue: state.outlineWarpMaxDisplacement });
 
   return (
-    <section className="control-section">
-      <div className="section-heading"><span>03</span><h2>Overlay & Effects</h2></div>
+    <div className="control-group nested-group">
+      <div className="section-subheading">Overlay & Effects</div>
       <label className="field compact-field">
         <span>Overlay mode</span>
         <select value={state.overlayMode} onChange={(event) => patchField({ overlayMode: event.target.value as ProjectState["overlayMode"] })}>
@@ -36,7 +44,10 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
           <option value="warped-outline">{parsedFontPathsAvailable ? "Warped outline" : "Warped outline · load font"}</option>
         </select>
       </label>
-      {state.overlayMode === "outline" && <Range label="Outline width" value={state.outlineStrokeWidth} min={0.25} max={16} step={0.25} onChange={(outlineStrokeWidth) => patchField({ outlineStrokeWidth })} />}
+      {state.overlayMode === "outline" && <>
+        <Range label="Outline width" value={state.outlineStrokeWidth} min={outlineBounds.min} max={outlineBounds.softMax} step={outlineBounds.step} onChange={(outlineStrokeWidth) => patchField({ outlineStrokeWidth })} />
+        {outlineBounds.warningThreshold !== undefined && state.outlineStrokeWidth > outlineBounds.warningThreshold && <small className="inactive-hint">Large centered outlines can close counters.</small>}
+      </>}
       {state.overlayMode !== "hidden" && <Range label="Overlay opacity" value={state.textOverlayOpacity} min={0} max={1} step={0.05} onChange={(textOverlayOpacity) => patchField({ textOverlayOpacity })} />}
       {activity.edgeErosion && (
         <div className="control-group nested-group" style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px dashed #2a2a26" }}>
@@ -55,13 +66,13 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
               <Range label="Warp scale" value={state.outlineWarpScale} min={0.25} max={3} step={0.05} onChange={(outlineWarpScale) => patchField({ outlineWarpScale })} />
               <Range label="Warp smoothing" value={state.outlineWarpSmoothing} min={0} max={1} step={0.05} onChange={(outlineWarpSmoothing) => patchField({ outlineWarpSmoothing })} />
               <Range label="Warp edge bias" value={state.outlineWarpEdgeBias} min={0} max={1} step={0.05} onChange={(outlineWarpEdgeBias) => patchField({ outlineWarpEdgeBias })} />
-              <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={0} max={80} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
+              <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={displacementBounds.min} max={displacementBounds.softMax} step={displacementBounds.step} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
               <label className="debug-toggle"><input type="checkbox" checked={state.preserveCounters} onChange={(event) => patchField({ preserveCounters: event.target.checked })} /><span>Preserve counters</span></label>
             </>
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

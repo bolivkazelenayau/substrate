@@ -1,5 +1,5 @@
 import type { ProjectState, RenderContext } from "../types";
-import { VIEWPORT } from "./constants";
+import { projectArtboard } from "./artboard";
 import { buildCompositeWaveField, createGlyphFieldContext } from "./field/compositeWaveField";
 
 /**
@@ -16,7 +16,7 @@ export function createStaticRenderContext(
     frame: 0,
     textGeometry,
     substrateData,
-    viewport: VIEWPORT,
+    viewport: projectArtboard(state),
   };
   return { ...base, ...createGlyphFieldContext(buildCompositeWaveField(state, base)) };
 }

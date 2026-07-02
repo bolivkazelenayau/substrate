@@ -1,12 +1,96 @@
 # SUBSTRATE - Implementation Status
 
-Updated for the v0.17 Multi-Emitter + Safe Typography release.
+Current working-tree status updated 2026-07-02. Historical release notes remain
+below.
+
+## Current working-tree snapshot
+
+- Package version: `0.20.1`
+- Exported SVG/app metadata version: `0.17.0`
+- Project schema: `8`
+- Renderers: `9`, synchronous and registry-authoritative
+- Tests: `545` across `59` files
+- Lint, typecheck, production build, and analyze build: passing
+- Initial application JS: `408.80 kB` minified / `124.11 kB` gzip
+- Lazy OpenType chunk: `243.12 kB` minified / `68.16 kB` gzip
+- Vite 500 kB warning: absent
+
+The package/app metadata version mismatch is pre-existing and should be resolved
+only through an explicit release/versioning pass. This documentation update
+does not change exported metadata.
+
+## Recent completed passes
+
+### v0.20.1 Dynamic Artboard + Contour Styling
+
+- Added schema-v8 dynamic artboard dimensions, deterministic SVG viewBox/export
+  plumbing, manual **Expand Artboard to Text**, and runtime-only **Auto-grow
+  Artboard** with no automatic shrinking.
+- Auto-grow observes authoritative text bounds in a stable runtime hook,
+  expands immediately when enabling the mode over existing overflow, debounces
+  continuous edits, suppresses transient Clip warnings/actions, and preserves
+  manual zoom/pan state.
+- Added `contourStrokeWidth` (default `1.15`, repaired to `0.25–16`) as an
+  Advanced Parameters control for `SDF Contours` and continuous
+  `Wave Contours`. Non-default values drive real vector `stroke-width` in both
+  preview and Final Artwork SVG without changing contour extraction, spacing,
+  count, presets, seeds, or renderer algorithms.
+- Default contour preview/export behavior and canonical golden SVG fixtures
+  remain unchanged; dotted Wave Contours and unrelated renderers are unaffected.
+
+### UX Disclosure Pass 1
+
+- Normal sidebar order is now `01 Artwork`, `02 Preset / Renderer`, `03 Core
+  Field`, `04 Appearance`, `05 Preview`, `06 Export`, `07 Diagnostics`.
+- Conditional numbering gaps and duplicate labels are removed.
+- Detailed typography, Emitters, renderer-specific parameters, Preview detail,
+  and Export detail start collapsed.
+- Preset and Renderer are reachable in the first sidebar viewport.
+- New sessions default DiagnosticsMode to Off.
+- Compact/Full telemetry remains available.
+- Dev-only FPS/WebGPU launchers moved into Diagnostics.
+- Default canvas telemetry is hidden while warnings, fallback/failure status,
+  navigation, and export checks remain available.
+- All controls, schema-v7 debug settings, preview semantics, and export paths
+  remain intact.
+
+Full record: `docs/UX_DISCLOSURE_PASS_1.md`.
+
+### Internal Graph Evaluation Prototype
+
+- Minimal one-renderer graphs can be built from `ProjectState`.
+- A typed test/internal CPU executor validates the graph and delegates to the
+  existing synchronous renderer registry.
+- Six representative projects match canonical registry geometry and existing
+  golden SVG hashes.
+- Graph execution is not used by App, preview, SVG export, project schema, or
+  the production bundle.
+
+### Renderer runtime ownership consolidation
+
+- `useRendererRuntime` owns live, export, and estimate variants plus timing and
+  summaries.
+- `App.tsx` consumes derived runtime results instead of invoking lower-level
+  renderer generation directly.
+- Static estimate/time-zero export identity, appearance exclusions, and
+  time-renderer cache bypass are covered by regression tests.
+
+### Schema v8 planning and UX audit
+
+- `docs/SCHEMA_V8_PLANNING.md` proposes grouped state, debug extraction,
+  preference ownership, migrations, downgrade policy, and parity gates without
+  implementing schema v8.
+- `docs/UX_INTERACTION_AUDIT.md` records first-run, diagnostics, Canvas/SVG,
+  accessibility, and performance findings with screenshots.
+- `design-qa.md` confirms the disclosure implementation against the audit
+  evidence.
 
 ## Release state
 
-- Current release: `0.17.0`
-- Project schema: `7`
-- Package, app, and exported SVG metadata report `0.17.0`.
+- Current package/tag release: `0.20.1`
+- Project schema: `8`
+- Exported SVG/app metadata remains `0.17.0` to preserve the canonical SVG
+  compatibility corpus; package and Git release versions advance independently.
 
 ## v0.17 Multi-Emitter + Safe Typography
 

@@ -150,6 +150,9 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .canvas-navigation.can-pan { cursor: grab; }
 .canvas-navigation.is-panning { cursor: grabbing; }
 .canvas-navigation-transform { position: absolute; inset: 0; display: flex; justify-content: center; align-items: center; transform-origin: center; }
+.viewport-hud-layer { position: absolute; inset: 0; z-index: 20; display: flex; justify-content: center; align-items: center; pointer-events: none; }
+.viewport-hud-content { position: relative; width: 100%; max-height: 100%; aspect-ratio: 1200 / 720; pointer-events: none; }
+.viewport-hud-layer .is-interactive { pointer-events: auto; }
 /* Crisp default ("crisp" compositing mode): the wrapper stays on the browser's
    native repaint path — every committed `transform` re-rasters the SVG/canvas
    subtree sharply, with no GPU layer texture to upscale during the gesture.
@@ -189,6 +192,7 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .diffuser-text-overlay { fill: var(--acid); stroke: none; }
 .glyph-ghost { fill: none; }
 .debug-line, .debug-emitter circle, .debug-emitter path { fill: none; stroke: var(--error); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.debug-layout-bounds { fill: none; stroke: #58cfff; stroke-width: 1.5; stroke-dasharray: 3 5; }
 .debug-origins { fill: var(--error); }
 .debug-glyph-outlines { fill: none; stroke: var(--error); stroke-width: 1.5; }
 .debug-glyph-origins { fill: var(--error); }
@@ -197,11 +201,12 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .debug-gradient { stroke: #58cfff; stroke-width: 1.4; stroke-linecap: round; }
 
 /* diagnostics */
-.substrate-diagnostics, .renderer-diagnostics, .backend-diagnostics, .export-warnings, .performance-warnings, .substrate-error {
+.substrate-diagnostics, .renderer-diagnostics, .sampling-diagnostics, .backend-diagnostics, .export-warnings, .performance-warnings, .substrate-error {
   position: absolute; z-index: 3; padding: 8px 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); font-size: 9px; pointer-events: none; display: flex; flex-wrap: wrap; gap: 6px 12px; letter-spacing: 0.05em;
 }
 .diagnostics-off .substrate-diagnostics,
 .diagnostics-off .renderer-diagnostics,
+.diagnostics-off .sampling-diagnostics,
 .diagnostics-off .backend-diagnostics {
   display: none;
 }
@@ -216,9 +221,10 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 }
 .substrate-diagnostics { top: 24px; left: 24px; max-width: calc(100% - 48px); }
 .renderer-diagnostics { top: 24px; right: 24px; justify-content: flex-end; max-width: calc(100% - 48px); }
+.sampling-diagnostics { left: 24px; top: 104px; max-width: min(620px, calc(100% - 48px)); }
 .backend-diagnostics { left: 24px; top: 64px; max-width: calc(100% - 48px); }
 
-.substrate-diagnostics strong, .renderer-diagnostics strong, .backend-diagnostics strong { color: var(--acid); text-transform: uppercase; }
+.substrate-diagnostics strong, .renderer-diagnostics strong, .sampling-diagnostics strong, .backend-diagnostics strong { color: var(--acid); text-transform: uppercase; }
 .renderer-diagnostics.warning { color: var(--warning); border-color: var(--warning-bg); }
 .backend-diagnostics.fallback, .backend-diagnostics.error { color: var(--warning); border-color: var(--warning-bg); }
 
@@ -228,6 +234,8 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 
 .export-warnings { right: 24px; bottom: 32px; max-width: 520px; color: var(--warning); background: var(--warning-bg); border-color: var(--error); }
 .export-warnings strong { color: var(--warning); margin-right: 6px; }
+.expand-artboard-action { margin-left: 6px; padding: 5px 8px; border-color: currentColor; color: var(--warning); background: transparent; font-size: 9px; }
+.expand-artboard-action:disabled { cursor: not-allowed; opacity: .45; }
 .performance-warnings { left: 24px; bottom: 32px; max-width: 520px; color: #ffd166; background: #3a2a0d; border-color: #70582e; }
 .performance-warnings strong { color: #ffd166; margin-right: 6px; }
 .substrate-error { left: 24px; bottom: 32px; max-width: calc(100% - 48px); color: var(--error); background: var(--warning-bg); border-color: var(--error); }

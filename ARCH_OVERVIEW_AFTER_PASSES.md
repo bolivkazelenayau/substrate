@@ -1,7 +1,7 @@
 # SUBSTRATE architecture overview after refactor/performance passes
 
 Audit snapshot: 2026-07-01  
-Repository version: `0.20.0`  
+Repository version: `0.20.1`  
 Source snapshot: initially dirty; provenance was resolved by the commit pass described below.
 
 ## 1. Product summary
@@ -95,14 +95,13 @@ flowchart TD
 After hook extraction, `App.tsx` is still the main composition and orchestration root. It owns:
 
 - assembly of document, font, substrate, renderer, animation, preview, diagnostics, navigation, and export flows;
-- live versus static render-context selection;
-- renderer geometry memoization and export geometry selection;
+- assembly of live and static render contexts;
 - font upload/clear and project import/export handlers;
 - preview backend resolution, Canvas failure handling, and preview diagnostics;
 - dev-only WebGPU and performance-overlay wiring;
 - top-level controls, viewport, transport, status, and messages.
 
-It no longer directly owns all underlying state and pipelines, but it remains large and contains product-policy decisions. `useRendererRuntime` exists as a focused hook, although the current `App.tsx` still invokes the lower-level renderer runtime directly for its live/export/estimate variants.
+It no longer directly owns all underlying state and pipelines, but it remains large and contains product-policy decisions. Renderer generation and live/export/estimate variant selection now flow through `useRendererRuntime`; `App.tsx` consumes the derived results.
 
 ### Focused hooks
 
@@ -111,10 +110,10 @@ It no longer directly owns all underlying state and pipelines, but it remains la
 | `useProjectDocument` | Owns `ProjectState`, migration/repair import, and document serialization helper. |
 | `useTypographyGeometry` | Memoizes parsed-font glyph layout and measures its build time. Native fallback yields no parsed outline geometry. |
 | `useSubstratePipeline` | Converts document/text geometry into substrate input and delegates to the selected worker/main backend lifecycle. |
-| `useRendererRuntime` | Computes a renderer geometry key and memoized geometry; present as a boundary, not yet the sole path used by `App`. |
+| `useRendererRuntime` | Owns the renderer geometry key plus live, export, and estimate geometry derivation, context selection, preview build timing, and export geometry summary. |
 | `usePreviewSettings` | Owns runtime-only FPS, hidden-tab, reduced-motion, backend, and quality settings. |
 | `useExportController` | Owns the transient `exporting` flag. |
-| `useDiagnosticsState` | Owns `off | compact | full` and derives visible/expanded flags. |
+| `useDiagnosticsState` | Owns `off | compact | full`, defaults new sessions to `off`, and derives visible/expanded flags. |
 
 ### Components
 
@@ -123,6 +122,11 @@ It no longer directly owns all underlying state and pipelines, but it remains la
 - `Viewport` composes the artwork preview, masks/overlays, diagnostics, warnings, and backend-specific preview component.
 - `FlowPreview` is the SVG Accuracy path for animated Flow geometry. It uses a stable grouped path pool rather than a React element per segment per frame.
 - `CanvasFlowPreview` is the Canvas Performance path for Flow. It owns its draw loop, grouped drawing behavior, timing samples, clipping, and cleanup.
+
+UX Disclosure Pass 1 fixes the normal sidebar order at Artwork → Preset /
+Renderer → Core Field → Appearance → Preview → Export → Diagnostics. Detailed
+typography, emitters, renderer-specific parameters, preview/export detail, and
+diagnostics remain available through collapsed disclosures.
 
 ## 5. State model
 
@@ -170,7 +174,7 @@ Bundle impact:
 
 | Output | Before lazy boundary | Current (2026-07-01) |
 | --- | ---: | ---: |
-| Initial app JS | 627.92 kB / 185.07 kB gzip | 386.46 kB / 117.34 kB gzip |
+| Initial app JS | 627.92 kB / 185.07 kB gzip | 388.08 kB / 117.84 kB gzip |
 | Lazy OpenType chunk | part of initial chunk | 243.12 kB / 68.16 kB gzip |
 
 The “before” numbers are the recorded Pass 2 baseline. The current numbers come from the latest local analyze build.
@@ -254,7 +258,12 @@ The implemented Graph IR is a minimal skeleton:
 - structural validation for duplicate IDs, missing nodes/sockets, direction, kind compatibility, and output-node validity;
 - `createRendererNodeDefinition()` as a renderer/manifest adapter.
 
-It has no graph evaluator or execution scheduler. It is not serialized, not part of `ProjectState`, not exposed as UI, not a WebGPU/shader runtime, and not authoritative over preview or export.
+It now has a narrow internal/test-only CPU execution prototype for a validated
+one-renderer graph. The executor resolves the existing synchronous registry
+renderer and delegates to its existing algorithm; it does not schedule general
+multi-node graphs. It is not serialized, not part of `ProjectState`, not
+exposed as UI, not a WebGPU/shader runtime, and not authoritative over preview
+or export.
 
 The intended path is to prototype evaluation internally across substrate → field → renderer → appearance/output stages, then define determinism, cache semantics, migration, persistence, error handling, and golden-export parity before considering product UI.
 
@@ -263,8 +272,11 @@ The intended path is to prototype evaluation internally across substrate → fie
 `DiagnosticsMode` supports:
 
 - `off`: hide the current diagnostics surface;
-- `compact`: show the concise operational view (default);
+- `compact`: show the concise operational view;
 - `full`: show expanded timing, cache, substrate, renderer, backend, and control detail.
+
+New sessions default to `off`; compact and full diagnostics remain available
+through the Diagnostics disclosure.
 
 Preview/runtime diagnostics report clock state, estimated FPS, frame/draw timing validity, selected backend, geometry/substrate regeneration, worker fallback/status, and renderer-specific data. Legacy `ProjectState.debug` still independently controls older artwork-adjacent visual aids.
 
@@ -280,7 +292,7 @@ Latest `npm run analyze` output:
 
 | Output | Minified | Gzip |
 | --- | ---: | ---: |
-| Initial application JS | 386.46 kB | 117.34 kB |
+| Initial application JS | 388.08 kB | 117.84 kB |
 | Lazy OpenType font engine | 243.12 kB | 68.16 kB |
 | Substrate worker | 5.97 kB | not reported |
 | CSS | 15.70 kB | 3.78 kB |
@@ -297,7 +309,7 @@ Implemented performance/correctness fixes include:
 
 ## 13. Test strategy
 
-Current suite: **458 tests in 45 files**, all passing.
+Current suite: **474 tests in 47 files**, all passing.
 
 Coverage includes:
 
@@ -357,18 +369,23 @@ provenance pass did not replay, squash, or alter them.
 - `App.tsx` remains a large composition root with orchestration, policy, event handlers, diagnostics, and dev wiring.
 - `ProjectState` is still large and flat. Cross-cutting changes can create wide cache/migration/test impact.
 - The renderer registry is eager and synchronous. This is currently justified, but it limits independent loading and plugin-style extension.
-- Graph IR has no execution semantics, persistence, migrations, evaluator caching, or parity proof.
+- Graph execution remains a one-renderer CPU parity prototype without general
+  scheduling, persistence, migrations, evaluator caching, or product authority.
 - WebGPU future scope needs governance: which workloads may use it, how fallback works, and which contracts can never become GPU-dependent.
 - Native fallback has weaker glyph metrics, outline, kerning, and emitter-anchor fidelity than parsed fonts.
 - Legacy `ProjectState.debug` blurs artwork-document and workspace-preference ownership.
 - Diagnostics are split between legacy debug flags, runtime `DiagnosticsMode`, preview measurements, and dev overlays; this can increase UI and reasoning complexity.
 - Crisp SVG navigation can trigger expensive browser-specific repaint behavior on large DOM trees.
-- `useRendererRuntime` is not yet the single renderer-runtime path, leaving duplicated orchestration in `App`.
 
 ## 16. Recommended next passes
 
 1. **Commit/squash and provenance pass.** Separate boundary/refactor changes, golden-corpus additions, and this audit snapshot into reviewable commits or a clearly documented squash. Risk: careless squashing can hide why canonical hashes or dependency versions changed.
-2. **Internal Graph Evaluation Prototype.** Evaluate a small non-serialized graph against one or two existing renderers and require golden-export parity. Keep it out of UI and saved projects. Risk: premature generalization can duplicate the current runtime and destabilize cache semantics.
+2. **Graph prototype review / stop gate.** The one-renderer CPU parity prototype
+   is complete. Before expanding it, define whether general multi-node
+   evaluation has a concrete product/runtime need and specify cache, error, and
+   scheduling semantics. Keep it out of UI and saved projects. Risk: premature
+   generalization can duplicate the current runtime and destabilize cache
+   semantics.
 3. **Font engine alternatives spike.** Measure parser size, parse latency, glyph/path fidelity, kerning, licensing, browser support, and failure behavior against the current local contract. Risk: smaller engines may regress typography fidelity or expand compatibility burden.
 4. **Debug ownership and schema-v8 planning.** Define extraction of legacy debug values, local preference persistence, v7 import, v8 save, downgrade behavior, and document decomposition. Risk: data loss or surprising visual changes without explicit migration tests.
 5. **UX/interaction quality pass.** Simplify diagnostics/control density and separately profile SVG preview zoom/pan in target browsers. Risk: hiding advanced controls can reduce debuggability; compositing changes can trade repaint cost for blur.
@@ -382,7 +399,7 @@ full gate after grouping:
 | --- | --- |
 | `npm run lint` | Pass |
 | `npm run typecheck` | Pass |
-| `npm run test` | Pass: 458 tests / 45 files |
+| `npm run test` | Pass: 474 tests / 47 files |
 | `npm run build` | Pass: Vite 6.4.3, 115 modules transformed |
 | `npm run analyze` | Pass; sizes recorded in section 12; no 500 kB warning |
 | Browser QA | Not run as part of this documentation-only audit |

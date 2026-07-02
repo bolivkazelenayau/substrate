@@ -15,6 +15,7 @@ export interface CompositeWaveField {
   height: number;
   viewportWidth: number;
   viewportHeight: number;
+  worldBounds: { x: number; y: number; width: number; height: number };
   data: Float32Array;
   min: number;
   max: number;
@@ -89,17 +90,18 @@ function buildLegacyCompositeWaveField(state: ProjectState, context: RenderConte
     y: state.emitter.customY,
   });
   const data = new Float32Array(substrate.width * substrate.height);
+  const worldBounds = substrate.domainBounds ?? { x: 0, y: 0, width: substrate.viewportWidth, height: substrate.viewportHeight };
   let min = Infinity;
   let max = -Infinity;
   let absoluteTotal = 0;
   let contributionMax = 0;
   let contributionCount = 0;
   for (let y = 0; y < substrate.height; y += 1) {
-    const worldY = y / Math.max(1, substrate.height - 1) * substrate.viewportHeight;
+    const worldY = worldBounds.y + y / Math.max(1, substrate.height - 1) * worldBounds.height;
     for (let x = 0; x < substrate.width; x += 1) {
       const index = y * substrate.width + x;
       if (substrate.mask.data[index] < 0.45) continue;
-      const worldX = x / Math.max(1, substrate.width - 1) * substrate.viewportWidth;
+      const worldX = worldBounds.x + x / Math.max(1, substrate.width - 1) * worldBounds.width;
       const value = getEmitterContributionAtPoint(state, sourceGlyph, anchor, worldX, worldY);
       data[index] = value;
       min = Math.min(min, value);
@@ -124,6 +126,7 @@ function buildLegacyCompositeWaveField(state: ProjectState, context: RenderConte
     height: substrate.height,
     viewportWidth: substrate.viewportWidth,
     viewportHeight: substrate.viewportHeight,
+    worldBounds,
     data,
     min: Number.isFinite(min) ? min : 0,
     max: Number.isFinite(max) ? max : 0,
@@ -172,6 +175,7 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
 
   const started = performance.now();
   const data = new Float32Array(substrate.width * substrate.height);
+  const worldBounds = substrate.domainBounds ?? { x: 0, y: 0, width: substrate.viewportWidth, height: substrate.viewportHeight };
   const basePeak = Math.abs(state.emitter.amplitude * state.amplitude / 22)
     * Math.max(0, state.emitter.selfInfluence, state.emitter.neighborInfluence);
   const outlierLimit = state.fieldBlendMode === "add"
@@ -185,11 +189,11 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
   let contributionsFinite = true;
 
   for (let y = 0; y < substrate.height; y += 1) {
-    const worldY = y / Math.max(1, substrate.height - 1) * substrate.viewportHeight;
+    const worldY = worldBounds.y + y / Math.max(1, substrate.height - 1) * worldBounds.height;
     for (let x = 0; x < substrate.width; x += 1) {
       const index = y * substrate.width + x;
       if (substrate.mask.data[index] < 0.45) continue;
-      const worldX = x / Math.max(1, substrate.width - 1) * substrate.viewportWidth;
+      const worldX = worldBounds.x + x / Math.max(1, substrate.width - 1) * worldBounds.width;
       let value = 0;
       if (state.fieldBlendMode === "max") {
         for (const source of contributingSources) {
@@ -221,6 +225,7 @@ function buildMultiEmitterWaveField(state: ProjectState, context: RenderContext)
     height: substrate.height,
     viewportWidth: substrate.viewportWidth,
     viewportHeight: substrate.viewportHeight,
+    worldBounds,
     data,
     min: Number.isFinite(min) ? min : 0,
     max: Number.isFinite(max) ? max : 0,
@@ -243,8 +248,8 @@ export function buildCompositeWaveField(state: ProjectState, context: RenderCont
 }
 
 export function sampleGlyphField(field: CompositeWaveField, x: number, y: number) {
-  const fx = Math.max(0, Math.min(field.width - 1, x / field.viewportWidth * (field.width - 1)));
-  const fy = Math.max(0, Math.min(field.height - 1, y / field.viewportHeight * (field.height - 1)));
+  const fx = Math.max(0, Math.min(field.width - 1, (x - field.worldBounds.x) / field.worldBounds.width * (field.width - 1)));
+  const fy = Math.max(0, Math.min(field.height - 1, (y - field.worldBounds.y) / field.worldBounds.height * (field.height - 1)));
   const x0 = Math.floor(fx);
   const y0 = Math.floor(fy);
   const x1 = Math.min(field.width - 1, x0 + 1);
@@ -260,8 +265,8 @@ export function sampleGlyphField(field: CompositeWaveField, x: number, y: number
 export const sampleCompositeWaveField = sampleGlyphField;
 
 export function sampleGlyphFieldGradient(field: CompositeWaveField, x: number, y: number): GlyphFieldGradient {
-  const dx = field.viewportWidth / Math.max(1, field.width - 1);
-  const dy = field.viewportHeight / Math.max(1, field.height - 1);
+  const dx = field.worldBounds.width / Math.max(1, field.width - 1);
+  const dy = field.worldBounds.height / Math.max(1, field.height - 1);
   const gx = (sampleGlyphField(field, x + dx, y) - sampleGlyphField(field, x - dx, y)) / (2 * dx);
   const gy = (sampleGlyphField(field, x, y + dy) - sampleGlyphField(field, x, y - dy)) / (2 * dy);
   const magnitude = Math.hypot(gx, gy);

@@ -28,11 +28,15 @@ describe("dev-only WebGPU overlay gating", () => {
     act(() => {
       root.render(createElement(App));
     });
+    const diagnostics = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((candidate) => candidate.textContent?.includes("Diagnostics"));
+    expect(diagnostics).toBeTruthy();
+    act(() => diagnostics!.click());
     const button = container.querySelector(
       "button[aria-label*='WebGPU field debug overlay']",
     );
     expect(button, "dev GPU debug toggle should render in dev builds").not.toBeNull();
-    expect(button!.textContent).toMatch(/GPU FIELD DEBUG/);
+    expect(button!.textContent).toMatch(/GPU field debug/i);
   });
 
   it("does not render the overlay panel until the toggle is opened", () => {

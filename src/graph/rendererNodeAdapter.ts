@@ -4,8 +4,9 @@ import type { NodeDefinition } from "./nodeTypes";
 import type { GraphSocket } from "./socketTypes";
 
 /**
- * Definition-only bridge. The current renderer registry remains authoritative;
- * this does not register, load, or execute a renderer through a graph runtime.
+ * Metadata bridge. The current renderer registry remains authoritative; this
+ * does not register or load renderers. The internal CPU execution prototype
+ * uses the resulting node type only to prove registry-path parity.
  */
 export function createRendererNodeDefinition(renderer: VectorRenderer): NodeDefinition {
   const manifest = getRendererManifest(renderer.id);

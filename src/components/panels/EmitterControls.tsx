@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { resolveEmitterRadiusBounds } from "../../engine/numericBounds";
 import { baseState } from "../../engine/presets";
 import { addEmitterRow, duplicateEmitterRow, MAX_EMITTER_ROWS, removeEmitterRow, updateEmitterRow } from "../../engine/emitterEditor";
 import { getGlyphDisplayLabel, type GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
@@ -90,6 +91,12 @@ export function EmitterControls({ state, setState, emitterGlyphs, consumerActive
 }
 
 function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: ProjectState; eligibleGlyphs: GlyphEmitterMetadata[]; patchEmitter: (next: Partial<ProjectState["emitter"]>) => void }) {
+  const radiusBounds = resolveEmitterRadiusBounds({
+    artboardWidth: state.artboard.width,
+    artboardHeight: state.artboard.height,
+    typographySize: state.fontSize,
+    currentValue: state.emitter.radius,
+  });
   return <div className="emitter-row">
     <div className="section-subheading">Single emitter</div>
     <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Emitter enabled</span></label>
@@ -98,7 +105,7 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
     <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
     <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
     <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-    <Range label="Radius" value={state.emitter.radius} min={20} max={1000} step={10} onChange={(radius) => patchEmitter({ radius })} />
+    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
     <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
@@ -107,6 +114,12 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
 }
 
 function GlobalEmitter({ state, patchField, patchEmitter }: { state: ProjectState; patchField: (next: Partial<ProjectState>) => void; patchEmitter: (next: Partial<ProjectState["emitter"]>) => void }) {
+  const radiusBounds = resolveEmitterRadiusBounds({
+    artboardWidth: state.artboard.width,
+    artboardHeight: state.artboard.height,
+    typographySize: state.fontSize,
+    currentValue: state.emitter.radius,
+  });
   return <div className="control-group nested-group">
     <div className="section-subheading">Global field shaping · all emitters</div><small className="inactive-hint">These shared controls intentionally affect every enabled emitter row.</small>
     <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Global field enabled</span></label>
@@ -114,7 +127,7 @@ function GlobalEmitter({ state, patchField, patchEmitter }: { state: ProjectStat
     <Range label="Global strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
     <Range label="Global wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
     <Range label="Global phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-    <Range label="Global base radius" value={state.emitter.radius} min={20} max={1000} step={10} onChange={(radius) => patchEmitter({ radius })} />
+    <Range label="Global base radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
     <label className="field compact-field"><span>Global falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Global self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Global neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />

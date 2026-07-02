@@ -3,6 +3,19 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
+  it("defaults, repairs, and round-trips contour thickness", () => {
+    expect(validateProject({ version: 8 }).project.contourStrokeWidth).toBe(1.15);
+    expect(validateProject({ ...baseState, contourStrokeWidth: Number.NaN }).project.contourStrokeWidth).toBe(1.15);
+    expect(validateProject({ ...baseState, contourStrokeWidth: -20 }).project.contourStrokeWidth).toBe(0.25);
+    expect(validateProject({ ...baseState, contourStrokeWidth: 999 }).project.contourStrokeWidth).toBe(16);
+
+    const restored = validateProject(JSON.parse(JSON.stringify({
+      ...baseState,
+      contourStrokeWidth: 3.25,
+    }))).project;
+    expect(restored.contourStrokeWidth).toBe(3.25);
+  });
+
   it("ignores runtime preview backend and quality fields on import", () => {
     const { project } = validateProject({
       ...baseState,
@@ -15,14 +28,15 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
-  it("migrates version 1 projects to version 7", () => {
+  it("migrates version 1 projects to version 8", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(7);
+    expect(result.project.version).toBe(8);
+    expect(result.project.artboard).toEqual({ width: 1200, height: 720 });
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 7.");
+    expect(result.warnings).toContain("Project was migrated to schema version 8.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -31,7 +45,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(7);
+    expect(result.project.version).toBe(8);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -40,10 +54,21 @@ describe("project schema", () => {
     expect(() => validateProject({ version: 99 })).toThrow("newer than this app supports");
   });
 
+  it("migrates v7 artboards and repairs invalid v8 dimensions", () => {
+    expect(validateProject({ ...baseState, version: 7, artboard: undefined }).project.artboard)
+      .toEqual({ width: 1200, height: 720 });
+    expect(validateProject({ ...baseState, artboard: { width: 1800, height: 900 } }).project.artboard)
+      .toEqual({ width: 1800, height: 900 });
+    expect(validateProject({ ...baseState, artboard: { width: -1, height: Infinity } }).project.artboard)
+      .toEqual({ width: 64, height: 720 });
+    expect(validateProject({ ...baseState, artboard: { width: 999_999, height: 1 } }).project.artboard)
+      .toEqual({ width: 16_384, height: 64 });
+  });
+
   it("clamps numeric values to supported ranges", () => {
     const { project } = validateProject({
       version: 3,
-      fontSize: 999,
+      fontSize: 999999,
       tracking: -999,
       seed: -2,
       density: 0,
@@ -56,7 +81,7 @@ describe("project schema", () => {
       substrateQuality: "cinema",
     });
     expect(project).toMatchObject({
-      fontSize: 220,
+      fontSize: 4096,
       tracking: -10,
       seed: 0,
       density: 10,
@@ -67,6 +92,44 @@ describe("project schema", () => {
       precision: 3,
       maxNodes: 5000,
       substrateQuality: "medium",
+    });
+  });
+
+  it("preserves large reasonable visual dimensions and clamps pathological values", () => {
+    const reasonable = validateProject({
+      ...baseState,
+      fontSize: 640,
+      outlineStrokeWidth: 64,
+      waveDotRadius: 24,
+      diffuserDotRadius: 32,
+      outlineWarpMaxDisplacement: 240,
+      emitter: { ...baseState.emitter, radius: 3000 },
+    }).project;
+    expect(reasonable).toMatchObject({
+      fontSize: 640,
+      outlineStrokeWidth: 64,
+      waveDotRadius: 24,
+      diffuserDotRadius: 32,
+      outlineWarpMaxDisplacement: 240,
+      emitter: expect.objectContaining({ radius: 3000 }),
+    });
+
+    const pathological = validateProject({
+      ...baseState,
+      fontSize: Infinity,
+      outlineStrokeWidth: Number.MAX_VALUE,
+      waveDotRadius: -5,
+      diffuserDotRadius: NaN,
+      outlineWarpMaxDisplacement: Number.MAX_VALUE,
+      emitter: { ...baseState.emitter, radius: Number.MAX_VALUE },
+    }).project;
+    expect(pathological).toMatchObject({
+      fontSize: baseState.fontSize,
+      outlineStrokeWidth: 512,
+      waveDotRadius: 0.1,
+      diffuserDotRadius: baseState.diffuserDotRadius,
+      outlineWarpMaxDisplacement: 2048,
+      emitter: expect.objectContaining({ radius: 8192 }),
     });
   });
 
@@ -90,13 +153,14 @@ describe("project schema", () => {
   it("migrates v6 projects to persisted artwork appearance defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 6 });
     expect(project).toMatchObject({
-      version: 7,
+      version: 8,
+      artboard: { width: 1200, height: 720 },
       primaryColor: "#e8ff45",
       outlineColor: "#e8ff45",
       backgroundColor: "#11110f",
       transparentBackground: false,
     });
-    expect(warnings).toContain("Project was migrated to schema version 7.");
+    expect(warnings).toContain("Project was migrated to schema version 8.");
   });
 
   it("preserves valid appearance colors and rejects invalid color strings", () => {
@@ -118,7 +182,8 @@ describe("project schema", () => {
   it("migrates version 5 typography fields to layout-preserving defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 5 });
     expect(project).toMatchObject({
-      version: 7,
+      version: 8,
+      artboard: { width: 1200, height: 720 },
       kerningMode: "font",
       kerningStrength: 1,
       opticalSpacing: false,
@@ -126,7 +191,7 @@ describe("project schema", () => {
       textAlign: "center",
       textOffsetY: 0,
     });
-    expect(warnings).toContain("Project was migrated to schema version 7.");
+    expect(warnings).toContain("Project was migrated to schema version 8.");
   });
 
   it("validates and clamps typography controls", () => {
@@ -137,7 +202,7 @@ describe("project schema", () => {
       opticalSpacing: true,
       opticalSpacingStrength: -5,
       textAlign: "justify",
-      textOffsetY: 999,
+      textOffsetY: 99999,
     });
     expect(project).toMatchObject({
       kerningMode: "font",
@@ -145,7 +210,7 @@ describe("project schema", () => {
       opticalSpacing: true,
       opticalSpacingStrength: 0,
       textAlign: "center",
-      textOffsetY: 120,
+      textOffsetY: 2048,
     });
   });
 
@@ -185,7 +250,7 @@ describe("project schema", () => {
       outlineWarpScale: 0,
       outlineWarpSmoothing: 4,
       outlineWarpEdgeBias: -2,
-      outlineWarpMaxDisplacement: 999,
+      outlineWarpMaxDisplacement: 99999,
       preserveCounters: false,
     }).project;
     expect(project).toMatchObject({
@@ -194,7 +259,7 @@ describe("project schema", () => {
       outlineWarpScale: 0.25,
       outlineWarpSmoothing: 1,
       outlineWarpEdgeBias: 0,
-      outlineWarpMaxDisplacement: 80,
+      outlineWarpMaxDisplacement: 2048,
       preserveCounters: false,
     });
   });
@@ -245,12 +310,12 @@ describe("project schema", () => {
       glyphId: "glyph-1",
       amplitude: 4,
       frequency: 0.005,
-      radius: 1400,
+      radius: 8192,
       selfInfluence: 0,
       neighborInfluence: 3,
     });
     expect(project.waveContourMode).toBe("dotted");
     expect(project.waveDotSpacing).toBe(40);
-    expect(project.waveDotRadius).toBe(0.4);
+    expect(project.waveDotRadius).toBe(0.1);
   });
 });
