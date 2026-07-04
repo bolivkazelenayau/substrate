@@ -29,73 +29,94 @@ function normalizeCommands(commands: Array<Record<string, unknown>>): GlyphPathC
 }
 
 export function layoutGlyphs(state: ProjectState, loaded: LoadedFont): TextGeometry {
-  const characters = Array.from(state.text);
-  const glyphs = characters.map((character) => loaded.font.charToGlyph(character));
   const scale = state.fontSize / loaded.font.unitsPerEm;
-  const advances = glyphs.map((glyph) => (glyph.advanceWidth ?? loaded.font.unitsPerEm) * scale);
   const kerningScale = state.kerningMode === "font" ? state.kerningStrength : 0;
-  const kernings = glyphs.map((glyph, index) => index < glyphs.length - 1
-    ? loaded.font.getKerningValue(glyph, glyphs[index + 1]) * scale * kerningScale
-    : 0);
-  const opticalAdjustments = getOpticalAdjustments(state, loaded, glyphs, advances);
-  const totalAdvance = advances.reduce((sum, advance) => sum + advance, 0)
-    + kernings.reduce((sum, kerning) => sum + kerning, 0)
-    + opticalAdjustments.reduce((sum, adjustment) => sum + adjustment, 0)
-    + Math.max(0, glyphs.length - 1) * state.tracking;
   const artboard = projectArtboard(state);
-  const originX = state.textAlign === "left"
-    ? VIEWPORT.paddingX
-    : state.textAlign === "right"
-      ? artboard.width - VIEWPORT.paddingX - totalAdvance
-      : artboard.centerX - totalAdvance / 2;
   const layout = getTextLayout(state);
-  const baselineY = layout.baselineY;
-  let cursorX = originX;
   let textIndex = 0;
-  const positioned: PositionedGlyph[] = glyphs.map((glyph, index) => {
-    const character = characters[index];
-    const path = glyph.getPath(cursorX, baselineY, state.fontSize, { kerning: false }, loaded.font);
-    const d = path.toPathData(state.precision);
-    const bounds = pathBounds(path.getBoundingBox(), path.commands.length > 0 && d.length > 0);
-    const center = bounds
-      ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
-      : { x: cursorX + advances[index] / 2, y: baselineY - state.fontSize / 2 };
-    const counterCenter = /[Oo0QPRBA]/.test(character) && bounds
-      ? { x: center.x, y: center.y + (/P|R|B/.test(character) ? -bounds.height * 0.16 : 0) }
-      : null;
-    const result: PositionedGlyph = {
-      glyphId: `glyph-${textIndex}-${glyph.index}`,
-      character,
-      sourceCharacter: character,
-      textIndex,
-      glyphIndex: glyph.index,
-      glyphName: glyph.name,
-      advanceWidth: advances[index],
-      x: cursorX,
-      y: baselineY,
-      path: {
-        d,
-        bounds,
-        commands: normalizeCommands(path.commands as unknown as Array<Record<string, unknown>>),
-      },
-      center,
-      centroid: center,
-      counterCenter,
-      sourceAnchor: counterCenter ?? center,
-      emitterEligible: !/\s/.test(character),
+  let globalGlyphIndex = 0;
+  const positioned: PositionedGlyph[] = [];
+  const lines = layout.lines.map((layoutLine) => {
+    const characters = Array.from(layoutLine.text);
+    const glyphs = characters.map((character) => loaded.font.charToGlyph(character));
+    const advances = glyphs.map((glyph) => (glyph.advanceWidth ?? loaded.font.unitsPerEm) * scale);
+    const kernings = glyphs.map((glyph, index) => index < glyphs.length - 1
+      ? loaded.font.getKerningValue(glyph, glyphs[index + 1]) * scale * kerningScale
+      : 0);
+    const opticalAdjustments = getOpticalAdjustments(state, loaded, glyphs, advances);
+    const totalAdvance = advances.reduce((sum, advance) => sum + advance, 0)
+      + kernings.reduce((sum, kerning) => sum + kerning, 0)
+      + opticalAdjustments.reduce((sum, adjustment) => sum + adjustment, 0)
+      + Math.max(0, glyphs.length - 1) * state.tracking;
+    const originX = state.textAlign === "left"
+      ? VIEWPORT.paddingX
+      : state.textAlign === "right"
+        ? artboard.width - VIEWPORT.paddingX - totalAdvance
+        : artboard.centerX - totalAdvance / 2;
+    let cursorX = originX;
+    const lineGlyphs = glyphs.map((glyph, index) => {
+      const character = characters[index];
+      const path = glyph.getPath(cursorX, layoutLine.baselineY, state.fontSize, { kerning: false }, loaded.font);
+      const d = path.toPathData(state.precision);
+      const bounds = pathBounds(path.getBoundingBox(), path.commands.length > 0 && d.length > 0);
+      const center = bounds
+        ? { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }
+        : { x: cursorX + advances[index] / 2, y: layoutLine.baselineY - state.fontSize / 2 };
+      const counterCenter = /[Oo0QPRBA]/.test(character) && bounds
+        ? { x: center.x, y: center.y + (/P|R|B/.test(character) ? -bounds.height * 0.16 : 0) }
+        : null;
+      const result: PositionedGlyph = {
+        glyphId: `glyph-${textIndex}-${glyph.index}`,
+        character,
+        sourceCharacter: character,
+        textIndex,
+        glyphIndex: glyph.index,
+        glyphName: glyph.name,
+        advanceWidth: advances[index],
+        lineIndex: layoutLine.lineIndex,
+        glyphIndexInLine: index,
+        globalGlyphIndex,
+        x: cursorX,
+        y: layoutLine.baselineY,
+        path: { d, bounds, commands: normalizeCommands(path.commands as unknown as Array<Record<string, unknown>>) },
+        center,
+        centroid: center,
+        counterCenter,
+        sourceAnchor: counterCenter ?? center,
+        emitterEligible: !/\s/.test(character),
+      };
+      cursorX += advances[index] + kernings[index] + opticalAdjustments[index]
+        + (index < glyphs.length - 1 ? state.tracking : 0);
+      textIndex += character.length;
+      globalGlyphIndex += 1;
+      return result;
+    });
+    positioned.push(...lineGlyphs);
+    textIndex += 1; // newline separator in the source string
+    return {
+      lineIndex: layoutLine.lineIndex,
+      text: layoutLine.text,
+      originX,
+      baselineY: layoutLine.baselineY,
+      advanceWidth: totalAdvance,
+      bounds: unionBounds(lineGlyphs.map((glyph) => glyph.path.bounds)),
     };
-    cursorX += advances[index] + kernings[index] + opticalAdjustments[index]
-      + (index < glyphs.length - 1 ? state.tracking : 0);
-    textIndex += character.length;
-    return result;
   });
   const bounds = unionBounds(positioned.map((glyph) => glyph.path.bounds));
+  const layoutBounds = unionBounds(lines.map((line) => ({
+    x: line.originX,
+    y: line.baselineY - state.fontSize,
+    width: line.advanceWidth,
+    height: state.fontSize * 1.18,
+  }))) ?? { x: layout.x, y: layout.baselineY - state.fontSize, width: 0, height: state.fontSize * 1.18 };
   return {
     glyphs: positioned,
+    lines,
     bounds,
-    baselineY,
-    originX,
-    advanceWidth: totalAdvance,
+    layoutBounds,
+    baselineY: layout.baselineY,
+    originX: lines[0]?.originX ?? layout.x,
+    advanceWidth: Math.max(0, ...lines.map((line) => line.advanceWidth)),
     sourceText: state.text,
     hasOutlines: positioned.some((glyph) => glyph.path.d.length > 0),
   };

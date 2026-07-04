@@ -101,6 +101,21 @@ describe("SVG export", () => {
     expect(geometry(second)).toEqual(geometry(first));
   });
 
+  it("preserves multiline editable text and indentation with tspans", () => {
+    const state = { ...lightState, text: "TYPE\n    FIELD", lineHeight: 1.2, exportMode: "editable" as const };
+    const svg = createSvg(state, { timeMs: 0, frame: 0 }, null);
+    const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+    const text = document.querySelector("text");
+    const tspans = [...document.querySelectorAll("tspan")];
+
+    expect(text?.getAttribute("xml:space")).toBe("preserve");
+    expect(tspans.map((tspan) => tspan.textContent)).toEqual(["TYPE", "    FIELD"]);
+    expect(Number(tspans[1].getAttribute("y")) - Number(tspans[0].getAttribute("y")))
+      .toBeCloseTo(state.fontSize * state.lineHeight);
+    expect(svg).not.toContain("<canvas");
+    expect(svg).not.toContain("<image");
+  });
+
   it("exports configured contour thickness as vector stroke width only for supported renderers", () => {
     const geometry = {
       id: "test-contour",
@@ -133,12 +148,38 @@ describe("SVG export", () => {
       contourStrokeWidth: 4,
     }, context, null, geometry);
 
-    expect(sdf).toContain('stroke-width="3.25"');
-    expect(wave).toContain('stroke-width="4"');
+    expect(sdf).toContain('stroke-width="0.8907"');
+    expect(wave).toContain('stroke-width="1.0963"');
     expect(dottedWave).toContain('stroke-width="1.15"');
     expect(flow).toContain('stroke-width="1.15"');
     expect(sdf).toContain("<polyline");
     expect(sdf).not.toMatch(/<image|<canvas|<foreignObject|data:image/i);
+  });
+
+  it.each([
+    ["SDF Contours", "sdf-contours"],
+    ["Wave Contours", "wave-contours"],
+  ] as const)("changes %s exported stroke width without changing contour geometry", (_label, renderer) => {
+    const geometry = {
+      id: `${renderer}-thickness-regression`,
+      geometries: [{
+        type: "polyline" as const,
+        points: [{ x: 10, y: 20 }, { x: 30, y: 40 }, { x: 50, y: 20 }],
+        opacity: 0.8,
+      }],
+    };
+    const project = { ...lightState, renderer, waveContourMode: "continuous" as const };
+    const defaultSvg = createSvg(project, context, null, geometry);
+    const thickSvg = createSvg({ ...project, contourStrokeWidth: 12 }, context, null, geometry);
+    const parse = (svg: string) => new DOMParser().parseFromString(svg, "image/svg+xml");
+
+    expect(defaultSvg).toContain('stroke-width="0.3837"');
+    expect(thickSvg).toContain('stroke-width="3.2889"');
+    expect(thickSvg).not.toBe(defaultSvg);
+    expect(parse(thickSvg).querySelectorAll("#generated-artwork polyline")).toHaveLength(
+      parse(defaultSvg).querySelectorAll("#generated-artwork polyline").length,
+    );
+    expect(thickSvg).not.toMatch(/<image|<canvas|<foreignObject|data:image/i);
   });
 
   it("keeps typography-enhanced Editable Text as one honest native text element", () => {

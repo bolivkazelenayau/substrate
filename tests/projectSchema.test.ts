@@ -3,9 +3,18 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
+  it("preserves multiline whitespace and repairs line height", () => {
+    const text = "TYPE\n    FIELD";
+    expect(validateProject({ ...baseState, text, lineHeight: 1.35 }).project).toMatchObject({ text, lineHeight: 1.35 });
+    expect(validateProject({ ...baseState, text, lineHeight: Infinity }).project.lineHeight).toBe(baseState.lineHeight);
+    expect(validateProject({ ...baseState, text, lineHeight: 99 }).project.lineHeight).toBe(2.5);
+  });
+
   it("defaults, repairs, and round-trips contour thickness", () => {
-    expect(validateProject({ version: 8 }).project.contourStrokeWidth).toBe(1.15);
-    expect(validateProject({ ...baseState, contourStrokeWidth: Number.NaN }).project.contourStrokeWidth).toBe(1.15);
+    expect(baseState.contourStrokeWidth).toBe(1.4);
+    expect(validateProject({ version: 8 }).project.contourStrokeWidth).toBe(1.4);
+    expect(validateProject({ version: 7, text: "LEGACY" }).project.contourStrokeWidth).toBe(1.4);
+    expect(validateProject({ ...baseState, contourStrokeWidth: Number.NaN }).project.contourStrokeWidth).toBe(1.4);
     expect(validateProject({ ...baseState, contourStrokeWidth: -20 }).project.contourStrokeWidth).toBe(0.25);
     expect(validateProject({ ...baseState, contourStrokeWidth: 999 }).project.contourStrokeWidth).toBe(16);
 
@@ -14,6 +23,7 @@ describe("project schema", () => {
       contourStrokeWidth: 3.25,
     }))).project;
     expect(restored.contourStrokeWidth).toBe(3.25);
+    expect(validateProject({ ...baseState, contourStrokeWidth: 1.15 }).project.contourStrokeWidth).toBe(1.15);
   });
 
   it("ignores runtime preview backend and quality fields on import", () => {

@@ -38,7 +38,7 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
         <div className="section-heading"><span>01</span><h2>Artwork</h2></div>
         <label className="field">
           <span>Text substrate</span>
-          <textarea value={state.text} rows={2} maxLength={28} onChange={(event) => patch({ text: event.target.value })} />
+          <textarea value={state.text} rows={3} maxLength={280} onChange={(event) => patch({ text: event.target.value })} />
         </label>
         <Range label="Size" value={state.fontSize} defaultValue={148} min={sizeBounds.min} max={sizeBounds.softMax} step={sizeBounds.step} onChange={(fontSize) => patch(centerPreservingTypographySizePatch(state, fontSize, textGeometry))} />
         <div className="font-loader">
@@ -62,6 +62,7 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
         {typographyOpen && (
           <div className="accordion-content">
             <Range label="Tracking" value={state.tracking} defaultValue={-3} min={-10} max={18} onChange={(tracking) => patch({ tracking })} />
+            <Range label="Line height" value={state.lineHeight} defaultValue={1} min={0.8} max={2.5} step={0.05} onChange={(lineHeight) => patch({ lineHeight })} />
             <div className="split">
               <label className="field compact-field">
                 <span>Kerning mode</span>

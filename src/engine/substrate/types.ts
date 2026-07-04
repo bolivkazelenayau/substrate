@@ -1,5 +1,5 @@
 import type { GlyphBounds, TextGeometry } from "../glyphGeometry";
-import type { KerningMode } from "../../types";
+import type { KerningMode, TextAlign } from "../../types";
 
 export interface SubstrateResolution {
   width: number;
@@ -75,6 +75,8 @@ export interface SubstrateBuildInput {
   fontWeight: number;
   baselineY: number;
   textX: number;
+  lineHeight?: number;
+  textAlign?: TextAlign;
   kerningMode?: KerningMode;
   resolution: SubstrateResolution;
   bounds: GlyphBounds | null;

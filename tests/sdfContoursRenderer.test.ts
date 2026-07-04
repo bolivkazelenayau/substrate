@@ -76,6 +76,14 @@ describe("SDF Contours renderer", () => {
     expect(group.diagnostics).toMatchObject({ substrateAvailable: true, fallback: false });
   });
 
+  it("keeps contour geometry unchanged when thickness changes", () => {
+    const renderer = getRenderer("sdf-contours");
+    const thin = renderer.generateGeometry({ ...state, contourStrokeWidth: 0.25 }, context);
+    const thick = renderer.generateGeometry({ ...state, contourStrokeWidth: 12 }, context);
+    expect(thick.geometries).toEqual(thin.geometries);
+    expect(renderer.strokeWidth?.({ ...state, contourStrokeWidth: 12 })).toBe(3.2889);
+  });
+
   it("is deterministic for identical state and context", () => {
     const renderer = getRenderer("sdf-contours");
     expect(renderer.generateGeometry(state, context)).toEqual(renderer.generateGeometry(state, context));
@@ -134,7 +142,7 @@ describe("SDF Contours renderer", () => {
     expect(group.diagnostics?.totalContourPoints).toBeLessThanOrEqual(75);
     expect(group.diagnostics).toMatchObject({
       maxNodesClipped: true,
-      warning: "Contour fragments were clipped by the maxNodes point budget.",
+      warning: "Contour detail was reduced by the maxNodes point budget.",
     });
   });
 

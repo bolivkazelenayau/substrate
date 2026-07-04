@@ -81,6 +81,31 @@ describe("font and glyph layout", () => {
     expect(tracked.advanceWidth - compact.advanceWidth).toBeCloseTo(30, 5);
   });
 
+  it("lays out multiline text with preserved indentation and empty lines", () => {
+    const state = { ...baseState, text: "TYPE\n\n    FIELD", lineHeight: 1.25, textAlign: "left" as const, font: loaded.metadata };
+    const geometry = layoutGlyphs(state, loaded);
+    const spaceAdvance = (loaded.font.charToGlyph(" ").advanceWidth ?? loaded.font.unitsPerEm)
+      * state.fontSize / loaded.font.unitsPerEm;
+
+    expect(geometry.lines).toHaveLength(3);
+    expect(geometry.lines![1].text).toBe("");
+    expect(geometry.lines![2].baselineY - geometry.lines![0].baselineY).toBeCloseTo(state.fontSize * state.lineHeight * 2);
+    expect(geometry.lines![2].originX).toBe(VIEWPORT.paddingX);
+    expect(geometry.glyphs.find((glyph) => glyph.lineIndex === 2 && glyph.character === "F")!.x)
+      .toBeCloseTo(VIEWPORT.paddingX + spaceAdvance * 4 + state.tracking * 4);
+    expect(geometry.layoutBounds!.height).toBeGreaterThan(state.fontSize * 2);
+  });
+
+  it("changes only multiline baseline spacing when line height changes", () => {
+    const single = layoutGlyphs({ ...baseState, text: "TYPE", lineHeight: 2, font: loaded.metadata }, loaded);
+    const compact = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 1, font: loaded.metadata }, loaded);
+    const loose = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 1.5, font: loaded.metadata }, loaded);
+
+    expect(single.baselineY).toBe(TEXT_LAYOUT.baselineY);
+    expect(loose.lines![1].baselineY - loose.lines![0].baselineY)
+      .toBeCloseTo((compact.lines![1].baselineY - compact.lines![0].baselineY) * 1.5);
+  });
+
   it("applies parsed-font kerning mode and strength predictably", () => {
     const text = "AV";
     const glyphs = Array.from(text).map((character) => loaded.font.charToGlyph(character));

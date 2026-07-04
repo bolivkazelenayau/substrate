@@ -29,6 +29,9 @@ export interface PositionedGlyph {
   glyphIndex: number;
   glyphName: string | null;
   advanceWidth: number;
+  lineIndex?: number;
+  glyphIndexInLine?: number;
+  globalGlyphIndex?: number;
   x: number;
   y: number;
   path: GlyphPath;
@@ -39,9 +42,20 @@ export interface PositionedGlyph {
   emitterEligible: boolean;
 }
 
+export interface TextLineGeometry {
+  lineIndex: number;
+  text: string;
+  originX: number;
+  baselineY: number;
+  advanceWidth: number;
+  bounds: GlyphBounds | null;
+}
+
 export interface TextGeometry {
   glyphs: PositionedGlyph[];
+  lines?: TextLineGeometry[];
   bounds: GlyphBounds | null;
+  layoutBounds?: GlyphBounds;
   baselineY: number;
   originX: number;
   advanceWidth: number;

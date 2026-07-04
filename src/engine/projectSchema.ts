@@ -155,8 +155,9 @@ export function validateProject(input: unknown): ProjectValidationResult {
       width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
       height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
     },
-    text: typeof source.text === "string" ? source.text.slice(0, 28) : baseState.text,
+    text: typeof source.text === "string" ? source.text.slice(0, 280) : baseState.text,
     fontSize: clamp(source.fontSize, baseState.fontSize, 1, SIZE_HARD_LIMITS.typographySize),
+    lineHeight: clamp(source.lineHeight, baseState.lineHeight, 0.8, 2.5),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
     kerningMode: enumValue(source.kerningMode, ["font", "none"], baseState.kerningMode),
     kerningStrength: clamp(source.kerningStrength, baseState.kerningStrength, 0, 2),
@@ -250,6 +251,6 @@ export function validateProject(input: unknown): ProjectValidationResult {
   };
 
   if (originalVersion < 8) warnings.push("Project was migrated to schema version 8.");
-  if (typeof source.text === "string" && source.text.length > 28) warnings.push("Text was truncated to 28 characters.");
+  if (typeof source.text === "string" && source.text.length > 280) warnings.push("Text was truncated to 280 characters.");
   return { project, warnings };
 }

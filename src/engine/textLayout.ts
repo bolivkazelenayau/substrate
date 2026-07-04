@@ -12,11 +12,20 @@ export interface TextLayout {
   fontSize: number;
   tracking: number;
   text: string;
+  lineAdvance: number;
+  lines: Array<{
+    lineIndex: number;
+    text: string;
+    x: number;
+    originX: number;
+    baselineY: number;
+    advanceWidth: number;
+  }>;
 }
 
-function estimatedTextAdvance(state: ProjectState) {
-  return state.text.length * state.fontSize * 0.66
-    + Math.max(0, state.text.length - 1) * state.tracking;
+function estimatedLineAdvance(state: ProjectState, text: string) {
+  const length = Array.from(text).length;
+  return length * state.fontSize * 0.66 + Math.max(0, length - 1) * state.tracking;
 }
 
 function alignedBoundsX(state: ProjectState, width: number) {
@@ -27,27 +36,51 @@ function alignedBoundsX(state: ProjectState, width: number) {
 }
 
 export function getTextLayout(state: ProjectState, useCustomFont = true): TextLayout {
-  const width = estimatedTextAdvance(state);
-  const boundsX = alignedBoundsX(state, width);
+  const sourceLines = state.text.replace(/\r\n?/g, "\n").split("\n");
+  const lineAdvance = state.fontSize * state.lineHeight;
+  const firstBaselineY = TEXT_LAYOUT.baselineY + state.textOffsetY - (sourceLines.length - 1) * lineAdvance / 2;
+  const lines = sourceLines.map((text, lineIndex) => {
+    const advanceWidth = estimatedLineAdvance(state, text);
+    const originX = alignedBoundsX(state, advanceWidth);
+    return {
+      lineIndex,
+      text,
+      originX,
+      x: originX + advanceWidth / 2,
+      baselineY: firstBaselineY + lineIndex * lineAdvance,
+      advanceWidth,
+    };
+  });
+  const first = lines[0];
   return {
     ...TEXT_LAYOUT,
-    x: boundsX + width / 2,
-    baselineY: TEXT_LAYOUT.baselineY + state.textOffsetY,
+    x: first.x,
+    baselineY: first.baselineY,
     fontFamily: useCustomFont ? state.font?.family ?? TEXT_LAYOUT.fontFamily : TEXT_LAYOUT.fontFamily,
     fontSize: state.fontSize,
     tracking: state.tracking,
     text: state.text,
+    lineAdvance,
+    lines,
   };
 }
 
 export function getTextLayoutBounds(state: ProjectState) {
-  const estimatedWidth = estimatedTextAdvance(state);
-  return {
-    x: alignedBoundsX(state, estimatedWidth),
-    y: TEXT_LAYOUT.baselineY + state.textOffsetY - state.fontSize,
-    width: estimatedWidth,
+  const layout = getTextLayout(state);
+  return unionRectangles(layout.lines.map((line) => ({
+    x: line.originX,
+    y: line.baselineY - state.fontSize,
+    width: line.advanceWidth,
     height: state.fontSize * 1.18,
-  };
+  })));
+}
+
+function unionRectangles(rectangles: Array<{ x: number; y: number; width: number; height: number }>) {
+  const x1 = Math.min(...rectangles.map((rect) => rect.x));
+  const y1 = Math.min(...rectangles.map((rect) => rect.y));
+  const x2 = Math.max(...rectangles.map((rect) => rect.x + rect.width));
+  const y2 = Math.max(...rectangles.map((rect) => rect.y + rect.height));
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
 }
 
 export function getApproximateTextInkBounds(state: ProjectState) {

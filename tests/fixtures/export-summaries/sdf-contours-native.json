@@ -4,12 +4,12 @@
     "path": 0,
     "circle": 0,
     "line": 0,
-    "polyline": 124,
+    "polyline": 254,
     "image": 0,
     "canvas": 0,
     "foreignObject": 0
   },
   "hasDataImage": false,
   "hasBase64": false,
-  "canonicalHash": "26d7c9294899007f45800c1c7331c172b701ff8e740dccc4124300f4e42fc15d"
+  "canonicalHash": "5d32db13e9b241a804a1f5b15ff1ef0e1ab11e037902c342f9c4551b4d92fd3f"
 }

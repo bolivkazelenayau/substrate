@@ -18,7 +18,7 @@ export function resolveTextBoundsModel(
   const glyphUnionBounds = textGeometry?.hasOutlines ? textGeometry.bounds : null;
   return {
     layoutBounds: textGeometry?.hasOutlines
-      ? {
+      ? textGeometry.layoutBounds ?? {
           x: textGeometry.originX,
           y: textGeometry.baselineY - state.fontSize,
           width: textGeometry.advanceWidth,

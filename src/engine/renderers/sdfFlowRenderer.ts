@@ -5,6 +5,7 @@ import type { VectorRenderer } from "./types";
 import { requestedMarkCount, simpleCost } from "./types";
 import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
 import { contextArtboard } from "../artboard";
+import { resolveSdfScaleContext } from "../sdfScale";
 
 export const sdfFlowRenderer: VectorRenderer = {
   id: "sdf-flow",
@@ -13,6 +14,7 @@ export const sdfFlowRenderer: VectorRenderer = {
   svgElementType: "line",
   usesTime: false,
   usesSubstrate: true,
+  strokeWidth: (state) => resolveSdfScaleContext(state).world(1.4, 0.1, 16),
   estimateCost: (state) => simpleCost(state, "paths"),
   generateGeometry(state, context) {
     const artboard = contextArtboard(context);
@@ -33,16 +35,18 @@ export const sdfFlowRenderer: VectorRenderer = {
     }
 
     const random = createSeededRandom(state.seed);
+    const sdfScale = resolveSdfScaleContext(state);
     const target = requestedMarkCount(state);
     const maxAttempts = Math.max(target * 14, 500);
     const geometries: LineSegment[] = [];
     const influence = state.edgeInfluence / 100;
     const edgeBand = Math.max(2, state.fontSize * (0.42 - influence * 0.34));
     const bounds = substrate.bounds;
-    const minX = Math.max(0, (bounds?.x ?? 0) - 8);
-    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + 8);
-    const minY = Math.max(0, (bounds?.y ?? 0) - 8);
-    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + 8);
+    const samplingPadding = sdfScale.world(8, 1);
+    const minX = Math.max(0, (bounds?.x ?? 0) - samplingPadding);
+    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + samplingPadding);
+    const minY = Math.max(0, (bounds?.y ?? 0) - samplingPadding);
+    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + samplingPadding);
     const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
       x: minX,
       y: minY,
@@ -72,7 +76,7 @@ export const sdfFlowRenderer: VectorRenderer = {
       const tangentAngle = Math.atan2(normalX, -normalY);
       const perturbation = (random() - 0.5) * (state.turbulence / 100) * 0.9;
       const angle = tangentAngle + perturbation;
-      const length = Math.max(1, state.amplitude * (0.45 + random() * 0.55) * (0.72 + edgeProximity * 0.28));
+      const length = Math.max(0.5, sdfScale.world(state.amplitude * (0.45 + random() * 0.55) * (0.72 + edgeProximity * 0.28), 0.5));
       const opacity = Math.min(0.96, 0.24 + edgeStrength * (0.35 + influence * 0.35) + random() * 0.12);
 
       geometries.push({

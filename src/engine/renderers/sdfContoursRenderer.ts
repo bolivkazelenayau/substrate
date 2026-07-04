@@ -3,17 +3,13 @@ import { sampleDistanceGradient, sampleMask, type SubstrateData } from "../subst
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { budgetContourFragmentsFairly } from "../contourBudget";
-import { configuredContourStrokeWidth } from "../contourStroke";
+import { resolveContourStrokeWidth } from "../contourStroke";
+import { resolveSdfScaleContext } from "../sdfScale";
 
 interface Segment {
   a: Point;
   b: Point;
 }
-
-// Preserve the historical budget selection for projects that were representable
-// before contextual typography sizing. Fair decimation applies only to the newly
-// reachable large-type range, keeping canonical exports byte-stable.
-const LEGACY_CONTOUR_BUDGET_SIZE_LIMIT = 220;
 
 // Numeric hash for a quantized point coordinate. Same quantization as the previous
 // `${Math.round(point.x*100)},${Math.round(point.y*100)}` string key, packed into
@@ -168,8 +164,10 @@ function fragmentLength(points: Point[]) {
   return length;
 }
 
-function cleanFragment(points: Point[]) {
-  const deduplicated = points.filter((point, index) => index === 0 || pointDistance(points[index - 1], point) > 0.12);
+function cleanFragment(points: Point[], scale: number) {
+  const deduplicateDistance = Math.max(0.03, 0.12 * scale);
+  const simplifyDistance = Math.max(0.05, 0.22 * scale);
+  const deduplicated = points.filter((point, index) => index === 0 || pointDistance(points[index - 1], point) > deduplicateDistance);
   if (deduplicated.length < 3) return deduplicated;
   const simplified = [deduplicated[0]];
   for (let index = 1; index < deduplicated.length - 1; index += 1) {
@@ -179,7 +177,7 @@ function cleanFragment(points: Point[]) {
     const span = pointDistance(previous, next);
     const areaTwice = Math.abs((current.x - previous.x) * (next.y - previous.y) - (current.y - previous.y) * (next.x - previous.x));
     const perpendicularDistance = span > 0 ? areaTwice / span : 0;
-    if (perpendicularDistance >= 0.22) simplified.push(current);
+    if (perpendicularDistance >= simplifyDistance) simplified.push(current);
   }
   simplified.push(deduplicated[deduplicated.length - 1]);
   return simplified;
@@ -190,9 +188,9 @@ function deterministicNoise(seed: number, x: number, y: number) {
   return value - Math.floor(value);
 }
 
-function displaceFragment(points: Point[], substrate: SubstrateData, turbulence: number, seed: number) {
+function displaceFragment(points: Point[], substrate: SubstrateData, turbulence: number, seed: number, scale: number) {
   if (turbulence <= 0) return points;
-  const maximum = Math.min(substrate.scaleX, substrate.scaleY) * 0.38 * turbulence;
+  const maximum = Math.min(substrate.scaleX, substrate.scaleY) * 0.38 * turbulence * scale;
   return points.map((point, index) => {
     const gradient = sampleDistanceGradient(substrate, point.x, point.y);
     if (!Number.isFinite(gradient.magnitude) || gradient.magnitude < 0.01) return point;
@@ -230,7 +228,7 @@ export const sdfContoursRenderer: VectorRenderer = {
   svgElementType: "polyline",
   usesTime: false,
   usesSubstrate: true,
-  strokeWidth: configuredContourStrokeWidth,
+  strokeWidth: resolveContourStrokeWidth,
   estimateCost: (state) => ({ marks: Math.max(2, Math.round(1 + state.density / 7)), nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} points` }),
   generateGeometry(state, context) {
     const substrate = context.substrateData;
@@ -239,11 +237,15 @@ export const sdfContoursRenderer: VectorRenderer = {
     }
 
     const maxPositiveDistance = substrate.diagnostics.maxDistance;
+    const sdfScale = resolveSdfScaleContext(state);
     const glyph = getGlyphFieldSampler(state, context);
     const requestedLevels = Math.max(2, Math.min(14, Math.round(1 + state.density / 7)));
     const influence = state.edgeInfluence / 100;
     const amplitudeFactor = 0.35 + ((state.amplitude - 2) / 42) * 0.65;
-    const minimumLevel = Math.min(maxPositiveDistance * 0.65, Math.max(0.75, (substrate.scaleX + substrate.scaleY) * 0.38));
+    const minimumLevel = Math.min(
+      maxPositiveDistance * 0.65,
+      Math.max(0.2, (substrate.scaleX + substrate.scaleY) * 0.38 * sdfScale.scale),
+    );
     const maximumLevel = Math.max(minimumLevel, maxPositiveDistance * amplitudeFactor * (1 - influence * 0.74));
     const levels = Array.from({ length: requestedLevels }, (_, index) => {
       const amount = requestedLevels === 1 ? 0 : index / (requestedLevels - 1);
@@ -264,8 +266,8 @@ export const sdfContoursRenderer: VectorRenderer = {
       const fragments = stitchSegments(extractSegments(substrate, level));
       fragments.forEach((rawFragment) => {
         extractedFragments += 1;
-        const cleaned = cleanFragment(rawFragment);
-        const displaced = displaceFragment(cleaned, substrate, state.turbulence / 100, state.seed + levelIndex * 1009).map((point) => {
+        const cleaned = cleanFragment(rawFragment, sdfScale.scale);
+        const displaced = displaceFragment(cleaned, substrate, state.turbulence / 100, state.seed + levelIndex * 1009, sdfScale.scale).map((point) => {
           if (!glyph.enabled) return point;
           const value = glyph.value(point.x, point.y);
           fieldValueTotal += Math.abs(value);
@@ -275,7 +277,7 @@ export const sdfContoursRenderer: VectorRenderer = {
           const sdfNormal = sampleDistanceGradient(substrate, point.x, point.y);
           const normalMagnitude = sdfNormal.magnitude;
           if (!Number.isFinite(normalMagnitude) || normalMagnitude < 0.01) return point;
-          const amount = value * state.glyphFieldDisplacement * glyph.strength;
+          const amount = value * sdfScale.world(state.glyphFieldDisplacement) * glyph.strength;
           const candidate = { x: point.x + sdfNormal.x / normalMagnitude * amount, y: point.y + sdfNormal.y / normalMagnitude * amount };
           if (!fieldGradient.finite || sampleMask(substrate, candidate.x, candidate.y) < 0.48) {
             rejectedDisplacedCandidates += 1;
@@ -285,7 +287,7 @@ export const sdfContoursRenderer: VectorRenderer = {
           return candidate;
         });
         const length = fragmentLength(displaced);
-        if (displaced.length < 3 || length < Math.min(substrate.scaleX, substrate.scaleY) * 1.5) {
+        if (displaced.length < 3 || length < Math.min(substrate.scaleX, substrate.scaleY) * 1.5 * sdfScale.scale) {
           skippedFragments += 1;
           return;
         }
@@ -296,31 +298,7 @@ export const sdfContoursRenderer: VectorRenderer = {
         candidates.push({ points: displaced, payload: { level, levelIndex } });
       });
     });
-    const usesFairBudget = state.fontSize > LEGACY_CONTOUR_BUDGET_SIZE_LIMIT;
-    const budgeted = usesFairBudget
-      ? budgetContourFragmentsFairly(candidates, state.maxNodes)
-      : (() => {
-          const fragments = [];
-          let retainedPointCount = 0;
-          let budgetLimited = false;
-          for (const candidate of candidates) {
-            if (retainedPointCount + candidate.points.length > state.maxNodes) {
-              budgetLimited = true;
-              continue;
-            }
-            fragments.push(candidate);
-            retainedPointCount += candidate.points.length;
-          }
-          return {
-            fragments,
-            originalFragmentCount: candidates.length,
-            retainedFragmentCount: fragments.length,
-            originalPointCount: candidates.reduce((sum, candidate) => sum + candidate.points.length, 0),
-            retainedPointCount,
-            budgetLimited,
-            strategy: "none" as const,
-          };
-        })();
+    const budgeted = budgetContourFragmentsFairly(candidates, state.maxNodes);
     const geometries: Polyline[] = budgeted.fragments.map(({ points, payload }) => ({
       type: "polyline",
       points,
@@ -355,9 +333,7 @@ export const sdfContoursRenderer: VectorRenderer = {
         rejectedDisplacedCandidates,
         fieldInfluencedAcceptanceCount: 0,
         warning: budgeted.budgetLimited
-          ? usesFairBudget
-            ? "Contour detail was reduced by the maxNodes point budget."
-            : "Contour fragments were clipped by the maxNodes point budget."
+          ? "Contour detail was reduced by the maxNodes point budget."
           : undefined,
       },
     };

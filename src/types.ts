@@ -97,6 +97,7 @@ export interface ProjectState {
   };
   text: string;
   fontSize: number;
+  lineHeight: number;
   tracking: number;
   kerningMode: KerningMode;
   kerningStrength: number;

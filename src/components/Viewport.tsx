@@ -29,6 +29,7 @@ import { buildGlyphSamplingDiagnostics } from "../engine/rendererSampling";
 import { resolveTextBoundsModel } from "../engine/textBounds";
 import { projectArtboard } from "../engine/artboard";
 import type { ArtboardExpansionPlan } from "../engine/artboardExpansion";
+import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -182,7 +183,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
             </mask>
           )}
         </defs>
-        <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }} strokeWidth={renderer.strokeWidth?.(state)}>
+        <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }} strokeWidth={renderer.strokeWidth?.(state) ?? LEGACY_PREVIEW_STROKE_WIDTH}>
           {state.renderer === "flow" && previewBackend === "svg-dom"
             ? <FlowPreview
                 geometry={geometry}
@@ -229,7 +230,9 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         )}
         {state.debug.maskBounds && diagnosticsExpanded && <rect className="debug-layout-bounds" x={textBounds.layoutBounds.x} y={textBounds.layoutBounds.y} width={textBounds.layoutBounds.width} height={textBounds.layoutBounds.height} />}
         {state.debug.maskBounds && <rect className="debug-line" x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} />}
-        {state.debug.baseline && <line className="debug-baseline" x1="0" y1={layout.baselineY} x2={artboard.width} y2={layout.baselineY} />}
+        {state.debug.baseline && layout.lines.map((line) => (
+          <line key={line.lineIndex} className="debug-baseline" x1="0" y1={line.baselineY} x2={artboard.width} y2={line.baselineY} />
+        ))}
         {state.debug.glyphOrigins && hasGlyphPaths && (
           <g className="debug-glyph-origins">
             {textGeometry!.glyphs.map((glyph) => <circle key={glyph.textIndex} cx={glyph.x} cy={glyph.y} r="3" />)}

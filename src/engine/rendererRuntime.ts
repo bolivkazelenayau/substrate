@@ -101,6 +101,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     state.text,
     state.font?.fileName ?? "native",
     state.fontSize,
+    state.lineHeight,
     state.tracking,
     state.density,
     state.amplitude,

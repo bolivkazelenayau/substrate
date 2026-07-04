@@ -1,7 +1,8 @@
 import type { CircleMark, Point, Polyline, RendererDiagnostics } from "../geometry";
 import { buildCompositeWaveField, type CompositeWaveField } from "../field/compositeWaveField";
 import type { VectorRenderer } from "./types";
-import { configuredContourStrokeWidth } from "../contourStroke";
+import { resolveContourStrokeWidth } from "../contourStroke";
+import { resolveSdfScaleContext } from "../sdfScale";
 
 interface Segment { a: Point; b: Point }
 
@@ -162,13 +163,14 @@ export const waveContoursRenderer: VectorRenderer = {
   usesTime: false,
   usesSubstrate: true,
   strokeWidth: (state) => state.waveContourMode === "continuous"
-    ? configuredContourStrokeWidth(state)
+    ? resolveContourStrokeWidth(state)
     : undefined,
   estimateCost: (state) => ({ marks: Math.round(state.density / 5), nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} nodes` }),
   generateGeometry(state, context) {
     const field = context.glyphField ?? buildCompositeWaveField(state, context);
     if (!field) return { id: "wave-contours", geometries: [], diagnostics: fallback("Wave Contours requires an enabled glyph emitter and non-empty substrate.") };
     const extractionStarted = performance.now();
+    const sdfScale = resolveSdfScaleContext(state);
     const levelCount = Math.max(3, Math.min(18, Math.round(state.density / 5)));
     const magnitude = Math.max(Math.abs(field.min), Math.abs(field.max));
     const levels = Array.from({ length: levelCount }, (_, index) => -magnitude * 0.88 + index / Math.max(1, levelCount - 1) * magnitude * 1.76);
@@ -181,7 +183,12 @@ export const waveContoursRenderer: VectorRenderer = {
         if (points.length < 3) continue;
         fragments += 1;
         if (state.waveContourMode === "dotted") {
-          const dots = resample(points, state.waveDotSpacing, state.waveDotRadius, state.maxNodes - geometries.length);
+          const dots = resample(
+            points,
+            sdfScale.world(state.waveDotSpacing, 1),
+            sdfScale.world(state.waveDotRadius, 0.2),
+            state.maxNodes - geometries.length,
+          );
           geometries.push(...dots);
           if (geometries.length >= state.maxNodes) clipped = true;
         } else if (pointCount + points.length <= state.maxNodes) {

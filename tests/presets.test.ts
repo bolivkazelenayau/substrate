@@ -22,6 +22,13 @@ describe("presets", () => {
     expect(Object.keys(presets)).toEqual(expectedPresetIds.slice(0, -1));
   });
 
+  it("inherits the legacy-visible contour thickness without preset overrides", () => {
+    expect(baseState.contourStrokeWidth).toBe(1.4);
+    Object.values(presets).forEach((preset) => {
+      expect(preset).not.toHaveProperty("contourStrokeWidth");
+    });
+  });
+
   it("provides unique, formatted study metadata for every built-in preset", () => {
     const builtInIds = presetIds.slice(0, -1);
     const builtInMetadata = builtInIds.map((preset) => presetMetadata[preset]);

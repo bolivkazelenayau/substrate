@@ -5,8 +5,8 @@ import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
 import { contextArtboard } from "../artboard";
+import { resolveSdfScaleContext } from "../sdfScale";
 
-const OCCUPANCY_CELL_SIZE = 11;
 const MIN_POLYLINE_POINTS = 4;
 
 function deterministicNoise(seed: number, x: number, y: number) {
@@ -14,14 +14,14 @@ function deterministicNoise(seed: number, x: number, y: number) {
   return value - Math.floor(value);
 }
 
-function occupancyIndex(x: number, y: number, width: number, height: number) {
-  const cellX = Math.max(0, Math.min(width - 1, Math.floor(x / OCCUPANCY_CELL_SIZE)));
-  const cellY = Math.max(0, Math.min(height - 1, Math.floor(y / OCCUPANCY_CELL_SIZE)));
+function occupancyIndex(x: number, y: number, width: number, height: number, cellSize: number) {
+  const cellX = Math.max(0, Math.min(width - 1, Math.floor(x / cellSize)));
+  const cellY = Math.max(0, Math.min(height - 1, Math.floor(y / cellSize)));
   return { cellX, cellY, index: cellY * width + cellX };
 }
 
-function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: number, height: number) {
-  const cell = occupancyIndex(x, y, width, height);
+function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: number, height: number, cellSize: number) {
+  const cell = occupancyIndex(x, y, width, height, cellSize);
   for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
     for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
       const nx = cell.cellX + offsetX;
@@ -32,9 +32,9 @@ function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: nu
   return false;
 }
 
-function markOccupied(occupancy: Uint8Array, points: Point[], width: number, height: number) {
+function markOccupied(occupancy: Uint8Array, points: Point[], width: number, height: number, cellSize: number) {
   points.forEach((point) => {
-    occupancy[occupancyIndex(point.x, point.y, width, height).index] = 1;
+    occupancy[occupancyIndex(point.x, point.y, width, height, cellSize).index] = 1;
   });
 }
 
@@ -55,6 +55,7 @@ function traceHalf(
   occupancy: Uint8Array,
   occupancyWidth: number,
   occupancyHeight: number,
+  occupancyCellSize: number,
   counters: TraceCounters,
   pointBudget: number,
   glyph: ReturnType<typeof getGlyphFieldSampler>,
@@ -103,7 +104,7 @@ function traceHalf(
       counters.stoppedInvalidGradient += 1;
       break;
     }
-    if (isOccupiedNearby(occupancy, next.x, next.y, occupancyWidth, occupancyHeight)) {
+    if (isOccupiedNearby(occupancy, next.x, next.y, occupancyWidth, occupancyHeight, occupancyCellSize)) {
       counters.occupancyRejections += 1;
       break;
     }
@@ -140,6 +141,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
   svgElementType: "polyline",
   usesTime: false,
   usesSubstrate: true,
+  strokeWidth: (state) => resolveSdfScaleContext(state).world(1.4, 0.1, 16),
   estimateCost(state) {
     const requested = Math.max(1, Math.round(state.density * 0.75));
     return { marks: requested, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} points` };
@@ -152,21 +154,24 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
     }
 
     const random = createSeededRandom(state.seed);
+    const sdfScale = resolveSdfScaleContext(state);
     const glyph = getGlyphFieldSampler(state, context);
     const requestedStreamlines = Math.max(1, Math.round(state.density * 0.75));
     const maxSteps = Math.max(6, Math.min(48, Math.round(5 + state.amplitude * 0.95)));
-    const stepSize = Math.max(1.5, 2.2 + state.amplitude * 0.09);
+    const stepSize = sdfScale.world(2.2 + state.amplitude * 0.09, 0.5);
     const maxSeedAttempts = requestedStreamlines * 35;
-    const occupancyWidth = Math.ceil(artboard.width / OCCUPANCY_CELL_SIZE);
-    const occupancyHeight = Math.ceil(artboard.height / OCCUPANCY_CELL_SIZE);
+    const occupancyCellSize = sdfScale.world(11, 2);
+    const occupancyWidth = Math.ceil(artboard.width / occupancyCellSize);
+    const occupancyHeight = Math.ceil(artboard.height / occupancyCellSize);
     const occupancy = new Uint8Array(occupancyWidth * occupancyHeight);
     const influence = state.edgeInfluence / 100;
     const edgeBand = Math.max(2, state.fontSize * (0.46 - influence * 0.37));
     const bounds = substrate.bounds;
-    const minX = Math.max(0, (bounds?.x ?? 0) - 5);
-    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + 5);
-    const minY = Math.max(0, (bounds?.y ?? 0) - 5);
-    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + 5);
+    const samplingPadding = sdfScale.world(5, 1);
+    const minX = Math.max(0, (bounds?.x ?? 0) - samplingPadding);
+    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + samplingPadding);
+    const minY = Math.max(0, (bounds?.y ?? 0) - samplingPadding);
+    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + samplingPadding);
     const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
       x: minX,
       y: minY,
@@ -193,7 +198,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
         rejectedSeeds += 1;
         continue;
       }
-      if (isOccupiedNearby(occupancy, seedPoint.x, seedPoint.y, occupancyWidth, occupancyHeight)) {
+      if (isOccupiedNearby(occupancy, seedPoint.x, seedPoint.y, occupancyWidth, occupancyHeight, occupancyCellSize)) {
         rejectedSeeds += 1;
         counters.occupancyRejections += 1;
         continue;
@@ -219,16 +224,17 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
       // every emitted point after the streamline is accepted. The seed point's
       // distance was sampled above and is added separately below.
       const streamlineDistance = { value: 0 };
-      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, counters, halfBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance, artboard);
+      const glyphDisplacement = sdfScale.world(state.glyphFieldDisplacement);
+      const forward = traceHalf(substrate, seedPoint, directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed, occupancy, occupancyWidth, occupancyHeight, occupancyCellSize, counters, halfBudget, glyph, glyphDisplacement, glyphStats, streamlineDistance, artboard);
       const backwardBudget = Math.max(0, remaining - 1 - forward.length);
-      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, counters, backwardBudget, glyph, state.glyphFieldDisplacement, glyphStats, streamlineDistance, artboard);
+      const backward = traceHalf(substrate, seedPoint, -directionSign, stepSize, maxSteps, state.turbulence / 100, state.seed + 7919, occupancy, occupancyWidth, occupancyHeight, occupancyCellSize, counters, backwardBudget, glyph, glyphDisplacement, glyphStats, streamlineDistance, artboard);
       const points = [...backward.reverse(), seedPoint, ...forward];
       if (points.length < MIN_POLYLINE_POINTS) {
         rejectedSeeds += 1;
         continue;
       }
 
-      markOccupied(occupancy, points, occupancyWidth, occupancyHeight);
+      markOccupied(occupancy, points, occupancyWidth, occupancyHeight, occupancyCellSize);
       sampledDistanceTotal += streamlineDistance.value + distance;
       totalPoints += points.length;
       polylines.push({

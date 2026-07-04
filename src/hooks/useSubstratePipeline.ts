@@ -24,6 +24,8 @@ export function useSubstratePipeline(project: ProjectState, textGeometry: TextGe
       fontWeight: layout.fontWeight,
       baselineY: layout.baselineY,
       textX: layout.x,
+      lineHeight: project.lineHeight,
+      textAlign: project.textAlign,
       kerningMode: project.kerningMode,
       resolution: {
         width: Math.round(baseResolution.width * domain.resolutionScaleX),

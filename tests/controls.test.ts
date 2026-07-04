@@ -324,15 +324,15 @@ describe("Safe Typography controls", () => {
   it("shows contour thickness only for continuous contour renderers", () => {
     renderControls({ ...baseState, renderer: "sdf-contours" });
     openDisclosure("Advanced Parameters");
-    expect(field("Contour thickness", "input").value).toBe("1.15");
-    expect(container.textContent).toContain("Controls the vector stroke width");
+    expect(field("Contour thickness", "input").value).toBe("1.4");
+    expect(container.textContent).toContain("Normalized contour weight; scales with typography size.");
 
     renderControls({ ...baseState, renderer: "flow" });
     expect(container.textContent).not.toContain("Contour thickness");
 
     renderControls({ ...baseState, renderer: "wave-contours", waveContourMode: "continuous" });
     openDisclosure("Advanced Parameters");
-    expect(field("Contour thickness", "input").value).toBe("1.15");
+    expect(field("Contour thickness", "input").value).toBe("1.4");
 
     renderControls({ ...baseState, renderer: "wave-contours", waveContourMode: "dotted" });
     expect(container.textContent).not.toContain("Contour thickness");

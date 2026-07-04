@@ -77,7 +77,7 @@ export function AdvancedFieldPanel({ state, setState, parsedFontPathsAvailable, 
                 min={CONTOUR_STROKE_WIDTH_LIMITS.min}
                 max={CONTOUR_STROKE_WIDTH_LIMITS.softMax}
                 step={0.25}
-                description="Controls the vector stroke width of generated contour lines."
+                description="Normalized contour weight; scales with typography size."
                 onChange={(contourStrokeWidth) => patchField({ contourStrokeWidth })}
               />
             )}

@@ -94,7 +94,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
         context2d.fillStyle = "#fff";
         context2d.font = `${layout.fontWeight} ${layout.fontSize}px ${layout.fontFamily}`;
         context2d.textAlign = "center";
-        context2d.fillText(layout.text, layout.x, layout.baselineY);
+        layout.lines.forEach((line) => context2d.fillText(line.text, line.x, line.baselineY));
       }
       context2d.restore();
       return { renderContext, drawTimeMs: Math.max(0, performance.now() - started) };

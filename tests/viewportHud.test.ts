@@ -150,16 +150,16 @@ describe("viewport space separation", () => {
     expect(expanded).toBe(true);
   });
 
-  it("uses configured contour thickness in the SVG preview", () => {
-    const state = {
-      ...baseState,
-      renderer: "sdf-contours" as const,
-      contourStrokeWidth: 3.25,
-    };
+  it.each(["sdf-contours", "wave-contours"] as const)("uses configured contour thickness in the %s SVG preview", (renderer) => {
     const baseViewport = viewport("off");
     act(() => root.render(createElement(CanvasNavigation, null, createElement(Viewport, {
       ...baseViewport.props,
-      state,
+      state: {
+        ...baseState,
+        renderer,
+        waveContourMode: "continuous",
+        contourStrokeWidth: 12,
+      },
       geometry: {
         id: "preview-contour",
         geometries: [{
@@ -169,6 +169,6 @@ describe("viewport space separation", () => {
         }],
       },
     }))));
-    expect(container.querySelector("#generated-artwork")?.getAttribute("stroke-width")).toBe("3.25");
+    expect(container.querySelector("#generated-artwork")?.getAttribute("stroke-width")).toBe("3.2889");
   });
 });

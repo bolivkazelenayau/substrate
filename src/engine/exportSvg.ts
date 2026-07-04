@@ -35,7 +35,13 @@ function serializeText(state: ProjectState, fill: string, visibility?: "hidden",
   const layout = getTextLayout(state, useCustomFont);
   const hidden = visibility ? ` visibility="${visibility}"` : "";
   const fontKerning = state.kerningMode === "none" ? ' font-kerning="none"' : "";
-  return `<text x="${layout.x}" y="${layout.baselineY}" text-anchor="${layout.anchor}" font-family="${escape(layout.fontFamily)}" font-size="${layout.fontSize}" font-weight="${layout.fontWeight}" letter-spacing="${layout.tracking}"${fontKerning} fill="${fill}"${hidden}>${escape(layout.text)}</text>`;
+  const content = layout.lines.length === 1
+    ? escape(layout.text)
+    : layout.lines.map((line) =>
+      `<tspan x="${line.x}" y="${line.baselineY}">${escape(line.text)}</tspan>`,
+    ).join("");
+  const preserveWhitespace = layout.lines.length > 1 || /(^|\n) | {2}/.test(layout.text) ? ' xml:space="preserve"' : "";
+  return `<text x="${layout.x}" y="${layout.baselineY}"${preserveWhitespace} text-anchor="${layout.anchor}" font-family="${escape(layout.fontFamily)}" font-size="${layout.fontSize}" font-weight="${layout.fontWeight}" letter-spacing="${layout.tracking}"${fontKerning} fill="${fill}"${hidden}>${content}</text>`;
 }
 
 function serializeGlyphPaths(textGeometry: TextGeometry) {
@@ -58,11 +64,12 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
   const timestamp = new Date().toISOString();
   const metadataProject = width === 1200 && height === 720
     ? (() => {
-        const { artboard: _artboard, version: _version, contourStrokeWidth, ...legacyProject } = state;
+        const { artboard: _artboard, version: _version, contourStrokeWidth, lineHeight, ...legacyProject } = state;
+        const typographyProject = lineHeight === 1 ? legacyProject : { ...legacyProject, lineHeight };
         if (contourStrokeWidth !== DEFAULT_CONTOUR_STROKE_WIDTH) {
-          return { version: 7, ...legacyProject, contourStrokeWidth };
+          return { version: 7, ...typographyProject, contourStrokeWidth };
         }
-        return { version: 7, ...legacyProject };
+        return { version: 7, ...typographyProject };
       })()
     : state;
   const metadata = {

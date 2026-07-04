@@ -363,6 +363,14 @@ describe("Wave Contours renderer", () => {
     });
   });
 
+  it("keeps continuous contour geometry unchanged when thickness changes", () => {
+    const renderer = getRenderer("wave-contours");
+    const thin = renderer.generateGeometry({ ...state, contourStrokeWidth: 0.25 }, context);
+    const thick = renderer.generateGeometry({ ...state, contourStrokeWidth: 12 }, context);
+    expect(thick.geometries).toEqual(thin.geometries);
+    expect(renderer.strokeWidth?.({ ...state, contourStrokeWidth: 12 })).toBe(3.2889);
+  });
+
   it("enforces maxNodes in continuous and dotted modes", () => {
     const renderer = getRenderer("wave-contours");
     const continuous = renderer.generateGeometry({ ...state, maxNodes: 80 }, context);
