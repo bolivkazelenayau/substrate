@@ -14,6 +14,28 @@ export interface ArtboardExpansionPlan {
 
 export const AUTO_GROW_ARTBOARD_WARNING = "Auto-grow could not contain artwork within safe artboard limits.";
 
+export function artboardExpansionInputKey(
+  state: ProjectState,
+  textGeometry: TextGeometry | null,
+): string {
+  const bounds = textGeometry?.hasOutlines ? textGeometry.bounds : null;
+  return [
+    state.artboard.width,
+    state.artboard.height,
+    state.text,
+    state.fontSize,
+    state.lineHeight,
+    state.tracking,
+    state.textAlign,
+    state.textOffsetY,
+    textGeometry?.hasOutlines ? 1 : 0,
+    bounds?.x ?? "",
+    bounds?.y ?? "",
+    bounds?.width ?? "",
+    bounds?.height ?? "",
+  ].join(":");
+}
+
 export function artboardExpansionTriggerKey(plan: ArtboardExpansionPlan): string {
   const { projectedInkBounds } = plan;
   return [
@@ -34,7 +56,10 @@ export function planArtboardExpansionToText(
   textGeometry: TextGeometry | null,
 ): ArtboardExpansionPlan {
   const inkBounds = resolveTextBoundsModel(state, textGeometry).inkBounds;
-  const padding = Math.max(48, 0.04 * Math.max(state.artboard.width, state.artboard.height));
+  // Padding must be independent of the current artboard dimensions. Artboard-
+  // relative padding creates a feedback loop where every growth increases the
+  // required padding and schedules another visible growth step.
+  const padding = Math.max(48, state.fontSize * 0.08);
   const leftDeficit = padding - inkBounds.x;
   const rightDeficit = inkBounds.x + inkBounds.width + padding - state.artboard.width;
   let widthDelta = 0;

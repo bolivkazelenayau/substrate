@@ -1,5 +1,6 @@
 import type { SubstrateData, SubstrateDebugMode } from "./types";
 import { measure } from "../performance";
+import { planSubstrateRaster } from "../safetyBudget";
 
 export interface CachedDebugImage {
   url: string | null;
@@ -13,14 +14,19 @@ let debugImageGenerationId = 0;
 
 export function createSubstrateDebugDataUrl(substrate: SubstrateData, mode: SubstrateDebugMode): string | null {
   if (!["mask", "edge", "distance"].includes(mode)) return null;
+  const plan = planSubstrateRaster({ requestedWidth: substrate.width, requestedHeight: substrate.height });
   const canvas = document.createElement("canvas");
-  canvas.width = substrate.width;
-  canvas.height = substrate.height;
+  canvas.width = plan.width;
+  canvas.height = plan.height;
   const context = canvas.getContext("2d");
   if (!context) return null;
-  const image = context.createImageData(substrate.width, substrate.height);
+  const image = context.createImageData(plan.width, plan.height);
   const maxAbsolute = Math.max(Math.abs(substrate.diagnostics.minDistance), Math.abs(substrate.diagnostics.maxDistance), 1);
-  for (let index = 0; index < substrate.width * substrate.height; index += 1) {
+  for (let y = 0; y < plan.height; y += 1) for (let x = 0; x < plan.width; x += 1) {
+    const sourceX = Math.min(substrate.width - 1, Math.floor(x * substrate.width / plan.width));
+    const sourceY = Math.min(substrate.height - 1, Math.floor(y * substrate.height / plan.height));
+    const index = sourceY * substrate.width + sourceX;
+    const outputIndex = y * plan.width + x;
     let red = 0;
     let green = 0;
     let blue = 0;
@@ -41,10 +47,10 @@ export function createSubstrateDebugDataUrl(substrate: SubstrateData, mode: Subs
         green = Math.round(40 + -signed * 60);
       }
     }
-    image.data[index * 4] = red;
-    image.data[index * 4 + 1] = green;
-    image.data[index * 4 + 2] = blue;
-    image.data[index * 4 + 3] = 255;
+    image.data[outputIndex * 4] = red;
+    image.data[outputIndex * 4 + 1] = green;
+    image.data[outputIndex * 4 + 2] = blue;
+    image.data[outputIndex * 4 + 3] = 255;
   }
   context.putImageData(image, 0, 0);
   return canvas.toDataURL("image/png");

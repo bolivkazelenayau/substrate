@@ -109,7 +109,6 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
     <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
-    <label className="field compact-field"><span>Blend</span><select value={state.emitter.blendMode} onChange={(event) => patchEmitter({ blendMode: event.target.value as ProjectState["emitter"]["blendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
   </div>;
 }
 
@@ -131,7 +130,7 @@ function GlobalEmitter({ state, patchField, patchEmitter }: { state: ProjectStat
     <label className="field compact-field"><span>Global falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Global self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Global neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
-    <label className="field compact-field"><span>Global composition</span><select value={state.fieldBlendMode} onChange={(event) => patchField({ fieldBlendMode: event.target.value as ProjectState["fieldBlendMode"] })}><option value="add">Add</option><option value="max">Max</option></select></label>
+    <label className="field compact-field"><span>Blend</span><select value={state.fieldBlendMode} onChange={(event) => patchField({ fieldBlendMode: event.target.value as ProjectState["fieldBlendMode"] })}><option value="add">Add</option><option value="max">Max</option></select><small>Combines overlapping emitter contributions.</small></label>
   </div>;
 }
 

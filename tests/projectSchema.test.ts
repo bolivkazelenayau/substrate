@@ -3,6 +3,16 @@ import { baseState, defaultDebugSettings } from "../src/engine/presets";
 import { validateProject } from "../src/engine/projectSchema";
 
 describe("project schema", () => {
+  it("round-trips the active multi-emitter blend mode", () => {
+    const project = validateProject({
+      ...baseState,
+      emitterMode: "multiple",
+      fieldBlendMode: "max",
+    }).project;
+    expect(project.fieldBlendMode).toBe("max");
+    expect(validateProject(JSON.parse(JSON.stringify(project))).project.fieldBlendMode).toBe("max");
+  });
+
   it("preserves multiline whitespace and repairs line height", () => {
     const text = "TYPE\n    FIELD";
     expect(validateProject({ ...baseState, text, lineHeight: 1.35 }).project).toMatchObject({ text, lineHeight: 1.35 });

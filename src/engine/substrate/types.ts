@@ -1,5 +1,6 @@
 import type { GlyphBounds, TextGeometry } from "../glyphGeometry";
 import type { KerningMode, TextAlign } from "../../types";
+import type { RasterPlan } from "../safetyBudget";
 
 export interface SubstrateResolution {
   width: number;
@@ -42,6 +43,7 @@ export interface SubstrateDiagnostics {
   edgeMapTimeMs: number;
   distanceFieldTimeMs: number;
   buildTimeMs: number;
+  rasterPlan?: RasterPlan;
 }
 
 export interface SubstrateData {
@@ -85,4 +87,5 @@ export interface SubstrateBuildInput {
     width: number;
     height: number;
   };
+  rasterPlan?: RasterPlan;
 }

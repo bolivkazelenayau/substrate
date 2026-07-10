@@ -10,6 +10,8 @@ import { generateWarpedOutline, getFinalOutlineGeometry } from "./outlineWarp";
 import { assertPresetExportable } from "./presetExportability";
 import { assertVectorOnlySvg } from "./svgValidation";
 import { DEFAULT_CONTOUR_STROKE_WIDTH, LEGACY_EXPORT_STROKE_WIDTH } from "./contourStroke";
+import type { ExportSnapshot } from "./exportAuthority";
+import { createStaticRenderContext } from "./renderContextLifecycle";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -51,7 +53,7 @@ function serializeGlyphPaths(textGeometry: TextGeometry) {
     .join("");
 }
 
-export function createSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup): string {
+export function createSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup, capturedContext?: { timeMs: number; frame: number }): string {
   const { width, height } = state.artboard;
   const dimensionAttributes = width === 1200 && height === 720 ? "" : ` width="${width}" height="${height}"`;
   assertPresetExportable(state.preset, state.exportMode);
@@ -85,6 +87,7 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
     project: metadataProject,
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
+    exportContext: capturedContext,
   };
 
   const background = state.transparentBackground
@@ -137,9 +140,18 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
   return svg;
 }
 
-export function createTimedSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup) {
-  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry));
+export function createTimedSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup, exportContext?: { timeMs: number; frame: number }) {
+  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry, exportContext));
   return { svg: result.value, serializationTimeMs: result.durationMs };
+}
+
+export function createTimedSvgFromSnapshot(snapshot: ExportSnapshot) {
+  const context: RenderContext = {
+    ...createStaticRenderContext(snapshot.document, snapshot.typography.geometry, snapshot.substrate?.data ?? null),
+    timeMs: snapshot.context.timeMs,
+    frame: snapshot.context.frame,
+  };
+  return createTimedSvg(snapshot.document, context, snapshot.typography.geometry, snapshot.renderer.geometry, snapshot.context);
 }
 
 export function validateSvgExport(svg: string, expectPathMask: boolean) {

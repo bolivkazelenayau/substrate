@@ -178,6 +178,7 @@ describe("Safe Typography controls", () => {
     updated = null;
     change(field("Strength", "input"), "2.2");
     expect(getUpdated()?.emitter.amplitude).toBe(2.2);
+    expect(container.textContent).not.toContain("Blend");
 
     const advanced = [...container.querySelectorAll(".accordion-group")]
       .find((group) => group.querySelector(".accordion-summary")?.textContent?.includes("Advanced Parameters"));
@@ -253,6 +254,10 @@ describe("Safe Typography controls", () => {
 
     change(field("Global base radius", "input"), "700");
     expect(getUpdated()?.emitter.radius).toBe(700);
+    updated = null;
+    change(field("Blend", "select"), "max");
+    expect(getUpdated()?.fieldBlendMode).toBe("max");
+    expect(container.textContent).toContain("Combines overlapping emitter contributions.");
     expect(getUpdated()?.emitters).toEqual([
       expect.objectContaining({ id: "first", radiusMultiplier: 1 }),
       expect.objectContaining({ id: "second", radiusMultiplier: 1 }),

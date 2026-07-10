@@ -5,6 +5,7 @@ import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { budgetContourFragmentsFairly } from "../contourBudget";
 import { resolveContourStrokeWidth } from "../contourStroke";
 import { resolveSdfScaleContext } from "../sdfScale";
+import { planContourWork } from "../safetyBudget";
 
 interface Segment {
   a: Point;
@@ -240,6 +241,7 @@ export const sdfContoursRenderer: VectorRenderer = {
     const sdfScale = resolveSdfScaleContext(state);
     const glyph = getGlyphFieldSampler(state, context);
     const requestedLevels = Math.max(2, Math.min(14, Math.round(1 + state.density / 7)));
+    const contourPlan = planContourWork(substrate.width, substrate.height, requestedLevels);
     const influence = state.edgeInfluence / 100;
     const amplitudeFactor = 0.35 + ((state.amplitude - 2) / 42) * 0.65;
     const minimumLevel = Math.min(
@@ -247,8 +249,8 @@ export const sdfContoursRenderer: VectorRenderer = {
       Math.max(0.2, (substrate.scaleX + substrate.scaleY) * 0.38 * sdfScale.scale),
     );
     const maximumLevel = Math.max(minimumLevel, maxPositiveDistance * amplitudeFactor * (1 - influence * 0.74));
-    const levels = Array.from({ length: requestedLevels }, (_, index) => {
-      const amount = requestedLevels === 1 ? 0 : index / (requestedLevels - 1);
+    const levels = Array.from({ length: contourPlan.levels }, (_, index) => {
+      const amount = contourPlan.levels === 1 ? 0 : index / (contourPlan.levels - 1);
       return minimumLevel + (maximumLevel - minimumLevel) * Math.pow(amount, 1 + influence * 1.8);
     });
 
@@ -332,9 +334,7 @@ export const sdfContoursRenderer: VectorRenderer = {
         averageGlyphFieldDisplacement: fieldSamples ? displacementTotal / fieldSamples : 0,
         rejectedDisplacedCandidates,
         fieldInfluencedAcceptanceCount: 0,
-        warning: budgeted.budgetLimited
-          ? "Contour detail was reduced by the maxNodes point budget."
-          : undefined,
+        warning: [budgeted.budgetLimited ? "Contour detail was reduced by the maxNodes point budget." : "", contourPlan.reduced ? "Contour levels were safety-limited before extraction." : ""].filter(Boolean).join(" ") || undefined,
       },
     };
   },

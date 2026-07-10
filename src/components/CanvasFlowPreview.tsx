@@ -5,6 +5,7 @@ import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 import { projectArtboard } from "../engine/artboard";
+import { planCanvasBackingStore } from "../engine/safetyBudget";
 
 export interface CanvasPreviewSample {
   context: RenderContext;
@@ -39,10 +40,18 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       onFailure();
       return;
     }
-    const ratio = Math.max(1, window.devicePixelRatio || 1);
     const artboard = projectArtboard(state);
-    canvas.width = Math.round(artboard.width * ratio);
-    canvas.height = Math.round(artboard.height * ratio);
+    // Backing storage follows the displayed preview, never the unbounded world artboard.
+    const rect = canvas.getBoundingClientRect();
+    const canvasPlan = planCanvasBackingStore({
+      cssWidth: rect.width || canvas.clientWidth || artboard.width,
+      cssHeight: rect.height || canvas.clientHeight || artboard.height,
+      dpr: window.devicePixelRatio || 1,
+    });
+    canvas.width = canvasPlan.width;
+    canvas.height = canvasPlan.height;
+    const scaleX = canvasPlan.width / artboard.width;
+    const scaleY = canvasPlan.height / artboard.height;
     let glyphClip: Path2D | null = null;
     if (textGeometry?.hasOutlines && typeof Path2D !== "undefined") {
       try {
@@ -67,7 +76,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       const started = performance.now();
       const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: artboard };
       const previewFrame = createFlowPreviewFrame(state, renderContext);
-      context2d.setTransform(ratio, 0, 0, ratio, 0, 0);
+      context2d.setTransform(scaleX, 0, 0, scaleY, 0, 0);
       context2d.clearRect(0, 0, artboard.width, artboard.height);
       if (!previewFrame.appearance.transparentBackground) {
         context2d.fillStyle = previewFrame.appearance.backgroundColor;

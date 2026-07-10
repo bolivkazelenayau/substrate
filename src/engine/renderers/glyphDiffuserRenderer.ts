@@ -5,6 +5,7 @@ import { createSeededRandom } from "../random";
 import { sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import type { ProjectState } from "../../types";
+import { SAFETY_BUDGETS } from "../safetyBudget";
 
 function fallbackDiagnostics(warning: string): RendererDiagnostics {
   return {
@@ -104,6 +105,11 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
+    // Bound work before candidates are materialized or sorted. Normal presets stay
+    // at stride 1, so their ordering and output remain byte-for-byte unchanged.
+    const candidateStride = requestedDots > SAFETY_BUDGETS.candidateAttempts
+      ? Math.ceil(Math.sqrt(requestedDots / SAFETY_BUDGETS.candidateAttempts)) : 1;
+    const candidateAttemptBudget = Math.ceil(rows / candidateStride) * Math.ceil(columns / candidateStride);
     const acceptedPool: Array<{
       geometry: CircleMark;
       emitterId: string;
@@ -141,8 +147,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
       field.sources.map((source) => [source.id, 0]),
     );
 
-    for (let row = 0; row < rows; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
+    for (let row = 0; row < rows; row += candidateStride) {
+      for (let column = 0; column < columns; column += candidateStride) {
         const x = minX + (column + 0.5) * spacing + (random() * 2 - 1) * jitter;
         const y = minY + (row + 0.5) * spacing + (random() * 2 - 1) * jitter;
         // Consume a fixed random budget per multi-emitter candidate. A row
@@ -285,6 +291,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         fallback: false,
         requestedDots,
         candidateCount: requestedDots,
+        attemptedCandidates: candidateAttemptBudget,
+        candidateBudgetReached: candidateStride > 1,
         preCapAcceptedCount: acceptedPool.length,
         cappedCount,
         effectiveDensity: requestedDots ? geometries.length / requestedDots : 0,
@@ -347,6 +355,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
             ? `Emitter sampling exceeds the ${artboard.width}×${artboard.height} artboard; output is intentionally edge-feathered and clipped to export bounds.`
             : "",
           clipped ? `Diffuser output clipped at the ${state.maxNodes} node budget.` : "",
+          candidateStride > 1 ? `Diffuser candidate generation was safety-limited to ${candidateAttemptBudget} attempts.` : "",
         ].filter(Boolean).join(" ") || undefined,
       },
     };

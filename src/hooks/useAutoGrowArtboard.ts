@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
+  artboardExpansionInputKey,
   artboardExpansionTriggerKey,
   planArtboardExpansionToText,
   type ArtboardExpansionPlan,
@@ -7,7 +8,7 @@ import {
 import type { TextGeometry } from "../engine/glyphGeometry";
 import type { ArtboardOverflowMode, ProjectState } from "../types";
 
-export const AUTO_GROW_ARTBOARD_DEBOUNCE_MS = 120;
+export const AUTO_GROW_ARTBOARD_DEBOUNCE_MS = 48;
 
 interface UseAutoGrowArtboardOptions {
   mode: ArtboardOverflowMode;
@@ -29,9 +30,14 @@ export function useAutoGrowArtboard({
   textGeometry,
   updateProject,
 }: UseAutoGrowArtboardOptions): AutoGrowArtboardState {
+  const expansionInputKey = artboardExpansionInputKey(project, textGeometry);
   const plan = useMemo(
     () => planArtboardExpansionToText(project, textGeometry),
-    [project, textGeometry],
+    // The key deliberately excludes diagnostics, renderer runtime, preview, and
+    // viewport state. The latest complete project remains available through
+    // latestRef when a scheduled growth is committed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [expansionInputKey],
   );
   const latestRef = useRef({ project, textGeometry, updateProject });
   latestRef.current = { project, textGeometry, updateProject };

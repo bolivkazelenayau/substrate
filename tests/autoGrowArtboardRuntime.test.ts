@@ -5,6 +5,7 @@ import { Controls } from "../src/components/Controls";
 import { getTextArtboardOverflowWarning } from "../src/engine/contourDomain";
 import type { TextGeometry } from "../src/engine/glyphGeometry";
 import { AUTO_GROW_ARTBOARD_WARNING } from "../src/engine/artboardExpansion";
+import { artboardExpansionInputKey, planArtboardExpansionToText } from "../src/engine/artboardExpansion";
 import { baseState } from "../src/engine/presets";
 import {
   AUTO_GROW_ARTBOARD_DEBOUNCE_MS,
@@ -30,6 +31,8 @@ function AutoGrowHarness({
   const [project, setProject] = useState(initialProject);
   const [mode, setMode] = useState<ArtboardOverflowMode>(initialMode);
   const [textGeometry, setTextGeometry] = useState<TextGeometry | null>(null);
+  const [diagnosticsMode, setDiagnosticsMode] = useState<"off" | "full">("off");
+  const [runtimeFrame, setRuntimeFrame] = useState(0);
   const autoGrow = useAutoGrowArtboard({ mode, project, textGeometry, updateProject: setProject });
   const overflowWarning = getTextArtboardOverflowWarning(project, textGeometry);
   const displayedOverflowWarning = overflowWarning
@@ -47,9 +50,14 @@ function AutoGrowHarness({
       "data-overflow": overflowWarning ?? "",
       "data-displayed-overflow": displayedOverflowWarning,
       "data-auto-grow-pending": String(autoGrow.pending),
+      "data-planned-artboard": autoGrow.plannedArtboard
+        ? `${autoGrow.plannedArtboard.width}x${autoGrow.plannedArtboard.height}`
+        : "",
       "data-debug": String(project.debug.glyphBounds),
       "data-renderer": project.renderer,
       "data-seed": project.seed,
+      "data-diagnostics-mode": diagnosticsMode,
+      "data-runtime-frame": runtimeFrame,
     }),
     createElement("button", {
       type: "button",
@@ -74,6 +82,26 @@ function AutoGrowHarness({
         debug: { ...current.debug, glyphBounds: !current.debug.glyphBounds },
       })),
     }, "Toggle diagnostics"),
+    createElement("button", {
+      type: "button",
+      "data-action": "all-debug",
+      onClick: () => setProject((current) => ({
+        ...current,
+        debug: Object.fromEntries(
+          Object.entries(current.debug).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+        ) as ProjectState["debug"],
+      })),
+    }, "Toggle all debug overlays"),
+    createElement("button", {
+      type: "button",
+      "data-action": "diagnostics-mode",
+      onClick: () => setDiagnosticsMode((current) => current === "off" ? "full" : "off"),
+    }, "Toggle diagnostics mode"),
+    createElement("button", {
+      type: "button",
+      "data-action": "runtime-frame",
+      onClick: () => setRuntimeFrame((current) => current + 1),
+    }, "Advance runtime frame"),
     createElement("button", {
       type: "button",
       "data-action": "wide-font",
@@ -223,6 +251,59 @@ describe("auto-grow artboard runtime wiring", () => {
     act(() => container.querySelector<HTMLButtonElement>("[data-action='diagnostics']")!.click());
     expect(vi.getTimerCount()).toBe(0);
     expect(container.querySelector("output")?.dataset.artboard).toBe("1200x720");
+  });
+
+  it("keeps authoritative keys and plans stable across every debug overlay toggle", () => {
+    const project = { ...baseState, text: "TYPE", fontSize: 80 };
+    const toggled = {
+      ...project,
+      debug: Object.fromEntries(
+        Object.entries(project.debug).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+      ) as ProjectState["debug"],
+    };
+    expect(artboardExpansionInputKey(toggled, null)).toBe(artboardExpansionInputKey(project, null));
+    expect(planArtboardExpansionToText(toggled, null).projectedInkBounds)
+      .toEqual(planArtboardExpansionToText(project, null).projectedInkBounds);
+
+    act(() => root.render(createElement(AutoGrowHarness, {
+      initialProject: project,
+      initialMode: "auto-grow",
+    })));
+    act(() => container.querySelector<HTMLButtonElement>("[data-action='all-debug']")!.click());
+    expect(vi.getTimerCount()).toBe(0);
+    expect(container.querySelector("output")?.dataset.artboard).toBe("1200x720");
+  });
+
+  it("ignores diagnostics mode and animation-frame-only updates", () => {
+    act(() => root.render(createElement(AutoGrowHarness, {
+      initialProject: { ...baseState, text: "TYPE", fontSize: 80 },
+      initialMode: "auto-grow",
+    })));
+    act(() => container.querySelector<HTMLButtonElement>("[data-action='diagnostics-mode']")!.click());
+    expect(container.querySelector("output")?.dataset.diagnosticsMode).toBe("full");
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => container.querySelector<HTMLButtonElement>("[data-action='runtime-frame']")!.click());
+    expect(container.querySelector("output")?.dataset.runtimeFrame).toBe("1");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("coalesces repeated typography changes into the latest growth plan", () => {
+    act(() => root.render(createElement(AutoGrowHarness, {
+      initialProject: { ...baseState, text: "SUBSTRATE", fontSize: 140 },
+      initialMode: "auto-grow",
+    })));
+    act(() => {
+      container.querySelector<HTMLButtonElement>("[data-action='large-size']")!.click();
+      container.querySelector<HTMLButtonElement>("[data-action='long-text']")!.click();
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    expect(container.querySelector("output")?.dataset.displayedOverflow).toBe("");
+    act(() => vi.advanceTimersByTime(AUTO_GROW_ARTBOARD_DEBOUNCE_MS));
+    const output = container.querySelector("output")!;
+    expect(output.dataset.fontSize).toBe("540");
+    expect(output.dataset.artboard).not.toBe("1200x720");
+    expect(output.dataset.autoGrowPending).toBe("false");
+    expect(output.dataset.plannedArtboard).toBe("");
   });
 
   it("recomputes from the latest document state when the debounce fires", () => {

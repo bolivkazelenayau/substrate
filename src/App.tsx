@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controls } from "./components/Controls";
 import { Viewport } from "./components/Viewport";
-import { createTimedSvg, download } from "./engine/exportSvg";
+import { createTimedSvg, createTimedSvgFromSnapshot, download } from "./engine/exportSvg";
 import { loadFontFile, validateLoadedFont, type LoadedFont } from "./engine/fontLoader";
 import { layoutGlyphs } from "./engine/glyphLayout";
 import { validateTextGeometry } from "./engine/glyphGeometry";
@@ -14,7 +14,7 @@ import { getSubstratePerformanceWarnings } from "./engine/performance";
 import { getTextArtboardOverflowWarning } from "./engine/contourDomain";
 import { NATIVE_TEXT_BOUNDS_WARNING } from "./engine/textBounds";
 import { projectArtboard } from "./engine/artboard";
-import { AUTO_GROW_ARTBOARD_WARNING } from "./engine/artboardExpansion";
+import { AUTO_GROW_ARTBOARD_WARNING, planArtboardExpansionToText } from "./engine/artboardExpansion";
 import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
 import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
@@ -34,6 +34,16 @@ import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
 import { useRendererRuntime } from "./hooks/useRendererRuntime";
 import { useAutoGrowArtboard } from "./hooks/useAutoGrowArtboard";
+import {
+  captureExportSnapshot,
+  documentKey,
+  rendererInputKey,
+  resolveExportReadiness,
+  resolveFontResolution,
+  typographyInputKey,
+  typographyOutputKey,
+} from "./engine/exportAuthority";
+import { APP_VERSION } from "./engine/constants";
 
 const DevWebGpuFieldOverlay = import.meta.env.DEV
   ? lazy(() => import("./components/dev/WebGpuFieldOverlay").then(({ WebGpuFieldOverlay }) => ({ default: WebGpuFieldOverlay })))
@@ -74,8 +84,17 @@ export default function App() {
     previewSettings.fpsCap,
     previewSettings.pauseWhenHidden,
   );
-  const textGeometryBuild = useTypographyGeometry(state, loadedFont);
+  const fontResolution = useMemo(() => resolveFontResolution(state, loadedFont), [state, loadedFont]);
+  const activeTypographyInputKey = useMemo(
+    () => typographyInputKey(state, fontResolution.resourceKey ?? "font:missing"),
+    [state, fontResolution.resourceKey],
+  );
+  const textGeometryBuild = useTypographyGeometry(state, fontResolution.loadedFont);
   const textGeometry = textGeometryBuild.value;
+  const activeTypographyOutputKey = useMemo(
+    () => typographyOutputKey(activeTypographyInputKey, fontResolution, textGeometry),
+    [activeTypographyInputKey, fontResolution, textGeometry],
+  );
   const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state, textGeometry]);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -147,7 +166,7 @@ export default function App() {
     };
     return snapshot;
   }, [state, textGeometry, emitterGlyphs]);
-  const substrateBuild = useSubstratePipeline(state, textGeometry);
+  const substrateBuild = useSubstratePipeline(state, textGeometry, activeTypographyOutputKey);
   const emitterFieldKey = emitterGeometryKey(state, textGeometry);
   useEffect(() => setCanvasFailed(false), [state.renderer, previewSettings.backend]);
 
@@ -169,8 +188,6 @@ export default function App() {
   }), [activeClockContext, state, staticRenderContext, textGeometry, substrateBuild.data]);
   const {
     liveGeometry: geometry,
-    exportContext,
-    exportGeometry,
     estimateContext,
     estimateGeometry,
     geometrySummary,
@@ -186,6 +203,33 @@ export default function App() {
     updateProject: setState,
   });
   const artboardExpansionPlan = autoGrowArtboard.plan;
+  const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
+    ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
+    : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
+  [context.frame, context.timeMs, state.exportFrameMode]);
+  const activeRendererInputKey = useMemo(
+    () => activeTypographyOutputKey
+      ? rendererInputKey(state, activeTypographyOutputKey, substrateBuild.outputKey, capturedExportContext)
+      : "renderer-input:typography-pending",
+    [activeTypographyOutputKey, capturedExportContext, state, substrateBuild.outputKey],
+  );
+  const exportReadiness = useMemo(() => resolveExportReadiness({
+    font: fontResolution,
+    typographyInputKey: activeTypographyInputKey,
+    typographyOutputKey: activeTypographyOutputKey,
+    substrateInputKey: substrateBuild.inputKey,
+    substrateOutputKey: substrateBuild.outputKey,
+    substrateData: substrateBuild.data,
+    rendererInputKey: activeRendererInputKey,
+    // Renderer generation is synchronous and recreated from the same input in the
+    // snapshot. Stale substrate is rejected before this stage can become current.
+    rendererGeometryKey: activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
+      ? activeRendererInputKey
+      : null,
+    autoGrowPending: autoGrowArtboard.pending,
+    failureReason: substrateBuild.error,
+    renderer: state.renderer,
+  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, autoGrowArtboard.pending, fontResolution, renderer.usesSubstrate, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
   const displayedTextOverflowWarning = textOverflowWarning
     ? artboardOverflowMode === "clip"
       ? textOverflowWarning
@@ -196,9 +240,11 @@ export default function App() {
           : null
     : null;
   const expandArtboardToText = useCallback(() => {
-    if (!textOverflowWarning || !artboardExpansionPlan.available || !artboardExpansionPlan.changed) return;
-    setState(artboardExpansionPlan.nextState);
-  }, [artboardExpansionPlan, setState, textOverflowWarning]);
+    if (!textOverflowWarning) return;
+    const latestPlan = planArtboardExpansionToText(state, textGeometry);
+    if (!latestPlan.available || !latestPlan.changed) return;
+    setState(latestPlan.nextState);
+  }, [setState, state, textGeometry, textOverflowWarning]);
   const exportWarnings = useMemo(() => [
     ...getExportBudgetWarnings({
       ...geometrySummary,
@@ -264,11 +310,36 @@ export default function App() {
       setMessage(PREVIEW_ONLY_EXPORT_WARNING);
       return;
     }
+    if (exportReadiness.status !== "ready") {
+      setMessage(exportReadiness.reason);
+      return;
+    }
+    // Capture every authoritative input before yielding to presentation work.
+    // The later serializer receives only this immutable, CPU-generated snapshot.
+    let snapshot;
+    try {
+      snapshot = captureExportSnapshot({
+        state,
+        documentKey: documentKey(state),
+        font: fontResolution,
+        typographyInputKey: activeTypographyInputKey,
+        typographyOutputKey: activeTypographyOutputKey!,
+        typographyGeometry: textGeometry,
+        substrateInputKey: substrateBuild.inputKey,
+        substrateOutputKey: substrateBuild.outputKey,
+        substrateData: substrateBuild.data,
+        context: capturedExportContext,
+        appVersion: APP_VERSION,
+      });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Export snapshot could not be captured.");
+      return;
+    }
     setExporting(true);
     requestAnimationFrame(() => {
       try {
     const filename = (state.text.trim() || "substrate").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
-    const timed = createTimedSvg(state, exportContext, textGeometry, exportGeometry);
+    const timed = createTimedSvgFromSnapshot(snapshot);
     const svg = timed.svg;
     const validation = reportSvgValidation(
       svg,
@@ -347,7 +418,7 @@ export default function App() {
         <div className="brand"><span className="brand-mark" aria-hidden="true" /><strong>SUBSTRATE</strong><small>TYPE / FIELD STUDY 001</small></div>
         <div className="header-actions">
           <button className="quiet" onClick={exportJson}>Save project</button>
-          <button className="export" disabled={exporting} onClick={exportSvg}>{exporting ? "Exporting…" : "Export SVG"} <span>↗</span></button>
+          <button className="export" disabled={exporting || exportReadiness.status !== "ready"} onClick={exportSvg} title={exportReadiness.reason}>{exporting ? "Exporting…" : exportReadiness.status === "ready" ? "Export SVG" : "Preparing export…"} <span>↗</span></button>
         </div>
       </header>
 

@@ -3,6 +3,7 @@ import { buildCompositeWaveField, type CompositeWaveField } from "../field/compo
 import type { VectorRenderer } from "./types";
 import { resolveContourStrokeWidth } from "../contourStroke";
 import { resolveSdfScaleContext } from "../sdfScale";
+import { planContourWork } from "../safetyBudget";
 
 interface Segment { a: Point; b: Point }
 
@@ -172,8 +173,9 @@ export const waveContoursRenderer: VectorRenderer = {
     const extractionStarted = performance.now();
     const sdfScale = resolveSdfScaleContext(state);
     const levelCount = Math.max(3, Math.min(18, Math.round(state.density / 5)));
+    const contourPlan = planContourWork(field.width, field.height, levelCount);
     const magnitude = Math.max(Math.abs(field.min), Math.abs(field.max));
-    const levels = Array.from({ length: levelCount }, (_, index) => -magnitude * 0.88 + index / Math.max(1, levelCount - 1) * magnitude * 1.76);
+    const levels = Array.from({ length: contourPlan.levels }, (_, index) => -magnitude * 0.88 + index / Math.max(1, contourPlan.levels - 1) * magnitude * 1.76);
     const geometries: Array<Polyline | CircleMark> = [];
     let pointCount = 0;
     let fragments = 0;

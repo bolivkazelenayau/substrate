@@ -30,6 +30,7 @@ import { resolveTextBoundsModel } from "../engine/textBounds";
 import { projectArtboard } from "../engine/artboard";
 import type { ArtboardExpansionPlan } from "../engine/artboardExpansion";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
+import { planDiagnosticSamples } from "../engine/safetyBudget";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -117,8 +118,11 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   const gradientVectors = useMemo(() => {
     if (!substrate || state.debug.substrateMode !== "gradient") return [];
     const vectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    for (let y = 45; y < artboard.height; y += 45) {
-      for (let x = 45; x < artboard.width; x += 45) {
+    const requested = Math.ceil(artboard.width / 45) * Math.ceil(artboard.height / 45);
+    const budget = planDiagnosticSamples(requested);
+    const stride = budget.reduced ? 45 * Math.ceil(Math.sqrt(requested / budget.emitted)) : 45;
+    for (let y = stride; y < artboard.height && vectors.length < budget.emitted; y += stride) {
+      for (let x = stride; x < artboard.width && vectors.length < budget.emitted; x += stride) {
         const gradient = sampleDistanceGradient(substrate, x, y);
         if (gradient.magnitude < 0.01) continue;
         const length = 14;
@@ -281,6 +285,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           <span>EDGE {substrate.diagnostics.edgeMapTimeMs.toFixed(1)}MS</span>
           <span>SDF {substrate.diagnostics.distanceFieldTimeMs.toFixed(1)}MS</span>
           <span>BUILD {substrate.diagnostics.buildTimeMs.toFixed(1)}MS</span>
+          {substrate.diagnostics.rasterPlan?.reduced && <span className="warning">RASTER SAFETY {substrate.width}×{substrate.height} · {substrate.diagnostics.rasterPlan.reason}</span>}
           <span>DEBUG {debugImage.pending ? "PENDING" : `${debugImage.durationMs.toFixed(1)}MS`}</span>
         </div>
       )}

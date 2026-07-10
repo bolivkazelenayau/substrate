@@ -15,6 +15,7 @@ import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
 import type { ProjectState, RenderContext } from "../src/types";
 import { validateProject } from "../src/engine/projectSchema";
+import { emitterGeometryKey } from "../src/engine/rendererRuntime";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
   const canvas = createCanvas(width, height);
@@ -260,6 +261,44 @@ describe("Wave Contours renderer", () => {
       .not.toBeCloseTo(sampleGlyphField(baseline, midpoint.x, midpoint.y), 5);
     expect(sampleGlyphField(weightChanged, midpoint.x, midpoint.y))
       .not.toBeCloseTo(sampleGlyphField(baseline, midpoint.x, midpoint.y), 5);
+  });
+
+  it("produces different overlapping fields, cache keys, geometry, and SVG for Add and Max", () => {
+    const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
+    const first = { ...state.emitters[0], id: "blend-first", glyphId: glyphs[0].glyphId, label: "First" };
+    const last = {
+      ...first,
+      id: "blend-last",
+      glyphId: glyphs[glyphs.length - 1].glyphId,
+      phaseOffset: Math.PI / 3,
+      label: "Last",
+    };
+    const addState = {
+      ...state,
+      renderer: "wave-contours" as const,
+      emitter: { ...state.emitter, enabled: true, radius: 700, neighborInfluence: 1 },
+      emitterMode: "multiple" as const,
+      emitters: [first, last],
+      fieldBlendMode: "add" as const,
+    };
+    const maxState = { ...addState, fieldBlendMode: "max" as const };
+    const addField = buildCompositeWaveField(addState, context)!;
+    const maxField = buildCompositeWaveField(maxState, context)!;
+    const addContext = { ...context, ...createGlyphFieldContext(addField) };
+    const maxContext = { ...context, ...createGlyphFieldContext(maxField) };
+    const renderer = getRenderer("wave-contours");
+    const addGeometry = renderer.generateGeometry(addState, addContext);
+    const maxGeometry = renderer.generateGeometry(maxState, maxContext);
+    const addSvg = createSvg(addState, addContext, context.textGeometry, addGeometry);
+    const maxSvg = createSvg(maxState, maxContext, context.textGeometry, maxGeometry);
+
+    expect(addField.compositionMode).toBe("add");
+    expect(maxField.compositionMode).toBe("max");
+    expect(Array.from(addField.data)).not.toEqual(Array.from(maxField.data));
+    expect(emitterGeometryKey(addState, context.textGeometry)).not.toBe(emitterGeometryKey(maxState, context.textGeometry));
+    expect(addGeometry.geometries).not.toEqual(maxGeometry.geometries);
+    expect(addSvg).not.toBe(maxSvg);
+    expect(renderer.generateGeometry(addState, addContext).geometries).toEqual(addGeometry.geometries);
   });
 
   it("returns a zero-safe context with no active emitters and finite multi diagnostics", () => {

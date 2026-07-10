@@ -5,6 +5,15 @@ import { loadFontEngine } from "./fonts/loadFontEngine";
 export interface LoadedFont {
   font: ParsedFont;
   metadata: FontMetadata;
+  /** Stable, non-persisted resource identity. Raw font bytes are never exported. */
+  fingerprint: string;
+}
+
+function fingerprintBuffer(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let hash = 2166136261;
+  for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619);
+  return `${bytes.byteLength}-${(hash >>> 0).toString(16)}`;
 }
 
 function localizedName(names: Record<string, string> | undefined, fallback: string) {
@@ -32,6 +41,7 @@ export async function parseFontBuffer(buffer: ArrayBuffer, fileName: string): Pr
 
   return {
     font,
+    fingerprint: fingerprintBuffer(buffer),
     metadata: {
       family,
       fullName,

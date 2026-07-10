@@ -4,6 +4,7 @@ import { contextArtboard, projectArtboard } from "../artboard";
 import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
+import { SAFETY_BUDGETS } from "../safetyBudget";
 
 interface OccupiedDot {
   x: number;
@@ -74,6 +75,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
+    const candidateStride = requestedDots > SAFETY_BUDGETS.candidateAttempts
+      ? Math.ceil(Math.sqrt(requestedDots / SAFETY_BUDGETS.candidateAttempts)) : 1;
+    const attemptedCandidates = Math.ceil(rows / candidateStride) * Math.ceil(columns / candidateStride);
     const geometries: CircleMark[] = [];
     // Numeric occupancy grid, keyed as `(cellY + OFFSET) * SPAN + (cellX + OFFSET)`.
     // Avoids string-key allocation per accepted dot while preserving identical spacing
@@ -101,8 +105,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     let acceptedCrestDots = 0;
 
     outer:
-    for (let row = 0; row < rows; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
+    for (let row = 0; row < rows; row += candidateStride) {
+      for (let column = 0; column < columns; column += candidateStride) {
         if (geometries.length >= state.maxNodes) {
           clipped = true;
           break outer;
@@ -215,6 +219,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         substrateAvailable: true,
         fallback: false,
         requestedDots,
+        attemptedCandidates,
+        candidateBudgetReached: candidateStride > 1,
         acceptedDots: geometries.length,
         rejectedOutsideMask,
         rejectedBySpacing,

@@ -13,6 +13,8 @@ import {
 
 export interface SubstrateBackendState {
   data: SubstrateData | null;
+  /** Identity of data currently visible to preview; null while only stale data exists. */
+  outputKey: string | null;
   error: string | null;
   status: SubstrateBackendStatus;
 }
@@ -38,7 +40,7 @@ const initialStatus: SubstrateBackendStatus = {
   ...initialSchedule,
 };
 
-export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBackendState {
+export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string): SubstrateBackendState {
   const [workerBackend] = useState(() => createCpuWorkerSubstrateBackend());
   const latestRequest = useRef(0);
   const lastEnqueuedInput = useRef<SubstrateBuildInput | null>(null);
@@ -46,6 +48,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
   const mounted = useRef(true);
   const [backendState, setBackendState] = useState<SubstrateBackendState>({
     data: null,
+    outputKey: null,
     error: null,
     status: initialStatus,
   });
@@ -75,6 +78,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
       const schedule = scheduler.snapshot();
       setBackendState((current) => ({
         data: current.data,
+        outputKey: current.outputKey,
         error: null,
         status: {
           ...current.status,
@@ -100,6 +104,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
           const latestSchedule = scheduler.snapshot();
           setBackendState({
             data: result.data,
+            outputKey: inputKey,
             error: result.error,
             status: {
               phase: result.error ? "error" : fallbackReason ? "fallback" : "ready",
@@ -119,6 +124,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
           const latestSchedule = scheduler.snapshot();
           setBackendState((current) => ({
             data: current.data,
+            outputKey: current.outputKey,
             error: error instanceof Error ? error.message : "Substrate build failed.",
             status: {
               ...current.status,
@@ -134,7 +140,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput): SubstrateBacken
 
     const timerId = setTimeout(executeSchedule, 50);
     return () => clearTimeout(timerId);
-  }, [input, scheduler, workerBackend]);
+  }, [input, inputKey, scheduler, workerBackend]);
 
   useEffect(() => {
     mounted.current = true;

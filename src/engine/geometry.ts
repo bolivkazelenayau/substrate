@@ -65,6 +65,8 @@ export interface RendererDiagnostics {
   minRadius?: number;
   maxRadius?: number;
   warning?: string;
+  attemptedCandidates?: number;
+  candidateBudgetReached?: boolean;
   selectedGlyph?: string;
   emitterAnchorX?: number;
   emitterAnchorY?: number;

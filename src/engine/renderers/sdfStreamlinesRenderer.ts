@@ -6,6 +6,7 @@ import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
 import { contextArtboard } from "../artboard";
 import { resolveSdfScaleContext } from "../sdfScale";
+import { planDenseOccupancy } from "../safetyBudget";
 
 const MIN_POLYLINE_POINTS = 4;
 
@@ -160,9 +161,10 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
     const maxSteps = Math.max(6, Math.min(48, Math.round(5 + state.amplitude * 0.95)));
     const stepSize = sdfScale.world(2.2 + state.amplitude * 0.09, 0.5);
     const maxSeedAttempts = requestedStreamlines * 35;
-    const occupancyCellSize = sdfScale.world(11, 2);
-    const occupancyWidth = Math.ceil(artboard.width / occupancyCellSize);
-    const occupancyHeight = Math.ceil(artboard.height / occupancyCellSize);
+    const occupancyPlan = planDenseOccupancy(artboard.width, artboard.height, sdfScale.world(11, 2));
+    const occupancyCellSize = occupancyPlan.cellSize;
+    const occupancyWidth = occupancyPlan.width;
+    const occupancyHeight = occupancyPlan.height;
     const occupancy = new Uint8Array(occupancyWidth * occupancyHeight);
     const influence = state.edgeInfluence / 100;
     const edgeBand = Math.max(2, state.fontSize * (0.46 - influence * 0.37));

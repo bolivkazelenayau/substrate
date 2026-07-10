@@ -83,6 +83,10 @@ export function rendererGeometryStateKey(state: ProjectState) {
     outlineColor: _outlineColor,
     backgroundColor: _backgroundColor,
     transparentBackground: _transparentBackground,
+    debug: _debug,
+    // Font bytes/metadata are represented by the typography output key at the
+    // authoritative boundary. They are not a renderer-local identity.
+    font: _font,
     ...geometryState
   } = state;
   return JSON.stringify(geometryState);
