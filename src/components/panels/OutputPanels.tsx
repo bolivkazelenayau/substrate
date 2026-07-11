@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type RefObject } from "react";
 import { previewBackends, recommendedPreviewBackends } from "../../engine/previewBackend";
 import type { SubstrateDebugMode } from "../../engine/substrate";
-import type { ArtboardOverflowMode, DebugSettings, DiagnosticsMode, PreviewSettings, ProjectState } from "../../types";
+import type { DebugSettings, DiagnosticsMode, PreviewSettings, ProjectState } from "../../types";
 import { AppearancePanel, DiagnosticsPanel, ExportPanel, PreviewPanel } from "./PanelSection";
 
 type BooleanDebugKey = Exclude<keyof DebugSettings, "substrateMode">;
@@ -26,8 +26,6 @@ interface OutputPanelsProps {
   onPreviewSettingsChange: (settings: PreviewSettings) => void;
   diagnosticsMode: DiagnosticsMode;
   onDiagnosticsModeChange: (mode: DiagnosticsMode) => void;
-  artboardOverflowMode: ArtboardOverflowMode;
-  onArtboardOverflowModeChange: (mode: ArtboardOverflowMode) => void;
   fileRef: RefObject<HTMLInputElement | null>;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   webGpuOverlayOpen?: boolean;
@@ -37,7 +35,7 @@ interface OutputPanelsProps {
 }
 
 export function OutputPanels(props: OutputPanelsProps) {
-  const { state, setState, previewSettings, onPreviewSettingsChange, diagnosticsMode, onDiagnosticsModeChange, artboardOverflowMode, onArtboardOverflowModeChange, fileRef, onImport, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter } = props;
+  const { state, setState, previewSettings, onPreviewSettingsChange, diagnosticsMode, onDiagnosticsModeChange, fileRef, onImport, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter } = props;
   const patch = (next: Partial<ProjectState>) => setState({ ...state, ...next });
   const setDebug = <K extends keyof DebugSettings,>(id: K, value: DebugSettings[K]) =>
     patch({ debug: { ...state.debug, [id]: value } });
@@ -101,14 +99,6 @@ export function OutputPanels(props: OutputPanelsProps) {
         </button>
         {exportOpen && (
           <div className="accordion-content">
-            <label className="field compact-field">
-              <span>Artboard overflow</span>
-              <select value={artboardOverflowMode} onChange={(event) => onArtboardOverflowModeChange(event.target.value as ArtboardOverflowMode)}>
-                <option value="clip">Clip to artboard</option>
-                <option value="auto-grow">Auto-grow artboard</option>
-              </select>
-              <small>Auto-grow expands the artboard when text exceeds the current bounds. It never shrinks automatically.</small>
-            </label>
             <div className="mode-switch">
               <button className={state.exportMode === "artwork" ? "active" : ""} onClick={() => patch({ exportMode: "artwork" })}>Final Artwork SVG</button>
               <button className={state.exportMode === "editable" ? "active" : ""} onClick={() => patch({ exportMode: "editable" })}>Editable Text SVG</button>

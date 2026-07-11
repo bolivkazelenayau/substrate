@@ -1,7 +1,7 @@
 import { memo, useState, type ChangeEvent, type RefObject } from "react";
 import { applyPreset, baseState, getPresetDisplayLabel, presetIds } from "../../engine/presets";
 import { getRenderer, rendererList } from "../../engine/renderers";
-import type { ArtboardOverflowMode, DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
+import type { DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
 import type { GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
 import type { TextGeometry } from "../../engine/glyphGeometry";
 import { getControlActivity } from "../../engine/controlOwnership";
@@ -27,8 +27,6 @@ export interface FieldControlsProps {
   textGeometry?: TextGeometry | null;
   diagnosticsMode: DiagnosticsMode;
   onDiagnosticsModeChange: (mode: DiagnosticsMode) => void;
-  artboardOverflowMode?: ArtboardOverflowMode;
-  onArtboardOverflowModeChange?: (mode: ArtboardOverflowMode) => void;
   webGpuOverlayOpen?: boolean;
   fpsMeterOpen?: boolean;
   onToggleWebGpuOverlay?: () => void;
@@ -91,7 +89,7 @@ const rangeDefaults: Record<string, number> = {
   "Dot spacing": baseState.waveDotSpacing,
 };
 
-export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, artboardOverflowMode = "clip", onArtboardOverflowModeChange = () => undefined, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter }: FieldControlsProps) {
+export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter }: FieldControlsProps) {
   const renderer = getRenderer(state.renderer);
   const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
   const emitterConsumerActive = state.renderer === "glyph-diffuser"
@@ -187,8 +185,6 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         onPreviewSettingsChange={onPreviewSettingsChange}
         diagnosticsMode={diagnosticsMode}
         onDiagnosticsModeChange={onDiagnosticsModeChange}
-        artboardOverflowMode={artboardOverflowMode}
-        onArtboardOverflowModeChange={onArtboardOverflowModeChange}
         fileRef={fileRef}
         onImport={onImport}
         webGpuOverlayOpen={webGpuOverlayOpen}
@@ -203,7 +199,6 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   && previous.fontLoaded === next.fontLoaded
   && previous.parsedFontPathsAvailable === next.parsedFontPathsAvailable
   && previous.previewSettings === next.previewSettings
-  && previous.artboardOverflowMode === next.artboardOverflowMode
   && previous.emitterGlyphs === next.emitterGlyphs
   && previous.textGeometry === next.textGeometry
   && previous.diagnosticsMode === next.diagnosticsMode

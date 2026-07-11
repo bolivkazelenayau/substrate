@@ -7,14 +7,14 @@ import { layoutGlyphs } from "./engine/glyphLayout";
 import { validateTextGeometry } from "./engine/glyphGeometry";
 import { getSvgDiagnostics, reportSvgValidation, type SvgDiagnostics } from "./engine/svgValidation";
 import { useAnimationClock } from "./hooks/useAnimationClock";
-import type { ArtboardOverflowMode, PreviewDiagnostics, RenderContext } from "./types";
+import type { PreviewDiagnostics, RenderContext } from "./types";
 import { emitterGeometryKey } from "./engine/rendererRuntime";
 import { getExportBudgetWarnings } from "./engine/exportBudget";
 import { getSubstratePerformanceWarnings } from "./engine/performance";
 import { getTextArtboardOverflowWarning } from "./engine/contourDomain";
 import { NATIVE_TEXT_BOUNDS_WARNING } from "./engine/textBounds";
 import { projectArtboard } from "./engine/artboard";
-import { AUTO_GROW_ARTBOARD_WARNING, planArtboardExpansionToText } from "./engine/artboardExpansion";
+import { AUTO_GROW_ARTBOARD_WARNING } from "./engine/artboardExpansion";
 import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
 import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
@@ -66,7 +66,6 @@ export default function App() {
   const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
   const [webGpuOverlayOpen, setWebGpuOverlayOpen] = useState(false);
   const [fpsMeterOpen, setFpsMeterOpen] = useState(false);
-  const [artboardOverflowMode, setArtboardOverflowMode] = useState<ArtboardOverflowMode>("clip");
   const [svgTraceConfig, setSvgTraceConfig] = useState<SvgTraceConfig>(DEFAULT_SVG_TRACE_CONFIG);
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
@@ -197,12 +196,11 @@ export default function App() {
     [state, textGeometry],
   );
   const autoGrowArtboard = useAutoGrowArtboard({
-    mode: artboardOverflowMode,
+    mode: "auto-grow",
     project: state,
     textGeometry,
     updateProject: setState,
   });
-  const artboardExpansionPlan = autoGrowArtboard.plan;
   const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
     ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
     : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
@@ -231,20 +229,10 @@ export default function App() {
     renderer: state.renderer,
   }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, autoGrowArtboard.pending, fontResolution, renderer.usesSubstrate, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
   const displayedTextOverflowWarning = textOverflowWarning
-    ? artboardOverflowMode === "clip"
-      ? textOverflowWarning
-      : autoGrowArtboard.pending
-        ? null
-        : autoGrowArtboard.failureReason
-          ? AUTO_GROW_ARTBOARD_WARNING
-          : null
-    : null;
-  const expandArtboardToText = useCallback(() => {
-    if (!textOverflowWarning) return;
-    const latestPlan = planArtboardExpansionToText(state, textGeometry);
-    if (!latestPlan.available || !latestPlan.changed) return;
-    setState(latestPlan.nextState);
-  }, [setState, state, textGeometry, textOverflowWarning]);
+    && !autoGrowArtboard.pending
+    && autoGrowArtboard.failureReason
+      ? AUTO_GROW_ARTBOARD_WARNING
+      : null;
   const exportWarnings = useMemo(() => [
     ...getExportBudgetWarnings({
       ...geometrySummary,
@@ -439,8 +427,6 @@ export default function App() {
           textGeometry={textGeometry}
           diagnosticsMode={diagnosticsState.mode}
           onDiagnosticsModeChange={diagnosticsState.setMode}
-          artboardOverflowMode={artboardOverflowMode}
-          onArtboardOverflowModeChange={setArtboardOverflowMode}
           webGpuOverlayOpen={webGpuOverlayOpen}
           fpsMeterOpen={fpsMeterOpen}
           onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
@@ -467,8 +453,6 @@ export default function App() {
             onCanvasSample={setCanvasSample}
             onCanvasFailure={handleCanvasFailure}
             diagnosticsMode={diagnosticsState.mode}
-            artboardExpansionPlan={artboardOverflowMode === "clip" && textOverflowWarning ? artboardExpansionPlan : null}
-            onExpandArtboardToText={expandArtboardToText}
             svgTraceConfig={activeSvgTraceConfig}
           />
           </CanvasNavigation>

@@ -28,7 +28,6 @@ import { useViewportHudHost } from "./viewportHudContext";
 import { buildGlyphSamplingDiagnostics } from "../engine/rendererSampling";
 import { resolveTextBoundsModel } from "../engine/textBounds";
 import { projectArtboard } from "../engine/artboard";
-import type { ArtboardExpansionPlan } from "../engine/artboardExpansion";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 
@@ -40,12 +39,10 @@ interface ViewportProps {
   previewRunning: boolean; canvasSample: CanvasPreviewSample | null;
   onCanvasSample: (sample: CanvasPreviewSample) => void; onCanvasFailure: () => void;
   diagnosticsMode: DiagnosticsMode;
-  artboardExpansionPlan?: ArtboardExpansionPlan | null;
-  onExpandArtboardToText?: () => void;
   svgTraceConfig?: SvgTraceConfig;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, artboardExpansionPlan = null, onExpandArtboardToText, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
@@ -149,6 +146,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         <CanvasFlowPreview
           state={state}
           textGeometry={textGeometry}
+          artboard={{ x: 0, y: 0, width: artboard.width, height: artboard.height }}
           running={previewRunning}
           fpsCap={previewSettings.fpsCap}
           pauseWhenHidden={previewSettings.pauseWhenHidden}
@@ -464,14 +462,6 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {exportWarnings.length > 0 && <div className="export-warnings">
           <strong>EXPORT CHECK</strong>
           <span>{exportWarnings.join(" ")}</span>
-          {artboardExpansionPlan && onExpandArtboardToText && <button
-            type="button"
-            className="expand-artboard-action is-interactive"
-            disabled={!artboardExpansionPlan.available || !artboardExpansionPlan.changed}
-            title={artboardExpansionPlan.reason}
-            onClick={onExpandArtboardToText}
-          >Expand artboard to text</button>}
-          {artboardExpansionPlan?.reason && <span>{artboardExpansionPlan.reason}</span>}
         </div>}
       {performanceWarnings.length > 0 && <div className="performance-warnings"><strong>PERFORMANCE</strong> {performanceWarnings.join(" ")}</div>}
         {(substrateError || debugImage.error) && <div className="substrate-error">{substrateError ?? debugImage.error}</div>}

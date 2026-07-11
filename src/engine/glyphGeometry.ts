@@ -63,6 +63,25 @@ export interface TextGeometry {
   hasOutlines: boolean;
 }
 
+export interface GlyphOutline {
+  d: string;
+  commands: GlyphPathCommand[];
+}
+
+export interface GlyphDomain {
+  glyphId: string;
+  character: string;
+  textIndex: number;
+  glyphIndex?: number;
+  bounds: GlyphBounds;
+  worldBounds: GlyphBounds | null;
+  outline: GlyphOutline | null;
+  worldTransform: { a: number; b: number; c: number; d: number; e: number; f: number };
+  visible: "inside" | "partial" | "outside";
+  eligible: boolean;
+  approximate: boolean;
+}
+
 export function unionBounds(bounds: Array<GlyphBounds | null>): GlyphBounds | null {
   const visible = bounds.filter((value): value is GlyphBounds => value !== null);
   if (visible.length === 0) return null;

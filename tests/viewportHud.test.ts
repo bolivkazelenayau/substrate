@@ -6,7 +6,6 @@ import { Viewport } from "../src/components/Viewport";
 import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry } from "../src/engine/rendererRuntime";
 import type { DiagnosticsMode, RenderContext } from "../src/types";
-import { planArtboardExpansionToText } from "../src/engine/artboardExpansion";
 
 const context: RenderContext = { timeMs: 500, frame: 15 };
 
@@ -130,24 +129,14 @@ describe("viewport space separation", () => {
     expect(container.querySelector("[aria-label='Canvas zoom']")?.textContent).toBe("125%");
   });
 
-  it("renders the explicit artboard expansion action in the screen-space warning HUD", () => {
-    const state = { ...baseState, text: "SUBSTRATE", fontSize: 560 };
-    const plan = planArtboardExpansionToText(state, null);
-    let expanded = false;
+  it("does not render a manual artboard expansion action in the warning HUD", () => {
     const baseViewport = viewport("off");
     act(() => root.render(createElement(CanvasNavigation, null, createElement(Viewport, {
       ...baseViewport.props,
-      state,
       exportWarnings: ["Text bounds exceed the artboard. Export will be clipped to the artboard viewBox."],
-      artboardExpansionPlan: plan,
-      onExpandArtboardToText: () => { expanded = true; },
     }))));
-    const button = container.querySelector<HTMLButtonElement>(".expand-artboard-action")!;
-    expect(button).not.toBeNull();
-    expect(container.querySelector(".viewport-hud-layer")?.contains(button)).toBe(true);
-    expect(container.querySelector(".canvas-navigation-transform")?.contains(button)).toBe(false);
-    act(() => button.click());
-    expect(expanded).toBe(true);
+    expect(container.querySelector(".expand-artboard-action")).toBeNull();
+    expect(container.textContent).not.toContain("Expand artboard to text");
   });
 
   it.each(["sdf-contours", "wave-contours"] as const)("uses configured contour thickness in the %s SVG preview", (renderer) => {

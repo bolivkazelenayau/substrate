@@ -234,8 +234,6 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 
 .export-warnings { right: 24px; bottom: 32px; max-width: 520px; color: var(--warning); background: var(--warning-bg); border-color: var(--error); }
 .export-warnings strong { color: var(--warning); margin-right: 6px; }
-.expand-artboard-action { margin-left: 6px; padding: 5px 8px; border-color: currentColor; color: var(--warning); background: transparent; font-size: 9px; }
-.expand-artboard-action:disabled { cursor: not-allowed; opacity: .45; }
 .performance-warnings { left: 24px; bottom: 32px; max-width: 520px; color: #ffd166; background: #3a2a0d; border-color: #70582e; }
 .performance-warnings strong { color: #ffd166; margin-right: 6px; }
 .substrate-error { left: 24px; bottom: 32px; max-width: calc(100% - 48px); color: var(--error); background: var(--warning-bg); border-color: var(--error); }

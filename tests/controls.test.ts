@@ -80,11 +80,11 @@ describe("Safe Typography controls", () => {
 
   const getUpdated = (): ProjectState | null => updated;
 
-  it("defaults artboard overflow to clipping", () => {
+  it("does not expose artboard containment as an export option", () => {
     renderControls();
     openDisclosure("Export");
-    expect(field("Artboard overflow", "select").value).toBe("clip");
-    expect(container.textContent).toContain("It never shrinks automatically.");
+    expect(container.textContent).not.toContain("Artboard overflow");
+    expect(container.textContent).not.toContain("Auto-grow artboard");
   });
 
   const openDisclosure = (label: string) => {

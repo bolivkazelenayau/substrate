@@ -4,8 +4,9 @@ import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../engine/flowP
 import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
-import { projectArtboard } from "../engine/artboard";
 import { planCanvasBackingStore } from "../engine/safetyBudget";
+
+interface ArtboardRect { x: number; y: number; width: number; height: number }
 
 export interface CanvasPreviewSample {
   context: RenderContext;
@@ -22,6 +23,7 @@ export interface CanvasPreviewSample {
 interface Props {
   state: ProjectState;
   textGeometry: TextGeometry | null;
+  artboard: ArtboardRect;
   running: boolean;
   fpsCap: PreviewFpsCap;
   pauseWhenHidden: boolean;
@@ -29,8 +31,20 @@ interface Props {
   onFailure: () => void;
 }
 
+/** Canvas equivalent of SVG's default `preserveAspectRatio="xMidYMid meet"`. */
+export function canvasWorldTransform(backingWidth: number, backingHeight: number, artboard: ArtboardRect) {
+  const scale = Math.min(backingWidth / artboard.width, backingHeight / artboard.height);
+  const insetX = (backingWidth - artboard.width * scale) / 2;
+  const insetY = (backingHeight - artboard.height * scale) / 2;
+  return {
+    a: scale, b: 0, c: 0, d: scale,
+    e: insetX - artboard.x * scale,
+    f: insetY - artboard.y * scale,
+  } as const;
+}
+
 export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
-  const { state, textGeometry, running, fpsCap, pauseWhenHidden, onSample, onFailure } = props;
+  const { state, textGeometry, artboard: artboardRect, running, fpsCap, pauseWhenHidden, onSample, onFailure } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -40,7 +54,11 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       onFailure();
       return;
     }
-    const artboard = projectArtboard(state);
+    const artboard = {
+      ...artboardRect,
+      centerX: artboardRect.x + artboardRect.width / 2,
+      centerY: artboardRect.y + artboardRect.height / 2,
+    };
     // Backing storage follows the displayed preview, never the unbounded world artboard.
     const rect = canvas.getBoundingClientRect();
     const canvasPlan = planCanvasBackingStore({
@@ -50,13 +68,12 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     });
     canvas.width = canvasPlan.width;
     canvas.height = canvasPlan.height;
-    const scaleX = canvasPlan.width / artboard.width;
-    const scaleY = canvasPlan.height / artboard.height;
+    const worldTransform = canvasWorldTransform(canvasPlan.width, canvasPlan.height, artboard);
     let glyphClip: Path2D | null = null;
     if (textGeometry?.hasOutlines && typeof Path2D !== "undefined") {
       try {
-        glyphClip = new Path2D();
-        textGeometry.glyphs.forEach((glyph) => glyph.path.d && glyphClip!.addPath(new Path2D(glyph.path.d)));
+        const combinedGlyphPath = textGeometry.glyphs.map((glyph) => glyph.path.d).filter(Boolean).join(" ");
+        glyphClip = combinedGlyphPath ? new Path2D(combinedGlyphPath) : null;
       } catch {
         glyphClip = null;
       }
@@ -76,12 +93,13 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       const started = performance.now();
       const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: artboard };
       const previewFrame = createFlowPreviewFrame(state, renderContext);
-      context2d.setTransform(scaleX, 0, 0, scaleY, 0, 0);
-      context2d.clearRect(0, 0, artboard.width, artboard.height);
+      context2d.setTransform(1, 0, 0, 1, 0, 0);
+      context2d.clearRect(0, 0, canvasPlan.width, canvasPlan.height);
       if (!previewFrame.appearance.transparentBackground) {
         context2d.fillStyle = previewFrame.appearance.backgroundColor;
-        context2d.fillRect(0, 0, artboard.width, artboard.height);
+        context2d.fillRect(0, 0, canvasPlan.width, canvasPlan.height);
       }
+      context2d.setTransform(worldTransform.a, worldTransform.b, worldTransform.c, worldTransform.d, worldTransform.e, worldTransform.f);
       context2d.save();
       if (glyphClip) context2d.clip(glyphClip);
       context2d.strokeStyle = previewFrame.appearance.primaryColor;
@@ -172,7 +190,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     };
     animationFrame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrame);
-  }, [fpsCap, onFailure, onSample, pauseWhenHidden, running, state, textGeometry]);
+  }, [artboardRect.x, artboardRect.y, artboardRect.width, artboardRect.height, fpsCap, onFailure, onSample, pauseWhenHidden, running, state, textGeometry]);
 
   return <canvas ref={canvasRef} className="flow-canvas" aria-hidden="true" />;
 });

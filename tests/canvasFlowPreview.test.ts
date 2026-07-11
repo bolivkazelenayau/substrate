@@ -1,7 +1,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CanvasFlowPreview } from "../src/components/CanvasFlowPreview";
+import { CanvasFlowPreview, canvasWorldTransform } from "../src/components/CanvasFlowPreview";
 import { baseState } from "../src/engine/presets";
 
 describe("CanvasFlowPreview lifecycle", () => {
@@ -61,6 +61,7 @@ describe("CanvasFlowPreview lifecycle", () => {
     const render = (state = baseState) => createElement(CanvasFlowPreview, {
       state,
       textGeometry: null,
+      artboard: { x: 0, y: 0, width: 1200, height: 720 },
       running: true,
       fpsCap: 60 as const,
       pauseWhenHidden: true,
@@ -84,5 +85,22 @@ describe("CanvasFlowPreview lifecycle", () => {
     act(() => root.unmount());
     expect(cancelled).toEqual([1, 2]);
     expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it("matches SVG xMidYMid meet when the canvas box is wider than the artboard", () => {
+    const transform = canvasWorldTransform(750, 290, { x: 0, y: 0, width: 1200, height: 720 });
+    expect(transform.a).toBeCloseTo(290 / 720, 8);
+    expect(transform.d).toBe(transform.a);
+    expect(transform.e).toBeCloseTo((750 - 1200 * transform.a) / 2, 8);
+    expect(transform.f).toBeCloseTo(0, 8);
+    expect(1200 * transform.a).toBeLessThan(750);
+  });
+
+  it("includes the SVG viewBox origin in the centred Canvas world transform", () => {
+    const transform = canvasWorldTransform(800, 400, { x: -100, y: 20, width: 1200, height: 720 });
+    const left = -100 * transform.a + transform.e;
+    const top = 20 * transform.d + transform.f;
+    expect(left).toBeCloseTo((800 - 1200 * transform.a) / 2, 8);
+    expect(top).toBeCloseTo((400 - 720 * transform.d) / 2, 8);
   });
 });

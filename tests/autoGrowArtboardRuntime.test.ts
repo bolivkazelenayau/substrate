@@ -158,25 +158,16 @@ describe("auto-grow artboard runtime wiring", () => {
     vi.useRealTimers();
   });
 
-  it("expands existing overflow when the Export selector changes from Clip to Auto-grow", () => {
+  it("expands existing overflow automatically without an Export selector", () => {
     const initialProject = { ...baseState, text: "SUBSTRATE", fontSize: 560 };
     expect(getTextArtboardOverflowWarning(initialProject, null)).not.toBeNull();
-    act(() => root.render(createElement(AutoGrowHarness, { initialProject })));
-
-    const exportButton = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.includes("Export"));
-    act(() => exportButton!.click());
-    const selector = [...container.querySelectorAll<HTMLSelectElement>("select")]
-      .find((select) => select.parentElement?.textContent?.includes("Artboard overflow"))!;
-
-    act(() => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(selector, "auto-grow");
-      selector.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    act(() => root.render(createElement(AutoGrowHarness, { initialProject, initialMode: "auto-grow" })));
+    act(() => vi.advanceTimersByTime(AUTO_GROW_ARTBOARD_DEBOUNCE_MS));
     const output = container.querySelector("output")!;
     expect(output.dataset.artboard).not.toBe("1200x720");
     expect(output.dataset.fontSize).toBe("560");
     expect(output.dataset.overflow).toBe("");
+    expect(container.textContent).not.toContain("Artboard overflow");
   });
 
   it("expands the default 1200x720 artboard after the exact 140 to 540 typography change", () => {
