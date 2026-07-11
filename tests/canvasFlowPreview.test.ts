@@ -1,7 +1,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CanvasFlowPreview, canvasWorldTransform } from "../src/components/CanvasFlowPreview";
+import { CanvasFlowPreview } from "../src/components/CanvasFlowPreview";
+import { canvasWorldTransform } from "../src/components/canvasWorldTransform";
 import { baseState } from "../src/engine/presets";
 
 describe("CanvasFlowPreview lifecycle", () => {

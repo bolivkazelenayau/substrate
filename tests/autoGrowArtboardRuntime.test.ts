@@ -130,8 +130,6 @@ function AutoGrowHarness({
       emitterGlyphs: [],
       diagnosticsMode: "compact",
       onDiagnosticsModeChange: () => undefined,
-      artboardOverflowMode: mode,
-      onArtboardOverflowModeChange: setMode,
     }),
   );
 }

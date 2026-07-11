@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build --config vite.config.ts",
     "analyze": "tsc -b && vite build --config vite.config.ts --mode analyze",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm run typecheck:source && npm run typecheck:test",
+    "typecheck:source": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "check:reachability": "node scripts/checkProductionReachability.mjs",
     "test": "vitest run",
     "update:export-fixtures": "node scripts/updateExportFixtures.mjs",
     "compatibility:check": "vitest run tests/compatibilityExports.test.ts"

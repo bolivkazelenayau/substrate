@@ -1,12 +1,13 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { consumeFrameBudget, updateTimingAverage } from "../engine/animationTiming";
 import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../engine/flowPreviewFrame";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 import { planCanvasBackingStore } from "../engine/safetyBudget";
+import { canvasWorldTransform, type CanvasWorldTransformArtboard } from "./canvasWorldTransform";
 
-interface ArtboardRect { x: number; y: number; width: number; height: number }
+type ArtboardRect = CanvasWorldTransformArtboard;
 
 export interface CanvasPreviewSample {
   context: RenderContext;
@@ -31,21 +32,18 @@ interface Props {
   onFailure: () => void;
 }
 
-/** Canvas equivalent of SVG's default `preserveAspectRatio="xMidYMid meet"`. */
-export function canvasWorldTransform(backingWidth: number, backingHeight: number, artboard: ArtboardRect) {
-  const scale = Math.min(backingWidth / artboard.width, backingHeight / artboard.height);
-  const insetX = (backingWidth - artboard.width * scale) / 2;
-  const insetY = (backingHeight - artboard.height * scale) / 2;
-  return {
-    a: scale, b: 0, c: 0, d: scale,
-    e: insetX - artboard.x * scale,
-    f: insetY - artboard.y * scale,
-  } as const;
-}
-
 export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
   const { state, textGeometry, artboard: artboardRect, running, fpsCap, pauseWhenHidden, onSample, onFailure } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stableArtboardRect = useMemo(
+    () => ({
+      x: artboardRect.x,
+      y: artboardRect.y,
+      width: artboardRect.width,
+      height: artboardRect.height,
+    }),
+    [artboardRect.x, artboardRect.y, artboardRect.width, artboardRect.height],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -55,9 +53,9 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       return;
     }
     const artboard = {
-      ...artboardRect,
-      centerX: artboardRect.x + artboardRect.width / 2,
-      centerY: artboardRect.y + artboardRect.height / 2,
+      ...stableArtboardRect,
+      centerX: stableArtboardRect.x + stableArtboardRect.width / 2,
+      centerY: stableArtboardRect.y + stableArtboardRect.height / 2,
     };
     // Backing storage follows the displayed preview, never the unbounded world artboard.
     const rect = canvas.getBoundingClientRect();
@@ -190,7 +188,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     };
     animationFrame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrame);
-  }, [artboardRect.x, artboardRect.y, artboardRect.width, artboardRect.height, fpsCap, onFailure, onSample, pauseWhenHidden, running, state, textGeometry]);
+  }, [fpsCap, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, state, textGeometry]);
 
   return <canvas ref={canvasRef} className="flow-canvas" aria-hidden="true" />;
 });
