@@ -28,7 +28,12 @@ import { useViewportHudHost } from "./viewportHudContext";
 import { buildGlyphSamplingDiagnostics } from "../engine/rendererSampling";
 import { resolveTextBoundsModel } from "../engine/textBounds";
 import { contextArtboard } from "../engine/artboard";
+import { buildRendererAwareSizeDraftGeometry } from "../engine/sizeDraftRenderer";
+import { buildSizeDraftPresentationGeometry } from "../engine/sizeDraftPreview";
+import { resolveSizePresentation } from "../engine/sizePresentation";
+import { resolveSizeSceneTransform } from "../engine/sizeSceneTransform";
 import { artboardBottom, artboardLeft, artboardRight, artboardTop, type ResolvedSceneLayout } from "../engine/sceneLayout";
+import type { SizeInteractionState } from "../hooks/useSizeInteraction";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 import { traceEvent } from "../dev/interactionTrace";
@@ -43,9 +48,12 @@ interface ViewportProps {
   onCanvasSample: (sample: CanvasPreviewSample) => void; onCanvasFailure: () => void;
   diagnosticsMode: DiagnosticsMode;
   svgTraceConfig?: SvgTraceConfig;
+  sizeInteraction: SizeInteractionState;
+  sizeDraftSceneLayout: ResolvedSceneLayout | null;
+  sizeExactReady: boolean;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
@@ -58,6 +66,52 @@ export function Viewport({ state, context, geometry, textGeometry, sceneLayout, 
   const artboard = contextArtboard(context);
   const effectiveRect = sceneLayout.effectiveArtboard;
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
+  const sizePresentation = useMemo(
+    () => resolveSizePresentation(sizeInteraction, sizeExactReady),
+    [sizeExactReady, sizeInteraction],
+  );
+  const presentationGeometry = useMemo(() => {
+    if (sizePresentation.kind === "exact" || sizePresentation.kind === "retained") return geometry;
+    if (sizePresentation.policy === "renderer-aware" && sizeDraftSceneLayout && sizeInteraction.phase === "dragging") {
+      return buildRendererAwareSizeDraftGeometry(
+        state,
+        sizeInteraction.draftSize,
+        sizeDraftSceneLayout,
+        textGeometry,
+        { timeMs: context.timeMs, frame: context.frame },
+      );
+    }
+    if (sizeDraftSceneLayout && sizeInteraction.phase === "dragging") {
+      return buildSizeDraftPresentationGeometry(
+        geometry,
+        sceneLayout,
+        sizeInteraction.baseSize,
+        sizeDraftSceneLayout,
+        sizeInteraction.draftSize,
+      );
+    }
+    return geometry;
+  }, [
+    context.frame,
+    context.timeMs,
+    geometry,
+    sceneLayout,
+    sizeDraftSceneLayout,
+    sizeInteraction,
+    sizePresentation,
+    state,
+    textGeometry,
+  ]);
+  const canvasSceneTransform = useMemo(() => {
+    if (sizePresentation.kind !== "draft" || sizePresentation.policy === "renderer-aware") return null;
+    if (!sizeDraftSceneLayout || sizeInteraction.phase !== "dragging") return null;
+    return resolveSizeSceneTransform(
+      sceneLayout,
+      sizeInteraction.baseSize,
+      sizeDraftSceneLayout,
+      sizeInteraction.draftSize,
+    );
+  }, [sceneLayout, sizeDraftSceneLayout, sizeInteraction, sizePresentation]);
   const samplingDiagnostics = useMemo(() => {
     if (!diagnosticsExpanded || !textGeometry?.hasOutlines) return [];
     const origins = geometry.geometries.flatMap((item) => {
@@ -166,13 +220,38 @@ const gradientVectors = useMemo(() => {
   }, [geometry.id, previewBackend]);
 
   useLayoutEffect(() => {
+    if (sizePresentation.kind === "draft") {
+      traceEvent({
+        stage: "presentation.draft",
+        phase: "instant",
+        gestureId: sizePresentation.gestureId,
+        frameKey: geometry.id,
+        outputKey: presentationGeometry.id,
+        detail: {
+          kind: sizePresentation.kind,
+          policy: sizePresentation.policy,
+          draftFontSize: sizeInteraction.phase === "dragging" ? sizeInteraction.draftSize : state.fontSize,
+        },
+      });
+      traceEvent({
+        stage: "size.draft.present",
+        phase: "instant",
+        gestureId: sizePresentation.gestureId,
+        frameKey: geometry.id,
+        outputKey: presentationGeometry.id,
+        detail: { policy: sizePresentation.policy },
+      });
+    }
+  }, [geometry.id, presentationGeometry.id, sizeInteraction, sizePresentation, state.fontSize]);
+
+  useLayoutEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
     traceEvent({
       stage: "svg.presentation",
       phase: "instant",
       frameKey: geometry.id,
-      outputKey: geometry.id,
+      outputKey: sizePresentation.kind === "exact" ? geometry.id : presentationGeometry.id,
       counts: {
         svgElements: svg.querySelectorAll("*").length,
         paths: svg.querySelectorAll("path").length,
@@ -182,12 +261,14 @@ const gradientVectors = useMemo(() => {
         viewBox: svg.getAttribute("viewBox"),
         presented: true,
         backend: "svg-dom",
+        sizeDraft: sizePresentation.kind !== "exact",
+        presentationKind: sizePresentation.kind,
       },
     });
-}, [effectiveRect.height, effectiveRect.width, geometry, previewBackend, state.renderer, textGeometry]);
+}, [effectiveRect.height, effectiveRect.width, geometry, presentationGeometry.id, previewBackend, sizePresentation.kind, state.renderer, textGeometry]);
 
   return (
-    <div className={`stage diagnostics-${diagnosticsMode}`} data-testid="viewport-stage" data-preview-backend={previewBackend} data-viewport-space="artwork" data-artboard-authored-width={sceneLayout.authoredArtboard.width} data-artboard-authored-height={sceneLayout.authoredArtboard.height} data-artboard-effective-x={effectiveRect.x} data-artboard-effective-y={effectiveRect.y} data-artboard-effective-width={effectiveRect.width} data-artboard-effective-height={effectiveRect.height} data-scene-layout-key={sceneLayout.key} data-renderer-element-count={geometry.geometries.length} style={{ aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}` }}>
+    <div className={`stage diagnostics-${diagnosticsMode}`} data-testid="viewport-stage" data-preview-backend={previewBackend} data-viewport-space="artwork" data-artboard-authored-width={sceneLayout.authoredArtboard.width} data-artboard-authored-height={sceneLayout.authoredArtboard.height} data-artboard-effective-x={effectiveRect.x} data-artboard-effective-y={effectiveRect.y} data-artboard-effective-width={effectiveRect.width} data-artboard-effective-height={effectiveRect.height} data-scene-layout-key={sceneLayout.key} data-renderer-element-count={geometry.geometries.length} data-size-interaction-phase={sizeInteraction.phase} data-size-presentation-kind={sizePresentation.kind} data-size-draft-active={sizePresentation.kind !== "exact" ? "true" : "false"} style={{ aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}` }}>
       <div
         className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
         data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
@@ -205,6 +286,7 @@ const gradientVectors = useMemo(() => {
           pauseWhenHidden={previewSettings.pauseWhenHidden}
           onSample={onCanvasSample}
           onFailure={onCanvasFailure}
+          sceneTransform={canvasSceneTransform}
         />
       )}
       <svg ref={svgRef} className="artboard" data-testid="artwork-svg" viewBox={`${effectiveRect.x} ${effectiveRect.y} ${effectiveRect.width} ${effectiveRect.height}`} aria-label={`Generative preview of ${state.text}`}>
@@ -241,7 +323,7 @@ const gradientVectors = useMemo(() => {
         <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }} strokeWidth={renderer.strokeWidth?.(state) ?? LEGACY_PREVIEW_STROKE_WIDTH}>
           {state.renderer === "flow" && previewBackend === "svg-dom"
             ? <FlowPreview
-                geometry={geometry}
+                geometry={presentationGeometry}
                 onUpdate={handleFlowPreviewUpdate}
                 bucketCount={svgTraceConfig.bucketCount}
                 traceMode={svgTraceConfig.mode}
@@ -251,7 +333,7 @@ const gradientVectors = useMemo(() => {
                 fpsCap={previewSettings.fpsCap}
               />
             : state.renderer !== "flow"
-              ? geometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)
+              ? presentationGeometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)
               : null}
         </g>
         {showOverlay && <g className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1}>

@@ -17,7 +17,7 @@ export interface FontResolution {
 }
 
 export interface ExportReadiness {
-  status: "ready" | "font-missing" | "typography-pending" | "substrate-pending" | "renderer-pending" | "scene-safety-limit" | "revision-mismatch" | "failed";
+  status: "ready" | "font-missing" | "typography-pending" | "substrate-pending" | "renderer-pending" | "size-interaction-pending" | "scene-safety-limit" | "revision-mismatch" | "failed";
   reason: string;
   technicalReason: string;
   expectedKey?: ExportKey;

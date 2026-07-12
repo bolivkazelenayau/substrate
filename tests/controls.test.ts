@@ -3,8 +3,58 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Controls } from "../src/components/Controls";
 import { baseState, presets } from "../src/engine/presets";
+import type { SizeRangeHandlers } from "../src/hooks/useSizeInteraction";
 import type { ProjectState } from "../src/types";
 import { getTextBounds } from "../src/engine/textLayout";
+
+function createTestSizeHandlers(
+  getState: () => ProjectState,
+  setState: (state: ProjectState) => void,
+): SizeRangeHandlers {
+  let dragging = false;
+  let latest = getState().fontSize;
+  const finish = () => {
+    if (!dragging) return;
+    dragging = false;
+    setState({ ...getState(), fontSize: latest });
+  };
+  return {
+    onPointerDown: (value, _pointerId, _element) => {
+      dragging = true;
+      latest = value;
+    },
+    onKeyDown: (value) => {
+      dragging = true;
+      latest = value;
+    },
+    onKeyUp: (value) => {
+      latest = value;
+      finish();
+    },
+    onInput: (value) => {
+      latest = value;
+      if (!dragging && value !== getState().fontSize) {
+        setState({ ...getState(), fontSize: value });
+      }
+    },
+    onPointerUp: (value) => {
+      latest = value;
+      finish();
+    },
+    onLostPointerCapture: (value) => {
+      latest = value;
+      finish();
+    },
+    onBlur: (value) => {
+      latest = value;
+      finish();
+    },
+    onDoubleClickReset: (_value, defaultValue) => {
+      dragging = false;
+      setState({ ...getState(), fontSize: defaultValue });
+    },
+  };
+}
 
 const previewSettings = {
   fpsCap: 30 as const,
@@ -37,10 +87,15 @@ describe("Safe Typography controls", () => {
   });
 
   const renderControls = (state: ProjectState = baseState) => {
+    let current = state;
+    const setState = (next: ProjectState) => {
+      current = next;
+      updated = next;
+    };
     act(() => {
       root.render(createElement(Controls, {
-        state,
-        setState: (state: ProjectState) => { updated = state; },
+        state: current,
+        setState,
         fileRef: { current: null },
         onImport: () => undefined,
         fontFileRef: { current: null },
@@ -53,6 +108,8 @@ describe("Safe Typography controls", () => {
         emitterGlyphs: [],
         diagnosticsMode: "compact",
         onDiagnosticsModeChange: () => undefined,
+        sizeDisplayFontSize: current.fontSize,
+        sizeHandlers: createTestSizeHandlers(() => current, setState),
       }));
     });
   };

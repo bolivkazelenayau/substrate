@@ -5,6 +5,7 @@ import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 import { planCanvasBackingStore } from "../engine/safetyBudget";
+import { sizeSceneTransformToCanvas, type SizeSceneTransform } from "../engine/sizeSceneTransform";
 import { canvasWorldTransform, type CanvasWorldTransformArtboard } from "./canvasWorldTransform";
 import { interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "../dev/interactionTrace";
 
@@ -30,12 +31,25 @@ interface Props {
   fpsCap: PreviewFpsCap;
   pauseWhenHidden: boolean;
   frameKey?: string;
+  sceneTransform?: SizeSceneTransform | null;
   onSample: (sample: CanvasPreviewSample) => void;
   onFailure: () => void;
 }
 
 export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
-  const { state, textGeometry, artboard: artboardRect, running, fpsCap, pauseWhenHidden, frameKey = "canvas:unknown", onSample, onFailure } = props;
+  const {
+    state,
+    textGeometry,
+    artboard: artboardRect,
+    running,
+    fpsCap,
+    pauseWhenHidden,
+    frameKey = "canvas:unknown",
+    sceneTransform = null,
+    onSample,
+    onFailure,
+  } = props;
+  const stableSceneTransform = sceneTransform;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stableArtboardRect = useMemo(
     () => ({
@@ -122,6 +136,9 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
         context2d.fillRect(0, 0, canvasPlan.width, canvasPlan.height);
       }
       context2d.setTransform(worldTransform.a, worldTransform.b, worldTransform.c, worldTransform.d, worldTransform.e, worldTransform.f);
+      if (stableSceneTransform) {
+        sizeSceneTransformToCanvas(context2d, stableSceneTransform);
+      }
       context2d.save();
       if (glyphClip) context2d.clip(glyphClip);
       context2d.strokeStyle = previewFrame.appearance.primaryColor;
@@ -225,7 +242,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       cancelAnimationFrame(animationFrame);
       traceEvent({ stage: "canvas.lifecycle", phase: "end", frameKey, detail: { reason: "effect-cleanup" } });
     };
-  }, [fpsCap, frameKey, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, state, textGeometry]);
+  }, [fpsCap, frameKey, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, stableSceneTransform, state, textGeometry]);
 
   return <canvas ref={canvasRef} className="flow-canvas" data-testid="artwork-canvas" aria-hidden="true" />;
 });

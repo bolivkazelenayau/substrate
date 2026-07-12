@@ -1,6 +1,7 @@
 import { memo, useState, type ChangeEvent, type RefObject } from "react";
 import { applyPreset, baseState, getPresetDisplayLabel, presetIds } from "../../engine/presets";
 import { getRenderer, rendererList } from "../../engine/renderers";
+import type { SizeRangeHandlers } from "../../hooks/useSizeInteraction";
 import type { DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
 import type { GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
 import type { TextGeometry } from "../../engine/glyphGeometry";
@@ -31,6 +32,8 @@ export interface FieldControlsProps {
   fpsMeterOpen?: boolean;
   onToggleWebGpuOverlay?: () => void;
   onToggleFpsMeter?: () => void;
+  sizeDisplayFontSize: number;
+  sizeHandlers: SizeRangeHandlers;
 }
 
 const fieldControls: Array<{ id: FieldControlId; label: string; min: number; max: number; step?: number }> = [
@@ -89,7 +92,7 @@ const rangeDefaults: Record<string, number> = {
   "Dot spacing": baseState.waveDotSpacing,
 };
 
-export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter }: FieldControlsProps) {
+export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter, sizeDisplayFontSize, sizeHandlers }: FieldControlsProps) {
   const renderer = getRenderer(state.renderer);
   const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
   const emitterConsumerActive = state.renderer === "glyph-diffuser"
@@ -126,6 +129,8 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         onClearFont={onClearFont}
         fontLoaded={fontLoaded}
         textGeometry={textGeometry}
+        sizeDisplayFontSize={sizeDisplayFontSize}
+        sizeHandlers={sizeHandlers}
       />
 
       <FieldPanel className="preset-renderer-section">
@@ -204,6 +209,8 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   && previous.diagnosticsMode === next.diagnosticsMode
   && previous.webGpuOverlayOpen === next.webGpuOverlayOpen
   && previous.fpsMeterOpen === next.fpsMeterOpen
+  && previous.sizeDisplayFontSize === next.sizeDisplayFontSize
+  && previous.sizeHandlers === next.sizeHandlers
 ));
 
 function Range({ label, value, min, max, step = 1, disabled = false, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; defaultValue?: number; onChange: (value: number) => void }) {

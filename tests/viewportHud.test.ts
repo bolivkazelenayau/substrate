@@ -7,6 +7,7 @@ import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry } from "../src/engine/rendererRuntime";
 import { resolveSceneLayout } from "../src/engine/sceneLayout";
 import type { DiagnosticsMode, RenderContext } from "../src/types";
+import { idleSizeInteraction } from "./helpers/idleSizeInteraction";
 
 const context: RenderContext = { timeMs: 500, frame: 15 };
 const baseSceneLayout = resolveSceneLayout(baseState, null);
@@ -58,6 +59,9 @@ function viewport(mode: DiagnosticsMode) {
     onCanvasSample: () => undefined,
     onCanvasFailure: () => undefined,
     diagnosticsMode: mode,
+    sizeInteraction: idleSizeInteraction(baseState.fontSize),
+    sizeDraftSceneLayout: null,
+    sizeExactReady: true,
   });
 }
 

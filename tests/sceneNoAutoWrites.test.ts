@@ -9,13 +9,11 @@ function cloneState(state: ProjectState): ProjectState {
   return structuredClone(state);
 }
 
-function sizePatchFields(source: string): string[] {
-  const match = source.match(/label="Size"[\s\S]*?onChange=\{\(fontSize\) => patch\(\{([^}]+)\}\)\}/);
-  if (!match) return [];
-  const patchBody = match[1];
-  const explicit = [...patchBody.matchAll(/(\w+)\s*:/g)].map((field) => field[1]);
-  if (explicit.length > 0) return explicit;
-  return [...new Set(patchBody.split(/[\s,]+/).filter(Boolean))];
+function sizeControlUsesInteractionBoundary(source: string): boolean {
+  return source.includes("SizeRange")
+    && source.includes("handlers={sizeHandlers}")
+    && source.includes("handlers.onInput")
+    && !source.includes('onChange={(fontSize) => patch({ fontSize })}');
 }
 
 describe("no automatic ProjectState writes", () => {
@@ -38,10 +36,13 @@ describe("no automatic ProjectState writes", () => {
     expect(scene.typography.authoredOffset.y).toBe(initial.textOffsetY);
   });
 
-  it("commits only the Size-owned field from the typography Size control", () => {
-    const source = readFileSync(resolve("src/components/panels/ArtworkTypographyPanels.tsx"), "utf8");
-    expect(sizePatchFields(source)).toEqual(["fontSize"]);
-    expect(source).not.toContain("useAutoGrowArtboard");
+  it("routes the typography Size control through the interaction boundary instead of per-input patch commits", () => {
+    const panels = readFileSync(resolve("src/components/panels/ArtworkTypographyPanels.tsx"), "utf8");
+    const app = readFileSync(resolve("src/App.tsx"), "utf8");
+    expect(sizeControlUsesInteractionBoundary(panels)).toBe(true);
+    expect(app).toContain("useSizeInteraction");
+    expect(app).toContain("commitFontSize");
+    expect(panels).not.toContain("useAutoGrowArtboard");
   });
 
   it("does not emit automatic artboard or textOffsetY patches from production hooks", () => {

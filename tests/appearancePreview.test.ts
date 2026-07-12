@@ -7,6 +7,7 @@ import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry, rendererGeometryStateKey } from "../src/engine/rendererRuntime";
 import { resolveSceneLayout } from "../src/engine/sceneLayout";
 import type { ProjectState, RenderContext } from "../src/types";
+import { idleSizeInteraction } from "./helpers/idleSizeInteraction";
 
 const context: RenderContext = { timeMs: 500, frame: 15 };
 const previewSettings = {
@@ -61,6 +62,9 @@ function previewMarkup(state: ProjectState, previewBackend: "svg-dom" | "canvas-
       onCanvasSample: () => undefined,
       onCanvasFailure: () => undefined,
       diagnosticsMode: "compact",
+      sizeInteraction: idleSizeInteraction(state.fontSize),
+      sizeDraftSceneLayout: null,
+      sizeExactReady: true,
     }),
   );
 }

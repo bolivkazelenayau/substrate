@@ -17,6 +17,13 @@ const reviewedProductionModules = [
   "src/engine/exportSvg.ts",
   "src/engine/renderers/index.ts",
   "src/hooks/useSceneLayout.ts",
+  "src/hooks/useSizeInteraction.ts",
+  "src/engine/sizeDraftPreview.ts",
+  "src/engine/sizeDraftScene.ts",
+  "src/engine/sizeSceneTransform.ts",
+  "src/engine/sizePresentation.ts",
+  "src/engine/sizeRendererDraftPolicy.ts",
+  "src/engine/sizeDraftRenderer.ts",
 ];
 
 // These files were the removed, test-backed architecture island. Keeping this

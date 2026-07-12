@@ -34,6 +34,9 @@ import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
 import { useRendererRuntime } from "./hooks/useRendererRuntime";
 import { useSceneLayout } from "./hooks/useSceneLayout";
+import { resolveSizeDraftSceneLayout } from "./engine/sizeDraftScene";
+import { sizeDisplayFontSize, sizeIsInteracting } from "./engine/sizePresentation";
+import { useSizeInteraction } from "./hooks/useSizeInteraction";
 import {
   captureExportSnapshot,
   documentKey,
@@ -74,6 +77,14 @@ function recordReactCommit(
 export default function App() {
   recordPreviewAppRender();
   const { project: state, setProject: setState, importUnknown } = useProjectDocument();
+  const commitFontSize = useCallback((fontSize: number) => {
+    setState((current) => (current.fontSize === fontSize ? current : { ...current, fontSize }));
+  }, [setState]);
+  const { state: sizeInteraction, handlers: sizeHandlers, completeSettlement } = useSizeInteraction(
+    state.fontSize,
+    state.renderer,
+    commitFontSize,
+  );
   const [playing, setPlaying] = useState(true);
   const { exporting, setExporting } = useExportController();
   const [previewSettings, setPreviewSettings] = usePreviewSettings();
@@ -114,6 +125,12 @@ export default function App() {
   // and the symmetric effective artboard rect (origin-aware). Replaces the
   // previous automatic artboard-growth mutation hook entirely.
   const sceneLayout = useSceneLayout(state, textGeometry);
+  const sizeDraftFontSize = sizeInteraction.phase === "dragging" ? sizeInteraction.draftSize : null;
+  const sizeDraftSceneLayout = useMemo(() => (
+    sizeDraftFontSize === null
+      ? null
+      : resolveSizeDraftSceneLayout(state, sizeDraftFontSize, textGeometry)
+  ), [sizeDraftFontSize, state, textGeometry]);
   const activeTypographyOutputKey = useMemo(
     () => typographyOutputKey(activeTypographyInputKey, fontResolution, textGeometry),
     [activeTypographyInputKey, fontResolution, textGeometry],
@@ -249,7 +266,7 @@ return snapshot;
       : "renderer-input:typography-pending",
     [activeTypographyOutputKey, capturedExportContext, state, substrateBuild.outputKey],
   );
-  const exportReadiness = useMemo(() => resolveExportReadiness({
+  const baseExportReadiness = useMemo(() => resolveExportReadiness({
     font: fontResolution,
     typographyInputKey: activeTypographyInputKey,
     typographyOutputKey: activeTypographyOutputKey,
@@ -266,6 +283,23 @@ return snapshot;
     failureReason: substrateBuild.error,
     renderer: state.renderer,
   }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
+  const sizeExactReady = baseExportReadiness.status === "ready" || baseExportReadiness.status === "scene-safety-limit";
+  const exportReadiness = useMemo(() => {
+    if (sizeIsInteracting(sizeInteraction)) {
+      return {
+        status: "size-interaction-pending" as const,
+        reason: "Preparing export… size interaction active.",
+        technicalReason: `Size interaction phase: ${sizeInteraction.phase}.`,
+      };
+    }
+    return baseExportReadiness;
+  }, [baseExportReadiness, sizeInteraction]);
+  useEffect(() => {
+    if (sizeInteraction.phase !== "settling") return;
+    if (state.fontSize !== sizeInteraction.committedSize) return;
+    if (!sizeExactReady) return;
+    completeSettlement();
+  }, [completeSettlement, sizeExactReady, sizeInteraction, state.fontSize]);
   const previousReadinessRef = useRef<string | null>(null);
   useEffect(() => {
     const marker = [
@@ -524,6 +558,8 @@ snapshot = captureExportSnapshot({
             fpsMeterOpen={fpsMeterOpen}
             onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
             onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
+            sizeDisplayFontSize={sizeDisplayFontSize(sizeInteraction)}
+            sizeHandlers={sizeHandlers}
           />
         </Profiler>
         <section className="viewport-shell">
@@ -550,6 +586,9 @@ snapshot = captureExportSnapshot({
               onCanvasFailure={handleCanvasFailure}
               diagnosticsMode={diagnosticsState.mode}
               svgTraceConfig={activeSvgTraceConfig}
+              sizeInteraction={sizeInteraction}
+              sizeDraftSceneLayout={sizeDraftSceneLayout}
+              sizeExactReady={sizeExactReady}
             />
             </CanvasNavigation>
           </Profiler>

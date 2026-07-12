@@ -96,7 +96,11 @@ function summarizeTrace(events: TraceEvent[]) {
     lastSequence: events.at(-1)?.sequence ?? null,
     gestureCount: new Set(events.map((event) => event.gestureId).filter((id): id is number => id !== undefined)).size,
     rawInputCount: eventsFor(events, "native.size.input").length,
+    draftFrameCount: eventsFor(events, "size.draft.frame").length,
+    sizeInteractionCommitCount: eventsFor(events, "size.interaction.commit").length,
     projectCommitCount: eventsFor(events, "project.patch").length,
+    fontSizePatchCount: fontSizePatches(events).length,
+    projectPatchDuringDragCount: eventsDuringSizeDrag(events, "project.patch").length,
     typographyBuildCount: eventsFor(events, "typography.build", "end").length,
     substrateRequestCount: eventsFor(events, "substrate.request", "start").length,
     rendererBuildCount: eventsFor(events, "renderer.build", "end").length,
@@ -126,6 +130,32 @@ function lastSizePatch(events: TraceEvent[]) {
   return events
     .filter((event) => event.stage === "project.patch" && String(event.detail?.fields ?? "").split(",").includes("fontSize"))
     .at(-1);
+}
+
+function fontSizePatches(events: TraceEvent[]) {
+  return events.filter((event) => event.stage === "project.patch" && String(event.detail?.fields ?? "").split(",").includes("fontSize"));
+}
+
+function sizeDragWindows(events: TraceEvent[]) {
+  const windows: Array<{ start: number; end: number }> = [];
+  let dragStart: number | null = null;
+  for (const event of events) {
+    if ((event.stage === "size.interaction" && event.phase === "start") || event.stage === "size.gesture.start") dragStart = event.sequence;
+    if (event.stage === "size.interaction.commit" && dragStart !== null) {
+      windows.push({ start: dragStart, end: event.sequence });
+      dragStart = null;
+    }
+  }
+  return windows;
+}
+
+function eventsDuringSizeDrag(events: TraceEvent[], stage: string, phase?: TraceEvent["phase"]) {
+  const windows = sizeDragWindows(events);
+  return events.filter((event) => {
+    if (event.stage !== stage) return false;
+    if (phase !== undefined && event.phase !== phase) return false;
+    return windows.some((window) => event.sequence > window.start && event.sequence < window.end);
+  });
 }
 
 async function dragSize(page: Page, values: number[]) {
@@ -254,7 +284,13 @@ test("Gate 1: Ripple native Size drag", async ({ page }) => {
   expect(await size(page).isEnabled()).toBe(true);
   expect(lastSizePatch(events)?.detail?.fontSizeAfter).toBe(300);
   expect(eventsFor(events, "native.size.input").length).toBeGreaterThanOrEqual(4);
-  expect(eventsFor(events, "project.patch").length).toBeGreaterThan(0);
+  expect(eventsDuringSizeDrag(events, "project.patch").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "typography.build", "end").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "substrate.request", "start").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "renderer.build", "end").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "renderer.draft", "end").length).toBeGreaterThan(0);
+  expect(fontSizePatches(events).length).toBe(1);
+  expect(eventsFor(events, "size.draft.frame").length).toBeGreaterThan(0);
   expect(eventsFor(events, "typography.build", "end").length).toBeGreaterThan(0);
   expect(eventsFor(events, "renderer.build", "end").length).toBeGreaterThan(0);
   expect(eventsFor(events, "svg.presentation").length).toBeGreaterThan(0);
@@ -268,6 +304,11 @@ test("Gate 2: Halftone native Size drag", async ({ page }) => {
   await waitForReady(page);
   const events = await readTrace(page);
   expect(lastSizePatch(events)?.detail?.fontSizeAfter).toBe(520);
+  expect(eventsDuringSizeDrag(events, "project.patch").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "typography.build", "end").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "substrate.request", "start").length).toBe(0);
+  expect(eventsDuringSizeDrag(events, "renderer.build", "end").length).toBe(0);
+  expect(fontSizePatches(events).length).toBe(1);
   expect(eventsFor(events, "substrate.request", "start").length).toBeGreaterThan(0);
   expect(eventsFor(events, "substrate.scheduler").length).toBeGreaterThan(0);
   expect(eventsFor(events, "substrate.result").length + eventsFor(events, "substrate.stale-result").length).toBeGreaterThan(0);
@@ -286,6 +327,8 @@ test("Gate 3: second Size drag wins over an unsettled first drag", async ({ page
   const gestures = new Set(events.filter((event) => event.gestureId !== undefined).map((event) => event.gestureId));
   expect(gestures.size).toBeGreaterThanOrEqual(2);
   expect(lastSizePatch(events)?.detail?.fontSizeAfter).toBe(340);
+  expect(fontSizePatches(events).length).toBe(2);
+  expect(eventsDuringSizeDrag(events, "project.patch").length).toBe(0);
   expect(await size(page).inputValue()).toBe("340");
 });
 
@@ -347,13 +390,12 @@ test("Gate 6: Canvas update has no all-background frame between valid frames", a
   expect(observed.length).toBeGreaterThan(0);
   expect(observed.every((frame) => !frame.allBackground)).toBe(true);
   const events = await readTrace(page);
-  expect(eventsFor(events, "canvas.clear").length).toBeGreaterThan(0);
-  expect(eventsFor(events, "canvas.resize").length).toBeGreaterThan(0);
+  expect(eventsDuringSizeDrag(events, "canvas.clear").length).toBe(0);
   expect(eventsFor(events, "canvas.present").length).toBeGreaterThan(0);
 });
 
 function sceneLayoutKeyFromTrace(events: TraceEvent[]) {
-  return eventsFor(events, "scene.layout").at(-1)?.outputKey ?? null;
+  return [...eventsFor(events, "scene.layout")].reverse().find((event) => event.outputKey)?.outputKey ?? null;
 }
 
 async function sceneLayoutKeyFromStage(page: Page) {
@@ -393,6 +435,29 @@ function repairPatches(events: TraceEvent[]) {
   });
 }
 
+function sizeGestureStarts(events: TraceEvent[]) {
+  return eventsFor(events, "size.gesture.start");
+}
+
+function sizeInteractionCommits(events: TraceEvent[]) {
+  return eventsFor(events, "size.interaction.commit");
+}
+
+async function navigateViewport(page: Page) {
+  const stage = page.getByTestId("viewport-stage");
+  const box = await stage.boundingBox();
+  if (!box) throw new Error("Viewport stage has no bounding box.");
+  await stage.hover();
+  await page.mouse.wheel(0, -20_000);
+  await page.mouse.wheel(0, 20_000);
+  await page.keyboard.down("Space");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+}
+
 test("Gate 7: 148 to 540 to 148 returns the authored scene", async ({ page }) => {
   await loadApp(page, "Edge Current");
   const initialProject = authoredProject(await captureProject(page));
@@ -425,6 +490,9 @@ test("Gate 7: 148 to 540 to 148 returns the authored scene", async ({ page }) =>
   expect(tracedSceneKey).toBe(initialSceneKey);
   expect(finalRendererElements).toBe(initialRendererElements);
   expect(repairPatches(finalEvents)).toHaveLength(0);
+  expect(sizeGestureStarts(finalEvents)).toHaveLength(2);
+  expect(fontSizePatches(finalEvents)).toHaveLength(2);
+  expect(sizeInteractionCommits(finalEvents)).toHaveLength(2);
 });
 
 test("Gate 8: dense SVG and supported Canvas navigation smoke test", async ({ page }) => {
@@ -433,21 +501,29 @@ test("Gate 8: dense SVG and supported Canvas navigation smoke test", async ({ pa
   await waitForReady(page);
   const initialProject = authoredProject(await captureProject(page));
   await beginScenario(page, "gate-8-navigation-smoke");
-  const stage = page.getByTestId("viewport-stage");
-  const box = await stage.boundingBox();
-  if (!box) throw new Error("Viewport stage has no bounding box.");
-  await stage.hover();
-  await page.mouse.wheel(0, -20_000);
-  await page.mouse.wheel(0, 20_000);
-  await page.keyboard.down("Space");
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2 + 40, { steps: 8 });
-  await page.mouse.up();
-  await page.keyboard.up("Space");
+  await dragSize(page, [320]);
+  await navigateViewport(page);
+  const settlingEvents = await readTrace(page);
+  const settlingStart = eventsFor(settlingEvents, "size.settling.start").at(-1);
+  const settledIdle = [...eventsFor(settlingEvents, "size.idle")].reverse().find((event) => event.detail?.reason === "settled");
+  const firstWheel = eventsFor(settlingEvents, "navigation.wheel").at(0);
+  expect(settlingStart).toBeDefined();
+  expect(firstWheel).toBeDefined();
+  expect(eventsFor(settlingEvents, "navigation.wheel").length).toBeGreaterThanOrEqual(2);
+  expect(eventsFor(settlingEvents, "navigation.commit").length).toBeGreaterThan(0);
+  expect(firstWheel!.timestampMs).toBeGreaterThanOrEqual(settlingStart!.timestampMs - 50);
+  expect(settledIdle ?? settlingStart).toBeDefined();
+  await waitForReady(page);
+  await expect(page.getByTestId("viewport-stage")).toHaveAttribute("data-size-interaction-phase", "idle");
+  const afterSettleProject = authoredProject(await captureProject(page));
+  expect(afterSettleProject.artboard).toEqual(initialProject.artboard);
+  expect(afterSettleProject.textOffsetY).toBe(initialProject.textOffsetY);
+  expect(afterSettleProject.fontSize).toBe(320);
+  await beginScenario(page, "gate-8-navigation-only");
+  await navigateViewport(page);
   await expect(page.locator("[data-canvas-zoom]")).toHaveAttribute("data-canvas-zoom", /^(0\.25|[0-7](\.\d+)?|8(\.0+)?)$/);
   const finalProject = authoredProject(await captureProject(page));
-  expect(finalProject).toEqual(initialProject);
+  expect(finalProject).toEqual(afterSettleProject);
   const events = await readTrace(page);
   expect(eventsFor(events, "navigation.wheel").length).toBeGreaterThanOrEqual(2);
   expect(eventsFor(events, "navigation.commit").length).toBeGreaterThan(0);
