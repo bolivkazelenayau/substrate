@@ -5,17 +5,27 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function findFreePort(start = 4173) {
-  return new Promise((resolve, reject) => {
-    const server = createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(start, "127.0.0.1", () => {
-      const address = server.address();
-      const port = typeof address === "object" && address ? address.port : start;
-      server.close(() => resolve(port));
-    });
-  });
+async function findFreePort(start = 4173, attempts = 32) {
+  let lastError;
+  for (let index = 0; index < attempts; index += 1) {
+    const candidate = start + index;
+    try {
+      const port = await new Promise((resolve, reject) => {
+        const server = createServer();
+        server.unref();
+        server.on("error", reject);
+        server.listen(candidate, "127.0.0.1", () => {
+          const address = server.address();
+          const bound = typeof address === "object" && address ? address.port : candidate;
+          server.close(() => resolve(bound));
+        });
+      });
+      return port;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? new Error(`No free preview port found from ${start}`);
 }
 
 async function waitForUrl(url, timeoutMs = 60_000) {

@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 import { getRenderer } from "../engine/renderers";
 import { measure } from "../engine/performance";
-import { traceDuplicateLiveRendererPrevented } from "../engine/pipelineTrace";
+import { traceDuplicateLiveRendererPrevented, tracePipelineStage } from "../engine/pipelineTrace";
 import {
   generateRendererGeometry,
   rendererGeometryStateKey,
@@ -31,6 +31,7 @@ export function useRendererRuntime(
       const cached = lastLiveRevisionRef.current;
       if (cached?.key === liveRevisionKey) {
         traceDuplicateLiveRendererPrevented(liveRevisionKey);
+        tracePipelineStage("renderer.live", "reused", { inputKey: liveRevisionKey });
         return cached.geometry;
       }
       const authoritativeContext = renderer.usesTime

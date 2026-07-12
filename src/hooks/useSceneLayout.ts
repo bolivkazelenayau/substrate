@@ -71,6 +71,8 @@ export function useSceneLayout(
       },
     });
     return layout;
+    // Scene layout rebuilds only when the focused scene input key changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneInputKey, textGeometry]);
 }
 

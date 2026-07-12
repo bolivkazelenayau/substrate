@@ -47,7 +47,8 @@ import {
   typographyOutputKey,
 } from "./engine/exportAuthority";
 import { APP_VERSION } from "./engine/constants";
-import { resolveRendererRequirementsForState } from "./engine/rendererRequirements";
+import { resolveRendererRequirements } from "./engine/rendererRequirements";
+import { staticRenderContextStageKey } from "./engine/pipelineStageKeys";
 import { tracePipelineRequirements } from "./engine/pipelineTrace";
 
 import { activeTraceGestureId, interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "./dev/interactionTrace";
@@ -103,7 +104,7 @@ export default function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
-  const pipelineRequirements = useMemo(() => resolveRendererRequirementsForState(state), [state.renderer]);
+  const pipelineRequirements = useMemo(() => resolveRendererRequirements(state.renderer), [state.renderer]);
   useEffect(() => {
     tracePipelineRequirements(state.renderer, pipelineRequirements);
   }, [pipelineRequirements, state.renderer]);
@@ -222,6 +223,16 @@ return snapshot;
   }, [setState]);
   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
+  const staticContextInputKey = useMemo(
+    () => staticRenderContextStageKey(
+      state.renderer,
+      pipelineRequirements,
+      sceneLayout.key,
+      activeTypographyOutputKey,
+      substrateBuild.outputKey,
+    ),
+    [activeTypographyOutputKey, pipelineRequirements, sceneLayout.key, state.renderer, substrateBuild.outputKey],
+  );
   const staticRenderContext: RenderContext = useMemo(
     () => createStaticRenderContext(
       state,
@@ -230,7 +241,9 @@ return snapshot;
       sceneLayout.effectiveArtboard,
       pipelineRequirements,
     ),
-    [pipelineRequirements, sceneLayout.effectiveArtboard, state, substrateBuild.data, textGeometry],
+    // Static context rebuilds only when focused semantic inputs change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [staticContextInputKey, sceneLayout.effectiveArtboard, state, textGeometry, substrateBuild.data],
   );
   const effectiveArtboardViewport = useMemo(
     () => artboardViewport(sceneLayout.effectiveArtboard),
@@ -249,6 +262,20 @@ return snapshot;
     estimateGeometry,
     geometrySummary,
   } = useRendererRuntime(state, renderContext, staticRenderContext);
+  const textOverflowWarning = useMemo(
+    () => getTextArtboardOverflowWarning(state, textGeometry),
+    [state, textGeometry],
+  );
+  const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
+    ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
+    : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
+  [context.frame, context.timeMs, state.exportFrameMode]);
+  const activeRendererInputKey = useMemo(
+    () => activeTypographyOutputKey
+      ? rendererInputKey(state, activeTypographyOutputKey, substrateBuild.outputKey, capturedExportContext)
+      : "renderer-input:typography-pending",
+    [activeTypographyOutputKey, capturedExportContext, state, substrateBuild.outputKey],
+  );
   useLayoutEffect(() => {
     if (!interactionTraceEnabled) return;
     traceEvent({
@@ -264,21 +291,7 @@ return snapshot;
         durationAvailable: false,
       },
     });
-  }, [geometry.id, previewSettings.backend, state, substrateBuild.outputKey]);
-  const textOverflowWarning = useMemo(
-    () => getTextArtboardOverflowWarning(state, textGeometry),
-    [state, textGeometry],
-  );
-  const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
-    ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
-    : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
-  [context.frame, context.timeMs, state.exportFrameMode]);
-  const activeRendererInputKey = useMemo(
-    () => activeTypographyOutputKey
-      ? rendererInputKey(state, activeTypographyOutputKey, substrateBuild.outputKey, capturedExportContext)
-      : "renderer-input:typography-pending",
-    [activeTypographyOutputKey, capturedExportContext, state, substrateBuild.outputKey],
-  );
+  }, [activeRendererInputKey, geometry.id, previewSettings.backend, state.renderer, substrateBuild.outputKey]);
   const baseExportReadiness = useMemo(() => resolveExportReadiness({
     font: fontResolution,
     typographyInputKey: activeTypographyInputKey,

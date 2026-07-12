@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { typographyInputKey } from "../src/engine/exportAuthority";
 import { baseState } from "../src/engine/presets";
-import { sceneLayoutStageKey, substrateStageKey, typographyStageKey } from "../src/engine/pipelineStageKeys";
+import {
+  sceneLayoutStageKey,
+  staticRenderContextStageKey,
+  substrateProjectSliceKey,
+  substrateStageKey,
+  typographyStageKey,
+} from "../src/engine/pipelineStageKeys";
+import { resolveRendererRequirements } from "../src/engine/rendererRequirements";
 import { rendererGeometryStateKey } from "../src/engine/rendererRuntime";
 
 describe("pipeline stage keys", () => {
@@ -27,6 +34,16 @@ describe("pipeline stage keys", () => {
   it("changes typography key when text changes", () => {
     const changed = { ...baseState, text: `${baseState.text}!` };
     expect(typographyStageKey(changed, "font:native")).not.toBe(typographyStageKey(baseState, "font:native"));
+  });
+
+  it("excludes preview backend from substrate project slice", () => {
+    expect(substrateProjectSliceKey(baseState)).toBe(substrateProjectSliceKey({ ...baseState, debug: { ...baseState.debug, frameTime: !baseState.debug.frameTime } }));
+  });
+
+  it("changes static context key when renderer requirements change", () => {
+    const flow = staticRenderContextStageKey("flow", resolveRendererRequirements("flow"), "scene:a", "typography:a", null);
+    const halftone = staticRenderContextStageKey("sdf-halftone", resolveRendererRequirements("sdf-halftone"), "scene:a", "typography:a", "substrate:a");
+    expect(halftone).not.toBe(flow);
   });
 
   it("changes substrate key when viewport changes", () => {

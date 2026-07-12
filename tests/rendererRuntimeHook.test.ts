@@ -104,13 +104,22 @@ describe("useRendererRuntime ownership", () => {
     expect(second.exportGeometry).toBe(first.exportGeometry);
   });
 
-  it("time-dependent live geometry continues to bypass the static cache", () => {
+  it("reuses live geometry for the same semantic revision key", () => {
     const project = { ...baseState, renderer: "flow" as const, maxNodes: 80 };
     const staticContext = createStaticRenderContext(project, null, null);
     const first = render(project, { ...staticContext, timeMs: 500, frame: 15 }, staticContext);
     const second = render(project, { ...staticContext, timeMs: 500, frame: 15 }, staticContext);
 
+    expect(second.liveGeometry).toBe(first.liveGeometry);
+  });
+
+  it("regenerates live geometry when the semantic revision key changes", () => {
+    const project = { ...baseState, renderer: "flow" as const, maxNodes: 80 };
+    const staticContext = createStaticRenderContext(project, null, null);
+    const first = render(project, { ...staticContext, timeMs: 500, frame: 15 }, staticContext);
+    const second = render(project, { ...staticContext, timeMs: 600, frame: 16 }, staticContext);
+
     expect(second.liveGeometry).not.toBe(first.liveGeometry);
-    expect(second.liveGeometry).toEqual(first.liveGeometry);
+    expect(second.liveGeometry).not.toEqual(first.liveGeometry);
   });
 });

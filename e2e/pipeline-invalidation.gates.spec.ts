@@ -62,14 +62,27 @@ function pipelineStageEvents(events: E2ETraceEvent[], disposition: string, stage
   return eventsFor(events, `pipeline.stage.${disposition}`).filter((event) => event.detail?.stage === stage);
 }
 
-test("Gate C: renderer switch gates substrate by capability", async ({ page }) => {
-  await loadApp(page, "Edge Current");
-  await beginScenario(page, "gate-c-renderer-switch");
-  await page.getByRole("button", { name: "Ripple lines" }).click();
+test("Gate C: renderer switch Halftone → Flow → Halftone", async ({ page }) => {
+  await loadApp(page, "Halftone Press");
+  await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
+  await beginScenario(page, "gate-c-halftone-flow-halftone");
+
+  await page.getByRole("button", { name: "Flow lines" }).click();
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
   let events = await readTrace(page);
-  expect(eventsFor(events, "substrate.request", "start").length).toBe(0);
-  expect(pipelineStageEvents(events, "skipped", "substrate").length).toBeGreaterThan(0);
+  expect(eventsFor(events, "export.ready").length).toBeGreaterThan(0);
+  expect(
+    pipelineStageEvents(events, "skipped", "substrate").some(
+      (event) => event.detail?.reason === "capability-not-required",
+    ),
+  ).toBe(true);
+  expect(
+    pipelineStageEvents(events, "invalidated", "substrate").some(
+      (event) => event.detail?.reason === "capability-not-required",
+    ),
+  ).toBe(true);
+  const flowCurrentSubstrate = eventsFor(events, "substrate.result").filter((event) => event.outputKey);
+  expect(flowCurrentSubstrate.length).toBe(0);
 
   await page.getByRole("button", { name: "SDF Halftone" }).click();
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
@@ -80,15 +93,7 @@ test("Gate C: renderer switch gates substrate by capability", async ({ page }) =
     ),
   ).toBe(true);
   expect(eventsFor(events, "substrate.request", "start").length).toBeGreaterThan(0);
-
-  await page.getByRole("button", { name: "Flow lines" }).click();
-  await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
-  events = await readTrace(page);
-  expect(
-    pipelineStageEvents(events, "skipped", "substrate").some(
-      (event) => event.detail?.reason === "capability-not-required",
-    ),
-  ).toBe(true);
+  expect(eventsFor(events, "export.ready").length).toBeGreaterThan(0);
 });
 
 test("Gate E: preview backend switch schedules zero authoritative builds", async ({ page }) => {

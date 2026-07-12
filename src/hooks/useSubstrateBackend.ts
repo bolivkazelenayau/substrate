@@ -95,8 +95,11 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
 
   useEffect(() => {
     if (!enabled) {
+      // Invalidate in-flight worker completions when substrate is not required.
+      latestRequest.current += 1;
       lastEnqueuedInput.current = null;
       tracePipelineStage("substrate", "skipped", { reason: "capability-not-required" });
+      tracePipelineStage("substrate", "invalidated", { reason: "capability-not-required" });
       setBackendState({
         data: null,
         outputKey: SUBSTRATE_NOT_REQUIRED_KEY,

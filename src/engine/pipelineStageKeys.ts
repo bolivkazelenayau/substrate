@@ -4,6 +4,7 @@ import type { ProjectState } from "../types";
 import { getRendererManifest } from "./renderers/rendererManifest";
 import { emitterGeometryKey, rendererGeometryStateKey } from "./rendererRuntime";
 import { glyphModulationCacheKey } from "./controlOwnership";
+import type { RendererRequirements } from "./rendererRequirements";
 
 export const SUBSTRATE_NOT_REQUIRED_KEY = "substrate:not-required";
 
@@ -61,6 +62,40 @@ export function substrateStageKey(input: SubstrateBuildInput, typographyKey: str
     bounds: input.bounds,
     domainBounds: input.domainBounds,
     viewport: input.viewport,
+  });
+}
+
+/** Project fields that affect substrate raster input construction. */
+export function substrateProjectSliceKey(state: ProjectState): string {
+  return key("substrate-project-slice", {
+    text: state.text,
+    fontSize: state.fontSize,
+    tracking: state.tracking,
+    lineHeight: state.lineHeight,
+    textAlign: state.textAlign,
+    kerningMode: state.kerningMode,
+    substrateQuality: state.substrateQuality,
+    font: state.font?.fileName ?? "native-fallback",
+    renderer: state.renderer,
+  });
+}
+
+/** Static render-context identity — excludes camera, diagnostics, and presentation. */
+export function staticRenderContextStageKey(
+  renderer: ProjectState["renderer"],
+  requirements: Pick<RendererRequirements, "staticField" | "glyphField" | "substrate">,
+  sceneKey: string,
+  typographyOutputKey: string | null,
+  substrateOutputKey: string | null,
+): string {
+  return key("static-context-input", {
+    renderer,
+    staticField: requirements.staticField,
+    glyphField: requirements.glyphField,
+    substrate: requirements.substrate,
+    sceneKey,
+    typographyOutputKey,
+    substrateOutputKey: requirements.substrate ? substrateOutputKey : SUBSTRATE_NOT_REQUIRED_KEY,
   });
 }
 

@@ -8,7 +8,7 @@ import { useSubstrateBackend } from "./useSubstrateBackend";
 import { resolveContourDomain } from "../engine/contourDomain";
 import { resolveTextBoundsModel } from "../engine/textBounds";
 import { substrateBuildInputKey } from "../engine/exportAuthority";
-import { SUBSTRATE_NOT_REQUIRED_KEY } from "../engine/pipelineStageKeys";
+import { SUBSTRATE_NOT_REQUIRED_KEY, substrateProjectSliceKey } from "../engine/pipelineStageKeys";
 import { resolveRendererRequirements } from "../engine/rendererRequirements";
 import { planSubstrateRaster } from "../engine/safetyBudget";
 
@@ -18,6 +18,7 @@ export function useSubstratePipeline(
   typographyKey: string | null,
   effectiveArtboard: ArtboardRect,
 ) {
+  const projectSliceKey = substrateProjectSliceKey(project);
   const input = useMemo(() => {
     const layout = getTextLayout(project, Boolean(textGeometry?.hasOutlines));
     const bounds = resolveTextBoundsModel(project, textGeometry).inkBounds;
@@ -56,7 +57,9 @@ export function useSubstratePipeline(
       domainBounds: domain.bounds,
       viewport: { x: effectiveArtboard.x, y: effectiveArtboard.y, width: effectiveArtboard.width, height: effectiveArtboard.height },
     };
-  }, [project, textGeometry, effectiveArtboard]);
+    // Substrate input rebuilds only when the focused project slice changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectSliceKey, textGeometry, effectiveArtboard]);
   const requirements = resolveRendererRequirements(project.renderer);
   const inputKey = requirements.substrate
     ? substrateBuildInputKey(input, typographyKey)
