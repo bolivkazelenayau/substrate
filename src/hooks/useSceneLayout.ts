@@ -4,6 +4,7 @@ import {
   sceneLayoutKey,
   type ResolvedSceneLayout,
 } from "../engine/sceneLayout";
+import { sceneLayoutStageKey } from "../engine/pipelineStageKeys";
 import { interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "../dev/interactionTrace";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import type { ProjectState } from "../types";
@@ -27,20 +28,9 @@ export function useSceneLayout(
   project: ProjectState,
   textGeometry: TextGeometry | null,
 ): ResolvedSceneLayout {
+  const sceneInputKey = sceneLayoutStageKey(project, textGeometry);
   return useMemo(() => {
-    const inputKey = interactionTraceEnabled
-      ? traceKey({
-          artboard: project.artboard,
-          fontSize: project.fontSize,
-          text: project.text,
-          textOffsetY: project.textOffsetY,
-          lineHeight: project.lineHeight,
-          tracking: project.tracking,
-          textAlign: project.textAlign,
-          font: project.font?.fileName ?? "native-fallback",
-          textGeometryBounds: textGeometry?.bounds ?? null,
-        })
-      : undefined;
+    const inputKey = interactionTraceEnabled ? sceneInputKey : undefined;
     const resolveTrace = traceStartSpan("scene.layout", {
       inputKey,
       detail: { authority: "resolved-scene" },
@@ -81,7 +71,7 @@ export function useSceneLayout(
       },
     });
     return layout;
-  }, [project, textGeometry]);
+  }, [sceneInputKey, textGeometry]);
 }
 
 export { sceneLayoutKey };

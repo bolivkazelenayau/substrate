@@ -2,6 +2,8 @@ import { artboardViewport, projectArtboard, type ArtboardViewport } from "./artb
 import type { ArtboardRect } from "./sceneLayout";
 import type { ProjectState, RenderContext } from "../types";
 import { buildCompositeWaveField, createGlyphFieldContext } from "./field/compositeWaveField";
+import type { RendererRequirements } from "./rendererRequirements";
+import { tracePipelineStage } from "./pipelineTrace";
 import { interactionTraceEnabled, traceKey, traceStartSpan } from "../dev/interactionTrace";
 
 /**
@@ -19,6 +21,7 @@ export function createStaticRenderContext(
   textGeometry: RenderContext["textGeometry"],
   substrateData: RenderContext["substrateData"],
   effectiveArtboard?: ArtboardRect,
+  requirements?: Pick<RendererRequirements, "staticField" | "glyphField" | "substrate">,
 ): RenderContext {
   const contextTrace = traceStartSpan("field.static-context", {
     inputKey: interactionTraceEnabled ? traceKey({ renderer: state.renderer, artboard: state.artboard, effective: effectiveArtboard, text: state.text }) : undefined,
@@ -34,6 +37,16 @@ export function createStaticRenderContext(
     substrateData,
     viewport,
   };
+  const needsField = requirements?.staticField || requirements?.glyphField;
+  if (!needsField) {
+    tracePipelineStage("field.static-context", "skipped", { reason: "capability-not-required" });
+    contextTrace({
+      outputKey: interactionTraceEnabled ? traceKey({ renderer: state.renderer, glyphField: null }) : undefined,
+      counts: { fieldWidth: 0, fieldHeight: 0 },
+    });
+    return base;
+  }
+  tracePipelineStage("field.static-context", "required");
   const context = { ...base, ...createGlyphFieldContext(buildCompositeWaveField(state, base)) };
   contextTrace({
     outputKey: interactionTraceEnabled ? traceKey({ renderer: state.renderer, glyphField: context.glyphField?.worldBounds ?? null }) : undefined,

@@ -3,6 +3,7 @@ import type { TextGeometry } from "./glyphGeometry";
 import { createStaticRenderContext } from "./renderContextLifecycle";
 import { generateRendererGeometry, rendererGeometryStateKey } from "./rendererRuntime";
 import { getRendererManifest } from "./renderers/rendererManifest";
+import { resolveRendererRequirements } from "./rendererRequirements";
 import type { GeometryGroup } from "./geometry";
 import type { ArtboardRect, AuthoredArtboard } from "./sceneLayout";
 import type { SubstrateBuildInput, SubstrateData } from "./substrate";
@@ -193,7 +194,13 @@ export function captureExportSnapshot(args: {
   // The effective rect is fed in explicitly so the static export context matches
   // the live preview's resolved scene geometry exactly.
   const context: RenderContext = {
-    ...createStaticRenderContext(document, args.typographyGeometry, manifest.usesSubstrate ? args.substrateData : null, args.effectiveArtboard),
+    ...createStaticRenderContext(
+      document,
+      args.typographyGeometry,
+      manifest.usesSubstrate ? args.substrateData : null,
+      args.effectiveArtboard,
+      resolveRendererRequirements(document.renderer),
+    ),
     timeMs: args.context.timeMs,
     frame: args.context.frame,
   };

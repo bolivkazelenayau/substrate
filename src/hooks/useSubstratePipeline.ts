@@ -8,6 +8,8 @@ import { useSubstrateBackend } from "./useSubstrateBackend";
 import { resolveContourDomain } from "../engine/contourDomain";
 import { resolveTextBoundsModel } from "../engine/textBounds";
 import { substrateBuildInputKey } from "../engine/exportAuthority";
+import { SUBSTRATE_NOT_REQUIRED_KEY } from "../engine/pipelineStageKeys";
+import { resolveRendererRequirements } from "../engine/rendererRequirements";
 import { planSubstrateRaster } from "../engine/safetyBudget";
 
 export function useSubstratePipeline(
@@ -55,6 +57,9 @@ export function useSubstratePipeline(
       viewport: { x: effectiveArtboard.x, y: effectiveArtboard.y, width: effectiveArtboard.width, height: effectiveArtboard.height },
     };
   }, [project, textGeometry, effectiveArtboard]);
-  const inputKey = substrateBuildInputKey(input, typographyKey);
-  return { ...useSubstrateBackend(input, inputKey), input, inputKey };
+  const requirements = resolveRendererRequirements(project.renderer);
+  const inputKey = requirements.substrate
+    ? substrateBuildInputKey(input, typographyKey)
+    : SUBSTRATE_NOT_REQUIRED_KEY;
+  return { ...useSubstrateBackend(input, inputKey, requirements.substrate), input, inputKey, required: requirements.substrate };
 }

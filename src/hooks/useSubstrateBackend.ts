@@ -10,6 +10,8 @@ import {
   type SubstrateData,
   type SubstrateFallbackResult,
 } from "../engine/substrate";
+import { SUBSTRATE_NOT_REQUIRED_KEY } from "../engine/pipelineStageKeys";
+import { tracePipelineStage } from "../engine/pipelineTrace";
 import { traceEvent, traceStartSpan } from "../dev/interactionTrace";
 
 export interface SubstrateBackendState {
@@ -41,7 +43,14 @@ const initialStatus: SubstrateBackendStatus = {
   ...initialSchedule,
 };
 
-export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string): SubstrateBackendState {
+const notRequiredStatus: SubstrateBackendStatus = {
+  ...initialStatus,
+  phase: "not-required",
+  requestedBackend: "cpu-worker",
+  activeBackend: null,
+};
+
+export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string, enabled = true): SubstrateBackendState {
   const [workerBackend] = useState(() => createCpuWorkerSubstrateBackend());
   const latestRequest = useRef(0);
   const lastEnqueuedInput = useRef<SubstrateBuildInput | null>(null);
@@ -85,8 +94,20 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
   ));
 
   useEffect(() => {
+    if (!enabled) {
+      lastEnqueuedInput.current = null;
+      tracePipelineStage("substrate", "skipped", { reason: "capability-not-required" });
+      setBackendState({
+        data: null,
+        outputKey: SUBSTRATE_NOT_REQUIRED_KEY,
+        error: null,
+        status: notRequiredStatus,
+      });
+      return;
+    }
+    tracePipelineStage("substrate", "required");
     if (lastEnqueuedInput.current === input) return;
-    
+
     const executeSchedule = () => {
       lastEnqueuedInput.current = input;
       const requestId = ++latestRequest.current;
@@ -207,7 +228,7 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
 
     const timerId = setTimeout(executeSchedule, 50);
     return () => clearTimeout(timerId);
-  }, [input, inputKey, scheduler, workerBackend]);
+  }, [enabled, input, inputKey, scheduler, workerBackend]);
 
   useEffect(() => {
     mounted.current = true;

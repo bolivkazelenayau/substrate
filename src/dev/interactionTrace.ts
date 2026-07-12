@@ -260,6 +260,7 @@ export function recordTraceProjectCommit(gestureId?: number) {
 
 export interface SubstrateTraceWindow extends Window {
   __SUBSTRATE_TRACE__?: InteractionTraceApi;
+  __SUBSTRATE_E2E_BUILD__?: string;
 }
 
 function installBrowserTraceObservers() {
@@ -272,6 +273,7 @@ function installBrowserTraceObservers() {
     endScenario: () => interactionTrace.endScenario(),
     getSummary: () => interactionTrace.getSummary(),
   };
+  traceWindow.__SUBSTRATE_E2E_BUILD__ = "e2e-trace";
 
   if ("PerformanceObserver" in window) {
     try {

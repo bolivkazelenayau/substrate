@@ -1,30 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { beginScenario, eventsFor, readTrace, type E2ETraceApi, type E2ETraceEvent } from "./helpers/trace";
 
-type TraceEvent = {
-  sequence: number;
-  traceId: string;
-  gestureId?: number;
-  stage: string;
-  phase: "instant" | "start" | "end";
-  inputKey?: string;
-  outputKey?: string;
-  documentKey?: string;
-  frameKey?: string;
-  timestampMs: number;
-  durationMs?: number;
-  counts?: Record<string, number>;
-  bytes?: Record<string, number>;
-  detail?: Record<string, string | number | boolean | null>;
-};
-
-type TraceApi = {
-  reset(): void;
-  snapshot(): TraceEvent[];
-  beginScenario(name: string): void;
-  endScenario(): void;
-  getSummary(): unknown;
-};
+type TraceEvent = E2ETraceEvent;
+type TraceApi = E2ETraceApi;
 
 type CanvasProbeFrame = {
   timestampMs: number;
@@ -38,7 +17,7 @@ type CanvasProbeFrame = {
 
 declare global {
   interface Window {
-    __SUBSTRATE_TRACE__?: TraceApi;
+    __SUBSTRATE_E2E_BUILD__?: string;
     __SUBSTRATE_CANVAS_PROBE__?: { active: boolean; frames: CanvasProbeFrame[] };
   }
 }
@@ -62,20 +41,6 @@ async function pauseAnimation(page: Page) {
 
 async function waitForReady(page: Page) {
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
-}
-
-async function beginScenario(page: Page, name: string) {
-  await page.evaluate((scenario) => {
-    window.__SUBSTRATE_TRACE__?.beginScenario(scenario);
-  }, name);
-}
-
-async function readTrace(page: Page) {
-  return page.evaluate(() => window.__SUBSTRATE_TRACE__?.snapshot() ?? []);
-}
-
-function eventsFor(events: TraceEvent[], stage: string, phase?: TraceEvent["phase"]) {
-  return events.filter((event) => event.stage === stage && (phase === undefined || event.phase === phase));
 }
 
 function summarizeTrace(events: TraceEvent[]) {
@@ -119,7 +84,9 @@ function summarizeTrace(events: TraceEvent[]) {
 test.afterEach(async ({ page }, testInfo) => {
   try {
     const events = await readTrace(page);
-    const apiSummary = await page.evaluate(() => window.__SUBSTRATE_TRACE__?.getSummary() ?? null);
+    const apiSummary = await page.evaluate(() => (
+      (window as Window & { __SUBSTRATE_TRACE__?: TraceApi }).__SUBSTRATE_TRACE__?.getSummary() ?? null
+    ));
     await writeFile(testInfo.outputPath("trace-summary.json"), JSON.stringify({ test: testInfo.title, status: testInfo.status, expectedStatus: testInfo.expectedStatus, summary: summarizeTrace(events), apiSummary }, null, 2), "utf8");
   } catch {
     // Harness evidence must never turn a product result into an infrastructure failure.
@@ -264,9 +231,13 @@ async function stopCanvasProbe(page: Page) {
 test("harness smoke: E2E trace API is live and receives a native Size event", async ({ page }) => {
   await loadApp(page);
   await page.evaluate(() => {
-    if (!window.__SUBSTRATE_TRACE__) throw new Error("E2E trace API is missing.");
-    window.__SUBSTRATE_TRACE__.reset();
-    window.__SUBSTRATE_TRACE__.beginScenario("harness-smoke");
+    const trace = (window as Window & { __SUBSTRATE_TRACE__?: TraceApi }).__SUBSTRATE_TRACE__;
+    if (!trace) throw new Error("E2E trace API is missing.");
+    if (window.__SUBSTRATE_E2E_BUILD__ !== "e2e-trace") {
+      throw new Error(`Unexpected E2E build identity: ${String(window.__SUBSTRATE_E2E_BUILD__)}`);
+    }
+    trace.reset();
+    trace.beginScenario("harness-smoke");
   });
   await dragSize(page, [220]);
   const events = await readTrace(page);

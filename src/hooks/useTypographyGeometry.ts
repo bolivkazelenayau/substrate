@@ -37,6 +37,8 @@ export function useTypographyGeometry(project: ProjectState, loadedFont: LoadedF
       });
       return timed;
     },
-    [inputKey, loadedFont, project],
+    // Typography rebuilds only when the focused typography input key changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inputKey, loadedFont],
   );
 }

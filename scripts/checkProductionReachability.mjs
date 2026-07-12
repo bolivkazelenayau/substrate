@@ -24,6 +24,9 @@ const reviewedProductionModules = [
   "src/engine/sizePresentation.ts",
   "src/engine/sizeRendererDraftPolicy.ts",
   "src/engine/sizeDraftRenderer.ts",
+  "src/engine/rendererRequirements.ts",
+  "src/engine/pipelineStageKeys.ts",
+  "src/engine/pipelineTrace.ts",
 ];
 
 // These files were the removed, test-backed architecture island. Keeping this

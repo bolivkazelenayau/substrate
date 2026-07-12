@@ -47,6 +47,9 @@ import {
   typographyOutputKey,
 } from "./engine/exportAuthority";
 import { APP_VERSION } from "./engine/constants";
+import { resolveRendererRequirementsForState } from "./engine/rendererRequirements";
+import { tracePipelineRequirements } from "./engine/pipelineTrace";
+
 import { activeTraceGestureId, interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "./dev/interactionTrace";
 
 const DevWebGpuFieldOverlay = import.meta.env.DEV
@@ -100,6 +103,10 @@ export default function App() {
   const fileRef = useRef<HTMLInputElement>(null);
   const fontFileRef = useRef<HTMLInputElement>(null);
   const renderer = getRenderer(state.renderer);
+  const pipelineRequirements = useMemo(() => resolveRendererRequirementsForState(state), [state.renderer]);
+  useEffect(() => {
+    tracePipelineRequirements(state.renderer, pipelineRequirements);
+  }, [pipelineRequirements, state.renderer]);
   const selectedPreviewBackend = selectPreviewBackend(state.renderer, requestedMarkCount(state), previewSettings.backend, !canvasFailed);
   const canvasFlowActive = selectedPreviewBackend === "canvas-2d";
   const previewAnimationRunning = shouldRunPreviewAnimation(renderer.usesTime, playing, previewSettings.reducedMotion, exporting);
@@ -216,8 +223,14 @@ return snapshot;
   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
   const staticRenderContext: RenderContext = useMemo(
-    () => createStaticRenderContext(state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard),
-    [state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard]
+    () => createStaticRenderContext(
+      state,
+      textGeometry,
+      pipelineRequirements.substrate ? substrateBuild.data : null,
+      sceneLayout.effectiveArtboard,
+      pipelineRequirements,
+    ),
+    [pipelineRequirements, sceneLayout.effectiveArtboard, state, substrateBuild.data, textGeometry],
   );
   const effectiveArtboardViewport = useMemo(
     () => artboardViewport(sceneLayout.effectiveArtboard),

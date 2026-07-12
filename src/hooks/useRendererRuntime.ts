@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+import { getRenderer } from "../engine/renderers";
 import { measure } from "../engine/performance";
+import { traceDuplicateLiveRendererPrevented } from "../engine/pipelineTrace";
 import {
   generateRendererGeometry,
   rendererGeometryStateKey,
@@ -19,17 +21,31 @@ export function useRendererRuntime(
   staticContext: RenderContext,
 ) {
   const geometryKey = rendererGeometryStateKey(project);
+  const renderer = getRenderer(project.renderer);
+  const liveRevisionKey = renderer.usesTime
+    ? `${geometryKey}|${liveContext.timeMs}:${liveContext.frame}`
+    : geometryKey;
+  const lastLiveRevisionRef = useRef<{ key: string; geometry: ReturnType<typeof generateRendererGeometry> } | null>(null);
   const liveGeometry = useMemo(
     () => {
-      const liveTrace = traceStartSpan("renderer.runtime.live", { inputKey: geometryKey });
-      const timed = measure(() => generateRendererGeometry(project, liveContext));
+      const cached = lastLiveRevisionRef.current;
+      if (cached?.key === liveRevisionKey) {
+        traceDuplicateLiveRendererPrevented(liveRevisionKey);
+        return cached.geometry;
+      }
+      const authoritativeContext = renderer.usesTime
+        ? liveContext
+        : { ...liveContext, timeMs: 0, frame: 0 };
+      const liveTrace = traceStartSpan("renderer.runtime.live", { inputKey: liveRevisionKey });
+      const timed = measure(() => generateRendererGeometry(project, authoritativeContext));
       recordPreviewGeometryBuild(timed.durationMs);
       liveTrace({ outputKey: timed.value.id, detail: { generationDurationMs: timed.durationMs, authority: "live" } });
+      lastLiveRevisionRef.current = { key: liveRevisionKey, geometry: timed.value };
       return timed.value;
     },
-    // Appearance-only project changes deliberately preserve geometry identity.
+    // Semantic renderer identity excludes presentation clock for static renderers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryKey, liveContext],
+    [geometryKey, liveRevisionKey, project],
   );
   const exportContext = selectExportContext(project, liveContext, staticContext);
   const staticExportGeometry = useMemo(

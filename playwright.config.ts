@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2ePort = Number(process.env.E2E_PREVIEW_PORT ?? 4173);
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 120_000,
@@ -16,17 +19,19 @@ export default defineConfig({
     locale: "en-US",
     timezoneId: "UTC",
     colorScheme: "light",
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: e2eBaseUrl,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     trace: "on-first-retry",
     extraHTTPHeaders: { "Cache-Control": "no-cache" },
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
-  webServer: {
-    command: "npm run preview:e2e",
-    url: "http://127.0.0.1:4173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-  },
+  webServer: process.env.E2E_MANAGED_PREVIEW
+    ? undefined
+    : {
+        command: "node scripts/e2ePreviewServer.mjs",
+        url: e2eBaseUrl,
+        reuseExistingServer: false,
+        timeout: 60_000,
+      },
 });

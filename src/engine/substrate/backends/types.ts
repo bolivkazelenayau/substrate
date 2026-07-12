@@ -60,7 +60,7 @@ export interface SubstrateComputeBackend {
   dispose(): void;
 }
 
-export type SubstrateBuildPhase = "idle" | "building" | "ready" | "fallback" | "error";
+export type SubstrateBuildPhase = "idle" | "building" | "ready" | "fallback" | "error" | "not-required";
 
 export interface SubstrateBackendStatus {
   phase: SubstrateBuildPhase;
