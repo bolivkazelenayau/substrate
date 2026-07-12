@@ -48,7 +48,7 @@ export const flowLinesRenderer: VectorRenderer = {
   estimateCost: (state) => simpleCost(state, "paths"),
   generateGeometry(state, context) {
     const artboard = contextArtboard(context);
-    const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state));
+    const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state, artboard));
     const base = getFlowLineBase(state.seed, requestedMarkCount(state), bounds);
     const geometries: LineSegment[] = [];
     for (const line of base) {

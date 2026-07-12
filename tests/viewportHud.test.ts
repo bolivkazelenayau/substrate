@@ -5,9 +5,11 @@ import { CanvasNavigation } from "../src/components/CanvasNavigation";
 import { Viewport } from "../src/components/Viewport";
 import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry } from "../src/engine/rendererRuntime";
+import { resolveSceneLayout } from "../src/engine/sceneLayout";
 import type { DiagnosticsMode, RenderContext } from "../src/types";
 
 const context: RenderContext = { timeMs: 500, frame: 15 };
+const baseSceneLayout = resolveSceneLayout(baseState, null);
 
 function viewport(mode: DiagnosticsMode) {
   return createElement(Viewport, {
@@ -15,6 +17,7 @@ function viewport(mode: DiagnosticsMode) {
     context,
     geometry: generateRendererGeometry(baseState, context),
     textGeometry: null,
+    sceneLayout: baseSceneLayout,
     exportDiagnostics: null,
     exportWarnings: ["Export warning"],
     performanceWarnings: [],

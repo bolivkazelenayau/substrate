@@ -1,0 +1,93 @@
+{
+  "name": "preview_click",
+  "description": "Click exactly one target in the tab selected by tabId, or this agent session's current tab when omitted. Prefer a Playwright locator; selector accepts legacy CSS; x and y must be supplied together.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector such as button[type='submit']. Prefer locator for resilient role/text targeting."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector, preferably role/text based, for example role=button[name='Send'] or text=Continue. Use snapshot first to inspect the page."
+      },
+      "x": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Viewport-relative X coordinate in CSS pixels. Must be paired with y."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "y": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Viewport-relative Y coordinate in CSS pixels. Must be paired with x."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "timeoutMs": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "allOf": [
+              {
+                "exclusiveMinimum": 0
+              },
+              {
+                "maximum": 60000,
+                "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Maximum wait in milliseconds. Defaults to 15000; maximum 60000."
+      }
+    },
+    "additionalProperties": false
+  }
+}

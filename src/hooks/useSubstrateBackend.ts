@@ -10,6 +10,7 @@ import {
   type SubstrateData,
   type SubstrateFallbackResult,
 } from "../engine/substrate";
+import { traceEvent, traceStartSpan } from "../dev/interactionTrace";
 
 export interface SubstrateBackendState {
   data: SubstrateData | null;
@@ -55,6 +56,20 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
   const [scheduler] = useState(() => new LatestOnlyScheduler<SubstrateBuildInput, SubstrateFallbackResult>(
     (schedule) => {
       if (!mounted.current) return;
+      traceEvent({
+        stage: "substrate.scheduler",
+        phase: "instant",
+        counts: {
+          active: schedule.activeRequestId === null ? 0 : 1,
+          pending: schedule.pendingRequestCount,
+          coalesced: schedule.coalescedRequestCount,
+          droppedObsolete: schedule.droppedObsoleteRequestCount,
+        },
+        detail: {
+          latestRequestedId: schedule.latestRequestedId,
+          skippedObsoleteRequest: schedule.skippedObsoleteRequest,
+        },
+      });
       setBackendState((current) => ({
         ...current,
         status: {
@@ -75,6 +90,10 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
     const executeSchedule = () => {
       lastEnqueuedInput.current = input;
       const requestId = ++latestRequest.current;
+      const requestTrace = traceStartSpan("substrate.request", {
+        inputKey,
+        detail: { requestId, source: "useSubstrateBackend" },
+      });
       const schedule = scheduler.snapshot();
       setBackendState((current) => ({
         data: current.data,
@@ -98,8 +117,52 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
       scheduler.schedule({
         id: requestId,
         input,
-        run: (nextInput) => computeSubstrateWithFallback(workerBackend, cpuMainSubstrateBackend, nextInput),
+        run: async (nextInput) => {
+          const computeTrace = traceStartSpan("substrate.compute", { inputKey });
+          try {
+            const result = await computeSubstrateWithFallback(workerBackend, cpuMainSubstrateBackend, nextInput);
+            computeTrace({
+              outputKey: inputKey,
+              counts: {
+                width: result.result.data.width,
+                height: result.result.data.height,
+                cells: result.result.data.width * result.result.data.height,
+              },
+              bytes: { plannedResident: result.result.data.width * result.result.data.height * Float32Array.BYTES_PER_ELEMENT * 3 },
+              detail: {
+                backend: result.result.backend,
+                fallbackCode: result.fallbackCode,
+                workerComputeMs: result.result.timing.workerComputeMs,
+                roundTripMs: result.result.timing.roundTripMs,
+              },
+            });
+            return result;
+          } catch (error) {
+            computeTrace({ detail: { error: error instanceof Error ? error.message : String(error) } });
+            throw error;
+          }
+        },
         complete: ({ result, fallbackCode, fallbackReason }, stale) => {
+          requestTrace({
+            outputKey: inputKey,
+            counts: { width: result.data.width, height: result.data.height },
+            bytes: { plannedResident: result.data.width * result.data.height * Float32Array.BYTES_PER_ELEMENT * 3 },
+            detail: {
+              backend: result.backend,
+              stale,
+              fallbackCode,
+              fallbackReason,
+              workerComputeMs: result.timing.workerComputeMs,
+              roundTripMs: result.timing.roundTripMs,
+            },
+          });
+          traceEvent({
+            stage: stale ? "substrate.stale-result" : "substrate.result",
+            phase: "instant",
+            inputKey,
+            outputKey: stale ? undefined : inputKey,
+            detail: { requestId, stale, backend: result.backend },
+          });
           if (!mounted.current || stale || latestRequest.current !== requestId) return;
           const latestSchedule = scheduler.snapshot();
           setBackendState({
@@ -120,6 +183,10 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
           });
         },
         fail: (error, stale) => {
+          requestTrace({
+            inputKey,
+            detail: { requestId, stale, error: error instanceof Error ? error.message : String(error) },
+          });
           if (!mounted.current || stale || latestRequest.current !== requestId) return;
           const latestSchedule = scheduler.snapshot();
           setBackendState((current) => ({

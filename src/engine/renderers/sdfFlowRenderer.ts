@@ -5,6 +5,7 @@ import type { VectorRenderer } from "./types";
 import { requestedMarkCount, simpleCost } from "./types";
 import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
 import { contextArtboard } from "../artboard";
+import { artboardBottom, artboardLeft, artboardRight, artboardTop } from "../sceneLayout";
 import { resolveSdfScaleContext } from "../sdfScale";
 
 export const sdfFlowRenderer: VectorRenderer = {
@@ -43,10 +44,10 @@ export const sdfFlowRenderer: VectorRenderer = {
     const edgeBand = Math.max(2, state.fontSize * (0.42 - influence * 0.34));
     const bounds = substrate.bounds;
     const samplingPadding = sdfScale.world(8, 1);
-    const minX = Math.max(0, (bounds?.x ?? 0) - samplingPadding);
-    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + samplingPadding);
-    const minY = Math.max(0, (bounds?.y ?? 0) - samplingPadding);
-    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + samplingPadding);
+    const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - samplingPadding);
+    const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + samplingPadding);
+    const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - samplingPadding);
+    const maxY = Math.min(artboardBottom(artboard), (bounds ? bounds.y + bounds.height : artboardBottom(artboard)) + samplingPadding);
     const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
       x: minX,
       y: minY,

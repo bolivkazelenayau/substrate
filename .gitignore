@@ -3,3 +3,6 @@ dist
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+test-results
+playwright-report
+e2e-artifacts

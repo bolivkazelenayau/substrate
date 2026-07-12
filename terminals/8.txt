@@ -1,0 +1,45 @@
+---
+pid: 14104
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; npm test 2>&1 | Select-Object -Last 30"
+started_at: 2026-07-12T01:12:14.455Z
+running_for_ms: 4329984  
+---
+     × sdf-contours-native matches registry geometry and golden export 362ms
+     × sdf-halftone-native matches registry geometry and golden export 144ms
+     × wave-contours-native matches registry geometry and golden export 187ms
+     × glyph-diffuser-native matches registry geometry and golden export 213ms
+     ✓ returns typed validation issues without executing an invalid graph 29ms
+     ✓ rejects a renderer node that disagrees with the input project 24ms
+ ✓ tests/sceneSizeRoundTrip.test.ts (1 test) 3302ms
+     ✓ restores authored scene, keys, preview viewBox, and export summary after 148 → 540 → 148  3297ms
+ ✓ tests/scenePreviewExportEquality.test.ts (2 tests) 2732ms
+     ✓ uses the same effective rect and scene key for preview SVG and export snapshot  1661ms
+     ✓ keeps preview and export viewBoxes identical across a size round trip  1065ms
+ ✓ tests/webGpuFieldOverlay.test.ts (16 tests) 2471ms
+     ✓ mounts the controller on open and disposes on unmount  464ms
+ ✓ tests/appearancePreview.test.ts (4 tests) 2472ms
+     ✓ uses an editor-only checker while keeping transparent SVG preview marks visible  615ms
+     ✓ does not change geometry, mark opacity, or animation state when transparency toggles  407ms
+     ✓ uses primary color for visible marks without background-color opacity coupling  1421ms
+ ✓ tests/waveContoursRenderer.test.ts (23 tests) 3528ms
+     ✓ returns a zero-safe context with no active emitters and finite multi diagnostics  828ms
+     ✓ keeps masked-out field values zero and every value finite  1678ms
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts (9 tests) 3965ms
+     ✓ flow uses the effective rect origin in context.viewport  1068ms
+     ✓ ripple uses the effective rect origin in context.viewport  779ms
+     ✓ dots uses the effective rect origin in context.viewport  765ms
+     ✓ sdf-flow samples within the shifted effective rect  554ms
+ ✓ tests/presetVectorIntegrity.test.ts (20 tests) 2406ms
+     ✓ Edge Current exports vector-only Final Artwork SVG  827ms
+     ✓ Sonic Ripple exports vector-only Final Artwork SVG  522ms
+     ✓ Signal Dust exports vector-only Final Artwork SVG  822ms
+Program 'node.exe' failed to run: Exception of type 'System.OutOfMemoryException' was thrown.At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Breeze\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Breeze\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ResourceUnavailable: (:) [], ApplicationFailedException
+    + FullyQualifiedErrorId : NativeCommandFailed
+ 

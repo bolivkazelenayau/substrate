@@ -12,6 +12,7 @@ import { assertVectorOnlySvg } from "./svgValidation";
 import { DEFAULT_CONTOUR_STROKE_WIDTH, LEGACY_EXPORT_STROKE_WIDTH } from "./contourStroke";
 import type { ExportSnapshot } from "./exportAuthority";
 import { createStaticRenderContext } from "./renderContextLifecycle";
+import type { ArtboardRect } from "./sceneLayout";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -53,9 +54,20 @@ function serializeGlyphPaths(textGeometry: TextGeometry) {
     .join("");
 }
 
-export function createSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup, capturedContext?: { timeMs: number; frame: number }): string {
-  const { width, height } = state.artboard;
-  const dimensionAttributes = width === 1200 && height === 720 ? "" : ` width="${width}" height="${height}"`;
+export function createSvg(
+  state: ProjectState,
+  context: RenderContext,
+  textGeometry: TextGeometry | null = null,
+  generatedGeometry?: GeometryGroup,
+  capturedContext?: { timeMs: number; frame: number },
+  effectiveArtboardOverride?: ArtboardRect,
+): string {
+  const authoredWidth = state.artboard.width;
+  const authoredHeight = state.artboard.height;
+  const effective: ArtboardRect = effectiveArtboardOverride ?? { x: 0, y: 0, width: authoredWidth, height: authoredHeight };
+  const { width, height, x: rectX, y: rectY } = effective;
+  const isAuthoredDefault = authoredWidth === 1200 && authoredHeight === 720 && rectX === 0 && rectY === 0 && width === 1200 && height === 720;
+  const dimensionAttributes = isAuthoredDefault ? "" : ` width="${width}" height="${height}"`;
   assertPresetExportable(state.preset, state.exportMode);
   const renderer = getRenderer(state.renderer);
   const geometry = generatedGeometry ?? renderer.generateGeometry(state, context);
@@ -64,7 +76,7 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
   const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
   const finalOutline = getFinalOutlineGeometry(textGeometry, warpedOutline, hasWarpedOutline);
   const timestamp = new Date().toISOString();
-  const metadataProject = width === 1200 && height === 720
+  const metadataProject = isAuthoredDefault
     ? (() => {
         const { artboard: _artboard, version: _version, contourStrokeWidth, lineHeight, ...legacyProject } = state;
         const typographyProject = lineHeight === 1 ? legacyProject : { ...legacyProject, lineHeight };
@@ -86,13 +98,18 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     font: state.font,
     substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
     project: metadataProject,
+    authoredArtboard: { width: authoredWidth, height: authoredHeight },
+    effectiveArtboard: { x: rectX, y: rectY, width, height },
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
     exportContext: capturedContext,
   };
 
+  const rectArgs = rectX === 0 && rectY === 0
+    ? `width="${width}" height="${height}"`
+    : `x="${rectX}" y="${rectY}" width="${width}" height="${height}"`;
   const background = state.transparentBackground
     ? ""
-    : `<g id="${SVG_IDS.background}"><rect width="${width}" height="${height}" fill="${state.backgroundColor}"/></g>`;
+    : `<g id="${SVG_IDS.background}"><rect ${rectArgs} fill="${state.backgroundColor}"/></g>`;
   const editable = `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines
     ? `<g fill="white">${serializeGlyphPaths(textGeometry)}</g>`
@@ -110,7 +127,7 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
     ? `<g fill="white" stroke="none" fill-rule="evenodd">${finalOutline.paths.map((path) => `<path d="${escape(path.d)}"/>`).join("")}</g><g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`
     : `${serializeText(state, "white", undefined, false)}<g id="diffuser-erosion-marks" fill="black" stroke="none">${serializedErosionMarks}</g>`;
   const overlayMask = renderer.showTextOverlay?.(state) && erodeOverlay
-    ? `<mask id="diffuser-overlay-mask"><rect width="${width}" height="${height}" fill="black"/>${overlayMaskContent}</mask>`
+    ? `<mask id="diffuser-overlay-mask"><rect ${rectArgs} fill="black"/>${overlayMaskContent}</mask>`
     : "";
   const overlayFill = state.overlayMode === "knockout" ? state.backgroundColor : state.primaryColor;
   // Regular Outline mode renders each positioned glyph path as a clean, stroke-only
@@ -128,30 +145,37 @@ export function createSvg(state: ProjectState, context: RenderContext, textGeome
       : `<g id="diffuser-text-overlay" opacity="${renderer.textOverlayOpacity?.(state) ?? 1}"><g ${overlayStyle}${erodeOverlay && state.overlayMode !== "outline" ? ' mask="url(#diffuser-overlay-mask)"' : ""}>${serializeText(state, state.overlayMode === "outline" ? "none" : overlayFill, undefined, false)}</g></g>`
     : "";
   const artwork = [
-    `<defs><mask id="${SVG_IDS.mask}"><g id="${SVG_IDS.substrateMask}"><rect width="${width}" height="${height}" fill="black"/>${substrate}</g></mask>${overlayMask}</defs>`,
+    `<defs><mask id="${SVG_IDS.mask}"><g id="${SVG_IDS.substrateMask}"><rect ${rectArgs} fill="black"/>${substrate}</g></mask>${overlayMask}</defs>`,
     outline,
     `<g id="${SVG_IDS.artwork}"${clipArtwork ? ` mask="url(#${SVG_IDS.mask})"` : ""} fill="${state.primaryColor}" stroke="${state.primaryColor}" stroke-width="${renderer.strokeWidth?.(state) ?? LEGACY_EXPORT_STROKE_WIDTH}" stroke-linecap="round">${serializeGeometry(geometry, state.precision)}</g>`,
     textOverlay,
     `<g id="${SVG_IDS.sourceText}">${serializeText(state, "none", "hidden")}</g>`,
   ].join("");
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg"${dimensionAttributes} viewBox="0 0 ${width} ${height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg"${dimensionAttributes} viewBox="${rectX} ${rectY} ${width} ${height}" role="img" aria-label="${escape(state.text)} generative typography"><metadata>${escape(JSON.stringify(metadata))}</metadata>${background}${state.exportMode === "editable" ? editable : artwork}</svg>`;
   assertVectorOnlySvg(svg);
   return svg;
 }
 
-export function createTimedSvg(state: ProjectState, context: RenderContext, textGeometry: TextGeometry | null = null, generatedGeometry?: GeometryGroup, exportContext?: { timeMs: number; frame: number }) {
-  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry, exportContext));
+export function createTimedSvg(
+  state: ProjectState,
+  context: RenderContext,
+  textGeometry: TextGeometry | null = null,
+  generatedGeometry?: GeometryGroup,
+  exportContext?: { timeMs: number; frame: number },
+  effectiveArtboardOverride?: ArtboardRect,
+) {
+  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry, exportContext, effectiveArtboardOverride));
   return { svg: result.value, serializationTimeMs: result.durationMs };
 }
 
 export function createTimedSvgFromSnapshot(snapshot: ExportSnapshot) {
   const context: RenderContext = {
-    ...createStaticRenderContext(snapshot.document, snapshot.typography.geometry, snapshot.substrate?.data ?? null),
+    ...createStaticRenderContext(snapshot.document, snapshot.typography.geometry, snapshot.substrate?.data ?? null, snapshot.effectiveArtboard),
     timeMs: snapshot.context.timeMs,
     frame: snapshot.context.frame,
   };
-  return createTimedSvg(snapshot.document, context, snapshot.typography.geometry, snapshot.renderer.geometry, snapshot.context);
+  return createTimedSvg(snapshot.document, context, snapshot.typography.geometry, snapshot.renderer.geometry, snapshot.context, snapshot.effectiveArtboard);
 }
 
 export function validateSvgExport(svg: string, expectPathMask: boolean) {

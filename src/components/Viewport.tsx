@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { SVG_IDS } from "../engine/constants";
 import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
@@ -27,12 +27,15 @@ import { DEFAULT_SVG_TRACE_CONFIG, type SvgTraceConfig } from "../engine/preview
 import { useViewportHudHost } from "./viewportHudContext";
 import { buildGlyphSamplingDiagnostics } from "../engine/rendererSampling";
 import { resolveTextBoundsModel } from "../engine/textBounds";
-import { projectArtboard } from "../engine/artboard";
+import { contextArtboard } from "../engine/artboard";
+import { artboardBottom, artboardLeft, artboardRight, artboardTop, type ResolvedSceneLayout } from "../engine/sceneLayout";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
+import { traceEvent } from "../dev/interactionTrace";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
+  sceneLayout: ResolvedSceneLayout;
   exportDiagnostics: SvgDiagnostics | null; exportWarnings: string[]; performanceWarnings: string[];
   glyphLayoutTimeMs: number; substrateError: string | null; substrateBackendStatus: SubstrateBackendStatus;
   previewDiagnostics: PreviewDiagnostics; previewBackend: PreviewBackend; previewSettings: PreviewSettings;
@@ -42,13 +45,18 @@ interface ViewportProps {
   svgTraceConfig?: SvgTraceConfig;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
   const diagnosticsExpanded = diagnosticsMode === "full";
   const renderer = getRenderer(state.renderer);
-  const artboard = projectArtboard(state);
+  const svgRef = useRef<SVGSVGElement>(null);
+  // The viewport reads the EFFECTIVE scene rect (resolved by the production
+  // scene authority), never `projectArtboard(state)`. The authored minimum is
+  // surfaced separately through `sceneLayout.authoredArtboard` for diagnostics.
+  const artboard = contextArtboard(context);
+  const effectiveRect = sceneLayout.effectiveArtboard;
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
   const samplingDiagnostics = useMemo(() => {
     if (!diagnosticsExpanded || !textGeometry?.hasOutlines) return [];
@@ -112,14 +120,23 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
   const substrateRebuilt = previousFrame.current.substrate !== substrate;
   const debugRegenerated = previousFrame.current.debugGenerationId !== debugImage.generationId;
   previousFrame.current = { geometry, warpedOutline, warpCacheKey, substrate, debugGenerationId: debugImage.generationId };
-  const gradientVectors = useMemo(() => {
+const gradientVectors = useMemo(() => {
     if (!substrate || state.debug.substrateMode !== "gradient") return [];
     const vectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
-    const requested = Math.ceil(artboard.width / 45) * Math.ceil(artboard.height / 45);
+    // Sample within the effective scene rect (origin-aware). The previous loop
+    // iterated `[0, artboard.width] × [0, artboard.height]`, assuming a
+    // zero-origin rect; the new effective rect may have non-zero origin.
+    const left = artboardLeft(effectiveRect);
+    const top = artboardTop(effectiveRect);
+    const right = artboardRight(effectiveRect);
+    const bottom = artboardBottom(effectiveRect);
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+    const requested = Math.ceil(width / 45) * Math.ceil(height / 45);
     const budget = planDiagnosticSamples(requested);
     const stride = budget.reduced ? 45 * Math.ceil(Math.sqrt(requested / budget.emitted)) : 45;
-    for (let y = stride; y < artboard.height && vectors.length < budget.emitted; y += stride) {
-      for (let x = stride; x < artboard.width && vectors.length < budget.emitted; x += stride) {
+    for (let y = top + stride; y < bottom && vectors.length < budget.emitted; y += stride) {
+      for (let x = left + stride; x < right && vectors.length < budget.emitted; x += stride) {
         const gradient = sampleDistanceGradient(substrate, x, y);
         if (gradient.magnitude < 0.01) continue;
         const length = 14;
@@ -132,10 +149,45 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
       }
     }
     return vectors;
-  }, [artboard.height, artboard.width, substrate, state.debug.substrateMode]);
+  }, [effectiveRect, substrate, state.debug.substrateMode]);
+
+  useEffect(() => {
+    traceEvent({ stage: "viewport.lifecycle", phase: "start", detail: { renderer: state.renderer } });
+    return () => { traceEvent({ stage: "viewport.lifecycle", phase: "end", detail: { reason: "effect-cleanup" } }); };
+  }, [state.renderer]);
+
+  useEffect(() => {
+    traceEvent({
+      stage: "preview.backend",
+      phase: "instant",
+      frameKey: geometry.id,
+      detail: { backend: previewBackend, canvasVisible: previewBackend === "canvas-2d", svgVisible: true },
+    });
+  }, [geometry.id, previewBackend]);
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    traceEvent({
+      stage: "svg.presentation",
+      phase: "instant",
+      frameKey: geometry.id,
+      outputKey: geometry.id,
+      counts: {
+        svgElements: svg.querySelectorAll("*").length,
+        paths: svg.querySelectorAll("path").length,
+        geometryNodes: geometry.geometries.length,
+      },
+      detail: {
+        viewBox: svg.getAttribute("viewBox"),
+        presented: true,
+        backend: "svg-dom",
+      },
+    });
+}, [effectiveRect.height, effectiveRect.width, geometry, previewBackend, state.renderer, textGeometry]);
 
   return (
-    <div className={`stage diagnostics-${diagnosticsMode}`} data-viewport-space="artwork" style={{ aspectRatio: `${artboard.width} / ${artboard.height}` }}>
+    <div className={`stage diagnostics-${diagnosticsMode}`} data-testid="viewport-stage" data-preview-backend={previewBackend} data-viewport-space="artwork" data-artboard-authored-width={sceneLayout.authoredArtboard.width} data-artboard-authored-height={sceneLayout.authoredArtboard.height} data-artboard-effective-x={effectiveRect.x} data-artboard-effective-y={effectiveRect.y} data-artboard-effective-width={effectiveRect.width} data-artboard-effective-height={effectiveRect.height} data-scene-layout-key={sceneLayout.key} data-renderer-element-count={geometry.geometries.length} style={{ aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}` }}>
       <div
         className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
         data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
@@ -146,7 +198,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         <CanvasFlowPreview
           state={state}
           textGeometry={textGeometry}
-          artboard={{ x: 0, y: 0, width: artboard.width, height: artboard.height }}
+          artboard={{ x: effectiveRect.x, y: effectiveRect.y, width: effectiveRect.width, height: effectiveRect.height }}
+          frameKey={geometry.id}
           running={previewRunning}
           fpsCap={previewSettings.fpsCap}
           pauseWhenHidden={previewSettings.pauseWhenHidden}
@@ -154,14 +207,14 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           onFailure={onCanvasFailure}
         />
       )}
-      <svg className="artboard" viewBox={`0 0 ${artboard.width} ${artboard.height}`} aria-label={`Generative preview of ${state.text}`}>
+      <svg ref={svgRef} className="artboard" data-testid="artwork-svg" viewBox={`${effectiveRect.x} ${effectiveRect.y} ${effectiveRect.width} ${effectiveRect.height}`} aria-label={`Generative preview of ${state.text}`}>
         {previewBackend !== "canvas-2d" && !state.transparentBackground && (
-          <rect data-preview-artwork-background="" width={artboard.width} height={artboard.height} fill={state.backgroundColor} />
+          <rect data-preview-artwork-background="" x={effectiveRect.x} y={effectiveRect.y} width={effectiveRect.width} height={effectiveRect.height} fill={state.backgroundColor} />
         )}
         <defs>
           <mask id={SVG_IDS.mask}>
             <g id={SVG_IDS.substrateMask}>
-              <rect width={artboard.width} height={artboard.height} fill="black" />
+              <rect x={effectiveRect.x} y={effectiveRect.y} width={effectiveRect.width} height={effectiveRect.height} fill="black" />
               {hasGlyphPaths
                 ? textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} fill="white" />)
                 : <text {...textAttributes(layout)} fill="white">{layout.text}</text>}
@@ -169,7 +222,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           </mask>
           {erodeOverlay && (
             <mask id="diffuser-overlay-mask">
-              <rect width={artboard.width} height={artboard.height} fill="black" />
+              <rect x={effectiveRect.x} y={effectiveRect.y} width={effectiveRect.width} height={effectiveRect.height} fill="black" />
               {hasGlyphPaths
                 ? <>
                     <g fill="white" stroke="none" fillRule="evenodd">
@@ -211,8 +264,8 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
           : <text className="ghost-text" {...textAttributes(layout)}>{layout.text}</text>}
-        {debugImage.url && <image className="debug-raster" href={debugImage.url} x={substrate?.domainBounds?.x ?? 0} y={substrate?.domainBounds?.y ?? 0} width={substrate?.domainBounds?.width ?? artboard.width} height={substrate?.domainBounds?.height ?? artboard.height} preserveAspectRatio="none" />}
-        {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x={context.glyphField?.worldBounds.x ?? 0} y={context.glyphField?.worldBounds.y ?? 0} width={context.glyphField?.worldBounds.width ?? artboard.width} height={context.glyphField?.worldBounds.height ?? artboard.height} preserveAspectRatio="none" />}
+        {debugImage.url && <image className="debug-raster" href={debugImage.url} x={substrate?.domainBounds?.x ?? effectiveRect.x} y={substrate?.domainBounds?.y ?? effectiveRect.y} width={substrate?.domainBounds?.width ?? effectiveRect.width} height={substrate?.domainBounds?.height ?? effectiveRect.height} preserveAspectRatio="none" />}
+        {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x={context.glyphField?.worldBounds.x ?? effectiveRect.x} y={context.glyphField?.worldBounds.y ?? effectiveRect.y} width={context.glyphField?.worldBounds.width ?? effectiveRect.width} height={context.glyphField?.worldBounds.height ?? effectiveRect.height} preserveAspectRatio="none" />}
         {state.debug.substrateMode === "gradient" && (
           <g className="debug-gradient">
             {gradientVectors.map((vector, index) => <line key={index} {...vector} />)}
@@ -233,7 +286,7 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
         {state.debug.maskBounds && diagnosticsExpanded && <rect className="debug-layout-bounds" x={textBounds.layoutBounds.x} y={textBounds.layoutBounds.y} width={textBounds.layoutBounds.width} height={textBounds.layoutBounds.height} />}
         {state.debug.maskBounds && <rect className="debug-line" x={bounds.x} y={bounds.y} width={bounds.width} height={bounds.height} />}
         {state.debug.baseline && layout.lines.map((line) => (
-          <line key={line.lineIndex} className="debug-baseline" x1="0" y1={line.baselineY} x2={artboard.width} y2={line.baselineY} />
+          <line key={line.lineIndex} className="debug-baseline" x1={effectiveRect.x} y1={line.baselineY} x2={effectiveRect.x + effectiveRect.width} y2={line.baselineY} />
         ))}
         {state.debug.glyphOrigins && hasGlyphPaths && (
           <g className="debug-glyph-origins">
@@ -260,16 +313,16 @@ export function Viewport({ state, context, geometry, textGeometry, exportDiagnos
           </g>
         )}
       </svg>
-      {hudHost && createPortal(<div className={`viewport-hud-content diagnostics-${diagnosticsMode}`} data-viewport-space="screen" style={{ aspectRatio: `${artboard.width} / ${artboard.height}` }}>
-        <div className="stage-meta top"><span>FIELD / {state.renderer.toUpperCase()}</span><span>{artboard.width} × {artboard.height}</span></div>
+      {hudHost && createPortal(<div className={`viewport-hud-content diagnostics-${diagnosticsMode}`} data-viewport-space="screen" style={{ aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}` }}>
+        <div className="stage-meta top"><span>FIELD / {state.renderer.toUpperCase()}</span><span>{effectiveRect.width} × {effectiveRect.height} ({sceneLayout.authoredArtboard.width}×{sceneLayout.authoredArtboard.height} authored)</span></div>
         <div className="coordinates">
-        <span>0,0</span>
+        <span>{effectiveRect.x},{effectiveRect.y}</span>
         <span>
           {state.debug.markCount && `${geometry.geometries.length} MARKS`}
           {state.debug.frameTime && ` · F${context.frame} / ${Math.round(context.timeMs)}MS`}
           {state.debug.costEstimate && exportDiagnostics && ` · ${exportDiagnostics.glyphPaths} GLYPHS · ${exportDiagnostics.generatedMarks} MARKS · ${exportDiagnostics.elementCount} EL · ${formatBytes(exportDiagnostics.byteSize)} · ${exportDiagnostics.substrateType.toUpperCase()}`}
         </span>
-        <span>{artboard.width},{artboard.height}</span>
+        <span>{effectiveRect.x + effectiveRect.width},{effectiveRect.y + effectiveRect.height}</span>
         </div>
       {substrate && state.debug.substrateMode !== "none" && (
         <div className="substrate-diagnostics">

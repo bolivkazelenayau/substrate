@@ -2,7 +2,7 @@
   "viewBox": "0 0 1200 720",
   "elementCounts": {
     "path": 0,
-    "circle": 46,
+    "circle": 58,
     "line": 0,
     "polyline": 0,
     "image": 0,
@@ -11,5 +11,5 @@
   },
   "hasDataImage": false,
   "hasBase64": false,
-  "canonicalHash": "38b4865ade89aa8d443a85f259af4586cf836d031628bab0cea7fa97c2e598bd"
+  "canonicalHash": "f0d30a26fc0ffcb455aa30f08a58862e45eea8acbda38bf72d166d4e50c1af3e"
 }

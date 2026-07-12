@@ -6,6 +6,7 @@ import { getTextLayout } from "../engine/textLayout";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 import { planCanvasBackingStore } from "../engine/safetyBudget";
 import { canvasWorldTransform, type CanvasWorldTransformArtboard } from "./canvasWorldTransform";
+import { interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "../dev/interactionTrace";
 
 type ArtboardRect = CanvasWorldTransformArtboard;
 
@@ -28,12 +29,13 @@ interface Props {
   running: boolean;
   fpsCap: PreviewFpsCap;
   pauseWhenHidden: boolean;
+  frameKey?: string;
   onSample: (sample: CanvasPreviewSample) => void;
   onFailure: () => void;
 }
 
 export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
-  const { state, textGeometry, artboard: artboardRect, running, fpsCap, pauseWhenHidden, onSample, onFailure } = props;
+  const { state, textGeometry, artboard: artboardRect, running, fpsCap, pauseWhenHidden, frameKey = "canvas:unknown", onSample, onFailure } = props;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stableArtboardRect = useMemo(
     () => ({
@@ -46,9 +48,11 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
   );
 
   useEffect(() => {
+    traceEvent({ stage: "canvas.lifecycle", phase: "start", frameKey, detail: { renderer: state.renderer } });
     const canvas = canvasRef.current;
     const context2d = canvas?.getContext("2d");
     if (!canvas || !context2d) {
+      traceEvent({ stage: "canvas.failure", phase: "instant", frameKey, detail: { reason: "2d-context-unavailable" } });
       onFailure();
       return;
     }
@@ -66,6 +70,19 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     });
     canvas.width = canvasPlan.width;
     canvas.height = canvasPlan.height;
+    traceEvent({
+      stage: "canvas.resize",
+      phase: "instant",
+      frameKey,
+      counts: { width: canvasPlan.width, height: canvasPlan.height },
+      detail: {
+        cssWidth: rect.width || canvas.clientWidth || artboard.width,
+        cssHeight: rect.height || canvas.clientHeight || artboard.height,
+        dpr: window.devicePixelRatio || 1,
+        visible: getComputedStyle(canvas).visibility !== "hidden" && getComputedStyle(canvas).display !== "none",
+      },
+    });
+    traceEvent({ stage: "canvas.visibility", phase: "instant", frameKey, detail: { visible: true, backend: "canvas-2d" } });
     const worldTransform = canvasWorldTransform(canvasPlan.width, canvasPlan.height, artboard);
     let glyphClip: Path2D | null = null;
     if (textGeometry?.hasOutlines && typeof Path2D !== "undefined") {
@@ -82,17 +99,24 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     let accumulatorMs = 0;
     let elapsedTime = 0;
     let frame = 0;
+    let drawCount = 0;
     let averageFrameMs = 0;
     let lastReport = 0;
     const minimumFrameMs = 1000 / fpsCap;
     const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
 
     const draw = (timeMs: number, frameNumber: number) => {
+      const drawTrace = traceStartSpan("canvas.draw", {
+        frameKey,
+        inputKey: interactionTraceEnabled ? traceKey({ frameKey, timeMs, frameNumber }) : undefined,
+        detail: { frame: frameNumber },
+      });
       const started = performance.now();
       const renderContext: RenderContext = { timeMs, frame: frameNumber, textGeometry, viewport: artboard };
       const previewFrame = createFlowPreviewFrame(state, renderContext);
       context2d.setTransform(1, 0, 0, 1, 0, 0);
       context2d.clearRect(0, 0, canvasPlan.width, canvasPlan.height);
+      traceEvent({ stage: "canvas.clear", phase: "instant", frameKey, counts: { width: canvasPlan.width, height: canvasPlan.height }, detail: { frame: frameNumber } });
       if (!previewFrame.appearance.transparentBackground) {
         context2d.fillStyle = previewFrame.appearance.backgroundColor;
         context2d.fillRect(0, 0, canvasPlan.width, canvasPlan.height);
@@ -122,6 +146,16 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
         layout.lines.forEach((line) => context2d.fillText(line.text, line.x, line.baselineY));
       }
       context2d.restore();
+      drawCount += 1;
+      if (interactionTraceEnabled) {
+        (canvas as HTMLCanvasElement & { __SUBSTRATE_CANVAS_DRAW_COUNT__?: number }).__SUBSTRATE_CANVAS_DRAW_COUNT__ = drawCount;
+      }
+      drawTrace({
+        outputKey: frameKey,
+        counts: { width: canvasPlan.width, height: canvasPlan.height, lines: previewFrame.lines.length },
+        detail: { frame: frameNumber, drawCount, transparentBackground: previewFrame.appearance.transparentBackground },
+      });
+      traceEvent({ stage: "canvas.present", phase: "instant", frameKey, outputKey: frameKey, detail: { frame: frameNumber, drawCount, backend: "canvas-2d" } });
       return { renderContext, drawTimeMs: Math.max(0, performance.now() - started) };
     };
 
@@ -187,8 +221,11 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       animationFrame = requestAnimationFrame(tick);
     };
     animationFrame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(animationFrame);
-  }, [fpsCap, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, state, textGeometry]);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      traceEvent({ stage: "canvas.lifecycle", phase: "end", frameKey, detail: { reason: "effect-cleanup" } });
+    };
+  }, [fpsCap, frameKey, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, state, textGeometry]);
 
-  return <canvas ref={canvasRef} className="flow-canvas" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="flow-canvas" data-testid="artwork-canvas" aria-hidden="true" />;
 });

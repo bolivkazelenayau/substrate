@@ -2,6 +2,7 @@ import { TEXT_LAYOUT, VIEWPORT } from "./constants";
 import type { ProjectState } from "../types";
 import type { TextGeometry } from "./glyphGeometry";
 import { projectArtboard } from "./artboard";
+import { canonicalBaselineAtAuthoredCenter } from "./sceneLayout";
 
 export interface TextLayout {
   x: number;
@@ -38,7 +39,14 @@ function alignedBoundsX(state: ProjectState, width: number) {
 export function getTextLayout(state: ProjectState, useCustomFont = true): TextLayout {
   const sourceLines = state.text.replace(/\r\n?/g, "\n").split("\n");
   const lineAdvance = state.fontSize * state.lineHeight;
-  const firstBaselineY = TEXT_LAYOUT.baselineY + state.textOffsetY - (sourceLines.length - 1) * lineAdvance / 2;
+  // Canonical placement: the first-line baseline is determined by the
+  // authored artboard center plus the user-authored `textOffsetY` delta.
+  // `textOffsetY` is no longer a cached/baseline compensation — it is purely
+  // a user-authored vertical displacement applied after canonical placement.
+  // The legacy hard-coded `405` baseline has been removed.
+  const authoredCenterY = state.artboard.height / 2;
+  const canonicalBaseline = canonicalBaselineAtAuthoredCenter(authoredCenterY, state.fontSize);
+  const firstBaselineY = canonicalBaseline + state.textOffsetY - (sourceLines.length - 1) * lineAdvance / 2;
   const lines = sourceLines.map((text, lineIndex) => {
     const advanceWidth = estimatedLineAdvance(state, text);
     const originX = alignedBoundsX(state, advanceWidth);
@@ -97,30 +105,6 @@ export function getApproximateTextInkBounds(state: ProjectState) {
 
 /** @deprecated Prefer the explicitly named layout/ink bounds helpers. */
 export const getTextBounds = getApproximateTextInkBounds;
-
-export function centerPreservingTypographySizePatch(
-  state: ProjectState,
-  nextFontSize: number,
-  textGeometry: TextGeometry | null,
-): Pick<ProjectState, "fontSize" | "textOffsetY"> {
-  if (!Number.isFinite(nextFontSize) || nextFontSize <= 0 || nextFontSize === state.fontSize) {
-    return { fontSize: state.fontSize, textOffsetY: state.textOffsetY };
-  }
-  const currentBounds = textGeometry?.bounds ?? getTextBounds(state);
-  const currentCenterY = currentBounds.y + currentBounds.height / 2;
-  let projectedCenterY: number;
-  if (textGeometry?.bounds && state.fontSize > 0) {
-    const scale = nextFontSize / state.fontSize;
-    projectedCenterY = textGeometry.baselineY + (currentCenterY - textGeometry.baselineY) * scale;
-  } else {
-    const projectedBounds = getTextBounds({ ...state, fontSize: nextFontSize });
-    projectedCenterY = projectedBounds.y + projectedBounds.height / 2;
-  }
-  return {
-    fontSize: nextFontSize,
-    textOffsetY: state.textOffsetY + currentCenterY - projectedCenterY,
-  };
-}
 
 export function getTypographyLimitations(state: ProjectState, parsedFontPathsAvailable: boolean) {
   if (parsedFontPathsAvailable) return [];

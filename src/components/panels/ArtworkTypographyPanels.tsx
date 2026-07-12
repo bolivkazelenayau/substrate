@@ -1,9 +1,9 @@
-import { useState, type ChangeEvent, type RefObject } from "react";
+import { useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { resolveTextOffsetBounds, resolveTypographySizeBounds } from "../../engine/numericBounds";
-import { centerPreservingTypographySizePatch } from "../../engine/textLayout";
 import type { TextGeometry } from "../../engine/glyphGeometry";
 import type { ProjectState } from "../../types";
 import { ArtworkPanel, TypographyPanel } from "./PanelSection";
+import { activeTraceGestureId, beginTraceGesture, endTraceGesture, traceEvent } from "../../dev/interactionTrace";
 
 interface ArtworkTypographyPanelsProps {
   state: ProjectState;
@@ -16,7 +16,7 @@ interface ArtworkTypographyPanelsProps {
 }
 
 export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
-  const { state, setState, fontFileRef, onFontUpload, onClearFont, fontLoaded, textGeometry = null } = props;
+  const { state, setState, fontFileRef, onFontUpload, onClearFont, fontLoaded } = props;
   const patch = (next: Partial<ProjectState>) => setState({ ...state, ...next });
   const [typographyOpen, setTypographyOpen] = useState(false);
   const sizeBounds = resolveTypographySizeBounds({
@@ -40,7 +40,7 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
           <span>Text substrate</span>
           <textarea value={state.text} rows={3} maxLength={280} onChange={(event) => patch({ text: event.target.value })} />
         </label>
-        <Range label="Size" value={state.fontSize} defaultValue={148} min={sizeBounds.min} max={sizeBounds.softMax} step={sizeBounds.step} onChange={(fontSize) => patch(centerPreservingTypographySizePatch(state, fontSize, textGeometry))} />
+        <Range label="Size" value={state.fontSize} defaultValue={148} min={sizeBounds.min} max={sizeBounds.softMax} step={sizeBounds.step} onChange={(fontSize) => patch({ fontSize })} />
         <div className="font-loader">
           <div>
             <span>Outline font</span>
@@ -101,10 +101,59 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
 }
 
 function Range({ label, value, min, max, step = 1, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; defaultValue: number; onChange: (value: number) => void }) {
+  const gestureIdRef = useRef<number | undefined>(undefined);
+  const tracedSize = label === "Size";
+  const recordNative = (eventType: "input" | "change", nextValue: number) => {
+    if (!tracedSize) return;
+    traceEvent({
+      stage: "native.size.input",
+      phase: "instant",
+      gestureId: gestureIdRef.current ?? activeTraceGestureId(),
+      inputKey: `size:${nextValue}`,
+      detail: { eventType, value: nextValue, min, max, step },
+    });
+  };
+  const finishGesture = (reason: string) => {
+    if (!tracedSize || gestureIdRef.current === undefined) return;
+    endTraceGesture(gestureIdRef.current, { reason, value: value });
+    gestureIdRef.current = undefined;
+  };
   return (
     <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => onChange(defaultValue)} onChange={(event) => onChange(Number(event.target.value))} />
+      <span>{label}<output data-testid={tracedSize ? "size-value" : undefined}>{value}</output></span>
+      <input
+        data-testid={tracedSize ? "size-control" : undefined}
+        type="range"
+        value={value}
+        min={min}
+        max={max}
+        step={step}
+        title="Double-click to reset"
+        onPointerDown={(event) => {
+          if (tracedSize) {
+            gestureIdRef.current = beginTraceGesture({ value, pointerId: event.pointerId, min, max });
+            traceEvent({ stage: "native.size.pointerdown", phase: "instant", gestureId: gestureIdRef.current, inputKey: `size:${value}`, detail: { pointerId: event.pointerId } });
+          }
+        }}
+        onPointerUp={(event) => {
+          if (tracedSize) traceEvent({ stage: "native.size.pointerup", phase: "instant", gestureId: gestureIdRef.current, inputKey: `size:${value}`, detail: { pointerId: event.pointerId } });
+          finishGesture("pointerup");
+        }}
+        onLostPointerCapture={() => finishGesture("lostpointercapture")}
+        onBlur={() => {
+          if (tracedSize) traceEvent({ stage: "native.size.blur", phase: "instant", gestureId: gestureIdRef.current, inputKey: `size:${value}` });
+          finishGesture("blur");
+        }}
+        onDoubleClick={() => {
+          if (tracedSize) traceEvent({ stage: "native.size.reset", phase: "instant", gestureId: gestureIdRef.current ?? activeTraceGestureId(), inputKey: `size:${value}`, outputKey: `size:${defaultValue}`, detail: { canonicalDefault: defaultValue, valueBefore: value } });
+          onChange(defaultValue);
+        }}
+        onInput={(event) => recordNative("input", Number(event.currentTarget.value))}
+        onChange={(event) => {
+          recordNative("change", Number(event.currentTarget.value));
+          onChange(Number(event.target.value));
+        }}
+      />
     </label>
   );
 }

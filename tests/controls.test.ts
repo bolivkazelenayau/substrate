@@ -122,7 +122,7 @@ describe("Safe Typography controls", () => {
     const after = getTextBounds(next);
     expect(after.y + after.height / 2).toBeCloseTo(before.y + before.height / 2, 8);
     expect(next.fontSize).toBe(500);
-    expect(next.textOffsetY).not.toBe(baseState.textOffsetY);
+    expect(next.textOffsetY).toBe(baseState.textOffsetY);
   });
 
   it("renders all six controls and wires their existing state fields", () => {

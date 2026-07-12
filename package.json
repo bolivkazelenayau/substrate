@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite --config vite.config.ts",
     "build": "tsc -b && vite build --config vite.config.ts",
+    "build:e2e": "tsc -b && vite build --config vite.config.ts --mode e2e",
+    "preview:e2e": "vite preview --config vite.config.ts --host 127.0.0.1 --port 4173 --strictPort",
     "analyze": "tsc -b && vite build --config vite.config.ts --mode analyze",
     "lint": "eslint .",
     "typecheck": "npm run typecheck:source && npm run typecheck:test",
@@ -13,6 +15,10 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "check:reachability": "node scripts/checkProductionReachability.mjs",
     "test": "vitest run",
+    "typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
+    "test:e2e": "npm run typecheck:e2e && npm run build:e2e && playwright test",
+    "test:e2e:headed": "npm run typecheck:e2e && npm run build:e2e && playwright test --headed",
+    "test:e2e:ui": "npm run typecheck:e2e && npm run build:e2e && playwright test --ui",
     "update:export-fixtures": "node scripts/updateExportFixtures.mjs",
     "compatibility:check": "vitest run tests/compatibilityExports.test.ts"
   },
@@ -29,6 +35,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@napi-rs/canvas": "^1.0.1",
+    "@playwright/test": "^1.61.1",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^26.0.1",
     "@types/react": "^19.0.8",

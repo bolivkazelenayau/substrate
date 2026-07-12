@@ -16,6 +16,7 @@ import { advanceAnimationFrameBudget } from "../engine/animationTiming";
 import { generateRendererGeometry } from "../engine/rendererRuntime";
 import type { SvgTraceMode } from "../engine/previewTraceConfig";
 import type { ProjectState, RenderContext } from "../types";
+import { traceEvent } from "../dev/interactionTrace";
 
 interface FlowPreviewProps {
   geometry: GeometryGroup;
@@ -66,6 +67,10 @@ export const FlowPreview = memo(function FlowPreview({
   fpsCap = 60,
 }: FlowPreviewProps) {
   recordFlowPreviewRender();
+  useEffect(() => {
+    traceEvent({ stage: "svg.lifecycle", phase: "start", detail: { backend: "svg-dom" } });
+    return () => { traceEvent({ stage: "svg.lifecycle", phase: "end", detail: { reason: "effect-cleanup" } }); };
+  }, []);
   const lines = geometry.geometries as LineSegment[];
   const pathRefs = useRef<Array<SVGPathElement | null>>([]);
   const previousDStrings = useRef<string[]>([]);
@@ -131,6 +136,18 @@ recordPreviewPathCommit({
       dStringLength,
     });
     recordFlowPreviewPathCommit(stats);
+    traceEvent({
+      stage: "svg.geometry-group",
+      phase: "instant",
+      frameKey: geometry.id,
+      counts: {
+        svgElements: bucketCount,
+        paths: bucketCount,
+        segments: plan.segmentCount,
+        attributeWrites: stats.attributeWrites,
+      },
+      detail: { activeBuckets: plan.activeBuckets, dStringLength, backend: "svg-dom" },
+    });
     onUpdate?.(stats);
   };
 

@@ -1,0 +1,73 @@
+{
+  "name": "preview_scroll",
+  "description": "Scroll the tab selected by tabId, or this agent session's current tab when omitted. Positive deltaY scrolls down and positive deltaX scrolls right; a locator/selector targets a container.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
+      "deltaX": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Horizontal scroll delta in CSS pixels. Positive scrolls right. Defaults to 0."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "deltaY": {
+        "anyOf": [
+          {
+            "type": "number",
+            "allOf": [
+              {
+                "description": "Vertical scroll delta in CSS pixels. Positive scrolls down. Defaults to 0."
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "selector": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Legacy CSS selector for a scrollable container. Omit to scroll the viewport."
+      },
+      "locator": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Playwright selector for a scrollable container. Omit to scroll the viewport."
+      }
+    },
+    "additionalProperties": false
+  }
+}

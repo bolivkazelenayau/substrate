@@ -5,6 +5,7 @@ import { Viewport } from "../src/components/Viewport";
 import { shouldRunPreviewAnimation } from "../src/engine/previewBackend";
 import { baseState } from "../src/engine/presets";
 import { generateRendererGeometry, rendererGeometryStateKey } from "../src/engine/rendererRuntime";
+import { resolveSceneLayout } from "../src/engine/sceneLayout";
 import type { ProjectState, RenderContext } from "../src/types";
 
 const context: RenderContext = { timeMs: 500, frame: 15 };
@@ -18,12 +19,14 @@ const previewSettings = {
 
 function previewMarkup(state: ProjectState, previewBackend: "svg-dom" | "canvas-2d" = "svg-dom") {
   const geometry = generateRendererGeometry(state, context);
+  const sceneLayout = resolveSceneLayout(state, null);
   return renderToStaticMarkup(
     createElement(Viewport, {
       state,
       context,
       geometry,
       textGeometry: null,
+      sceneLayout,
       exportDiagnostics: null,
       exportWarnings: [],
       performanceWarnings: [],

@@ -84,6 +84,8 @@ export interface SubstrateBuildInput {
   bounds: GlyphBounds | null;
   domainBounds?: GlyphBounds;
   viewport?: {
+    x: number;
+    y: number;
     width: number;
     height: number;
   };

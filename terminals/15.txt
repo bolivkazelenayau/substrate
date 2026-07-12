@@ -1,0 +1,20 @@
+---
+pid: 14208
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; $env:NODE_OPTIONS=\"--max-old-space-size=4096\"; npx vitest run --maxWorkers=1 --pool=threads tests/sdfHalftoneRenderer.test.ts tests/waveContoursRenderer.test.ts"
+started_at: 2026-07-12T01:38:52.948Z
+running_for_ms: 2735006  
+---
+
+ RUN  v4.1.9 C:/Users/Breeze/Documents/Dev/type_react_kit
+
+ ✓ tests/waveContoursRenderer.test.ts (23 tests) 2479ms
+     ✓ returns a zero-safe context with no active emitters and finite multi diagnostics  686ms
+     ✓ keeps masked-out field values zero and every value finite  990ms
+ ✓ tests/sdfHalftoneRenderer.test.ts (11 tests) 360ms
+
+ Test Files  2 passed (2)
+      Tests  34 passed (34)
+   Start at  04:38:57
+   Duration  16.51s (transform 1.04s, setup 0ms, import 3.80s, tests 2.84s, environment 8.86s)
+

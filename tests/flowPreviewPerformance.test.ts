@@ -33,7 +33,7 @@ function makeBucketPaths(count = FLOW_PREVIEW_BUCKET_COUNT): (SVGPathElement | n
 
 function edgeCurrentGeometry(timeMs: number): GeometryGroup {
   const state = applyPreset(baseState, "Edge Current");
-  const context: RenderContext = { timeMs, frame: Math.round(timeMs / 33), viewport: { width: 1200, height: 720, centerX: 600, centerY: 360 } };
+  const context: RenderContext = { timeMs, frame: Math.round(timeMs / 33), viewport: { x: 0, y: 0, width: 1200, height: 720, centerX: 600, centerY: 360 } };
   return generateRendererGeometry(state, context);
 }
 

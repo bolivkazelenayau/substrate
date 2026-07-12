@@ -6,6 +6,7 @@ import { layoutGlyphs } from "../src/engine/glyphLayout";
 import { unionBounds, validateTextGeometry } from "../src/engine/glyphGeometry";
 import { baseState } from "../src/engine/presets";
 import { TEXT_LAYOUT, VIEWPORT } from "../src/engine/constants";
+import { canonicalBaselineAtAuthoredCenter } from "../src/engine/sceneLayout";
 import { getTextLayoutBounds, getTextLayout, getTypographyLimitations } from "../src/engine/textLayout";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
@@ -18,8 +19,13 @@ beforeAll(async () => {
 });
 
 describe("font and glyph layout", () => {
+  function canonicalBaseline(state: typeof baseState) {
+    return canonicalBaselineAtAuthoredCenter(state.artboard.height / 2, state.fontSize);
+  }
+
   it("preserves the legacy default paths, origins, advances, and bounds", () => {
     const state = { ...baseState, text: "TYPE", font: loaded.metadata };
+    const baselineY = canonicalBaseline(state);
     const characters = Array.from(state.text);
     const sourceGlyphs = characters.map((character) => loaded.font.charToGlyph(character));
     const scale = state.fontSize / loaded.font.unitsPerEm;
@@ -32,11 +38,11 @@ describe("font and glyph layout", () => {
       + Math.max(0, sourceGlyphs.length - 1) * state.tracking;
     let cursorX = VIEWPORT.centerX - totalAdvance / 2;
     const legacy = sourceGlyphs.map((glyph, index) => {
-      const path = glyph.getPath(cursorX, TEXT_LAYOUT.baselineY, state.fontSize, { kerning: false }, loaded.font);
+      const path = glyph.getPath(cursorX, baselineY, state.fontSize, { kerning: false }, loaded.font);
       const result = {
         d: path.toPathData(state.precision),
         x: cursorX,
-        y: TEXT_LAYOUT.baselineY,
+        y: baselineY,
         advanceWidth: advances[index],
         box: path.getBoundingBox(),
       };
@@ -97,11 +103,12 @@ describe("font and glyph layout", () => {
   });
 
   it("changes only multiline baseline spacing when line height changes", () => {
-    const single = layoutGlyphs({ ...baseState, text: "TYPE", lineHeight: 2, font: loaded.metadata }, loaded);
+    const singleState = { ...baseState, text: "TYPE", lineHeight: 2, font: loaded.metadata };
+    const single = layoutGlyphs(singleState, loaded);
     const compact = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 1, font: loaded.metadata }, loaded);
     const loose = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 1.5, font: loaded.metadata }, loaded);
 
-    expect(single.baselineY).toBe(TEXT_LAYOUT.baselineY);
+    expect(single.baselineY).toBe(canonicalBaseline(singleState));
     expect(loose.lines![1].baselineY - loose.lines![0].baselineY)
       .toBeCloseTo((compact.lines![1].baselineY - compact.lines![0].baselineY) * 1.5);
   });
@@ -158,7 +165,7 @@ describe("font and glyph layout", () => {
     const right = { ...baseState, text: "TYPE", textAlign: "right" as const, textOffsetY: -24 };
     expect(getTextLayoutBounds(left).x).toBe(VIEWPORT.paddingX);
     expect(getTextLayoutBounds(right).x + getTextLayoutBounds(right).width).toBe(VIEWPORT.width - VIEWPORT.paddingX);
-    expect(getTextLayout(right, false).baselineY).toBe(TEXT_LAYOUT.baselineY - 24);
+    expect(getTextLayout(right, false).baselineY).toBe(canonicalBaseline(right) - 24);
     expect(getTypographyLimitations({
       ...baseState,
       kerningStrength: 0.5,

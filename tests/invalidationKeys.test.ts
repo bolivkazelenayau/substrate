@@ -30,7 +30,7 @@ describe("semantic invalidation boundaries", () => {
       textX: 600,
       resolution: { width: 256, height: 154 },
       bounds: null,
-      viewport: { width: baseState.artboard.width, height: baseState.artboard.height },
+      viewport: { x: 0, y: 0, width: baseState.artboard.width, height: baseState.artboard.height },
     };
     expect(debugTypography).toBe(typography);
     expect(substrateBuildInputKey(input, typography)).toBe(substrateBuildInputKey(input, debugTypography));

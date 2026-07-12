@@ -1,0 +1,559 @@
+---
+pid: 24184
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; npm test"
+started_at: 2026-07-12T01:16:34.712Z
+running_for_ms: 4069999  
+---
+
+> type-react-kit@0.20.1 test
+> vitest run
+
+
+ RUN  v4.1.9 C:/Users/Breeze/Documents/Dev/type_react_kit
+
+ ❯ tests/exportSvg.test.ts (13 tests | 2 failed) 656ms
+     ✓ uses a path-based mask when glyph geometry is available 113ms
+     ✓ uses native text fallback without loaded glyph geometry 34ms
+     × keeps Editable Text export as native SVG text 40ms
+     ✓ applies appearance colors and omits only a transparent background 59ms
+     ✓ keeps Editable Text native and applies its configured primary color 13ms
+     ✓ does not change generated geometry when only appearance changes 28ms
+     ✓ preserves multiline editable text and indentation with tspans 10ms
+     ✓ exports configured contour thickness as vector stroke width only for supported renderers 5ms
+     ✓ changes SDF Contours exported stroke width without changing contour geometry 17ms
+     ✓ changes Wave Contours exported stroke width without changing contour geometry 16ms
+     × keeps typography-enhanced Editable Text as one honest native text element 18ms
+     ✓ includes required metadata and diagnostics 39ms
+     ✓ escapes XML-sensitive text and parses without errors 15ms
+ ❯ tests/controls.test.ts (14 tests | 1 failed) 2004ms
+     ✓ does not expose artboard containment as an export option 216ms
+     ✓ shows field-study labels while preserving preset option values 72ms
+     ✓ uses contextual typography bounds and preserves an oversized current value 51ms
+     × preserves the fallback text bounds center when changing size 88ms
+     ✓ renders all six controls and wires their existing state fields 109ms
+     ✓ owns single-emitter controls in the main Emitters section 181ms
+     ✓ resets numeric controls through their normal update path without touching siblings 115ms
+     ✓ resets expanded emitter-row controls to the canonical row defaults 177ms
+     ✓ shows row-local controls and clearly labeled shared controls in multiple mode 194ms
+     ✓ shows Full as the default preview-only quality control 53ms
+     ✓ shows an explicit Canvas Performance mode and Edge Current recommendation 79ms
+     ✓ uses one sequential number for each normal-path section 43ms
+     ✓ keeps advanced, preview, export, and diagnostic controls available  398ms
+     ✓ shows contour thickness only for continuous contour renderers 222ms
+ ❯ tests/exportGolden.test.ts (6 tests | 6 failed) 3748ms
+     × edge-current-native matches its canonical export summary 1485ms
+     × dot-field-native matches its canonical export summary 951ms
+     × sdf-contours-native matches its canonical export summary 448ms
+     × sdf-halftone-native matches its canonical export summary 257ms
+     × wave-contours-native matches its canonical export summary 239ms
+     × glyph-diffuser-native matches its canonical export summary 332ms
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts (9 tests) 4850ms
+     ✓ flow uses the effective rect origin in context.viewport  1538ms
+     ✓ ripple uses the effective rect origin in context.viewport  851ms
+     ✓ dots uses the effective rect origin in context.viewport  813ms
+     ✓ sdf-flow samples within the shifted effective rect  570ms
+ ✓ tests/glyphDiffuserRenderer.test.ts (38 tests) 5333ms
+     ✓ responds continuously and monotonically across low strength values  421ms
+     ✓ preserves single-mode geometry and reacts deterministically to multiple emitters  440ms
+     ✓ samples every multiple-emitter domain and reports renderer comparison diagnostics  543ms
+     ✓ excludes zero-weight rows from fields and marks without suppressing other rows  355ms
+     ✓ exports warped paths as vector-only Final Artwork and keeps Editable Text native  304ms
+ ✓ tests/compatibilityExports.test.ts (6 tests) 6878ms
+     ✓ keeps final artwork vector-only and XML-valid  442ms
+ ❯ tests/graphExecution.test.ts (8 tests | 6 failed) 2644ms
+     × edge-current-native matches registry geometry and golden export 1008ms
+     × dot-field-native matches registry geometry and golden export 577ms
+     × sdf-contours-native matches registry geometry and golden export 404ms
+     × sdf-halftone-native matches registry geometry and golden export 158ms
+     × wave-contours-native matches registry geometry and golden export 205ms
+     × glyph-diffuser-native matches registry geometry and golden export 233ms
+     ✓ returns typed validation issues without executing an invalid graph 27ms
+     ✓ rejects a renderer node that disagrees with the input project 26ms
+ ✓ tests/scenePreviewExportEquality.test.ts (2 tests) 2751ms
+     ✓ uses the same effective rect and scene key for preview SVG and export snapshot  1653ms
+     ✓ keeps preview and export viewBoxes identical across a size round trip  1093ms
+ ✓ tests/sceneSizeRoundTrip.test.ts (1 test) 3394ms
+     ✓ restores authored scene, keys, preview viewBox, and export summary after 148 → 540 → 148  3389ms
+ ✓ tests/webGpuFieldOverlay.test.ts (16 tests) 2439ms
+     ✓ mounts the controller on open and disposes on unmount  439ms
+ ✓ tests/appearancePreview.test.ts (4 tests) 3013ms
+     ✓ uses an editor-only checker while keeping transparent SVG preview marks visible  679ms
+     ✓ does not change geometry, mark opacity, or animation state when transparency toggles  769ms
+     ✓ uses primary color for visible marks without background-color opacity coupling  1536ms
+ ✓ tests/presetVectorIntegrity.test.ts (20 tests) 2431ms
+     ✓ Edge Current exports vector-only Final Artwork SVG  840ms
+     ✓ Sonic Ripple exports vector-only Final Artwork SVG  471ms
+     ✓ Signal Dust exports vector-only Final Artwork SVG  773ms
+ ✓ tests/sceneExportFoundations.test.ts (3 tests) 1928ms
+     ✓ records authored and effective artboard plus scene keys in export snapshots  1125ms
+     ✓ serializes the effective rect into the SVG viewBox  793ms
+ ✓ tests/waveContoursRenderer.test.ts (23 tests) 3691ms
+     ✓ returns a zero-safe context with no active emitters and finite multi diagnostics  1027ms
+     ✓ keeps masked-out field values zero and every value finite  1595ms
+ ✓ tests/viewportHud.test.ts (7 tests) 1227ms
+     ✓ keeps artwork and artwork debug geometry inside the zoom transform  370ms
+ ✓ tests/canvasNavigation.test.ts (10 tests) 957ms
+     ✓ marks the transform wrapper as an active interaction during zoom and auto-clears after idle  355ms
+ ✓ tests/flowPreviewPerformance.test.ts (18 tests) 990ms
+ ✓ tests/largeTypographySubstrateRenderers.test.ts (6 tests) 1947ms
+     ✓ retains output in both edge glyph intersections deterministically  538ms
+ ✓ tests/sdfScaleInvariance.test.ts (7 tests) 2809ms
+     ✓ sdf-flow remains non-empty and deterministic at sizes 148 and 540  696ms
+     ✓ sdf-streamlines remains non-empty and deterministic at sizes 148 and 540  382ms
+     ✓ sdf-contours remains non-empty and deterministic at sizes 148 and 540  653ms
+     ✓ wave-contours remains non-empty and deterministic at sizes 148 and 540  444ms
+ ✓ tests/overlayMode.test.ts (13 tests) 2266ms
+ ✓ tests/sdfContoursRenderer.test.ts (12 tests) 1536ms
+     ✓ fairly reduces large-type contours across the full visible span  344ms
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+stderr | tests/webGpuOverlayDevGating.test.ts > dev-only WebGPU overlay gating > renders the dev-only GPU FIELD DEBUG toggle in dev builds
+[SUBSTRATE] Worker creation failed. {
+  workerUrl: 'http://localhost:3000/src/engine/substrate/substrate.worker.ts',
+  workerType: 'undefined',
+  offscreenCanvasType: 'undefined',
+  path2DType: 'undefined',
+  exceptionName: 'ReferenceError',
+  exceptionMessage: 'Worker is not defined',
+  exceptionStack: 'ReferenceError: Worker is not defined\n' +
+    '    at CpuWorkerSubstrateBackend.workerUrl.workerUrl (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:397:46)\n' +
+    '    at new CpuWorkerSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:149:21)\n' +
+    '    at createCpuWorkerSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:397:10)\n' +
+    '    at C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:45:42\n' +
+    '    at mountStateImpl (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:8268:24)\n' +
+    '    at mountState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:8289:22)\n' +
+    '    at Object.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:26243:18)\n' +
+    '    at process.env.NODE_ENV.exports.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react\\cjs\\react.development.js:1263:34)\n' +
+    '    at useSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:45:27)\n' +
+    '    at useSubstratePipeline (C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstratePipeline.ts:59:15)'
+}
+ ✓ tests/webGpuOverlayDevGating.test.ts (2 tests) 741ms
+     ✓ renders the dev-only GPU FIELD DEBUG toggle in dev builds  594ms
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+stderr | tests/webGpuOverlayDevGating.test.ts > dev-only WebGPU overlay gating > does not render the overlay panel until the toggle is opened
+[SUBSTRATE] Worker creation failed. {
+  workerUrl: 'http://localhost:3000/src/engine/substrate/substrate.worker.ts',
+  workerType: 'undefined',
+  offscreenCanvasType: 'undefined',
+  path2DType: 'undefined',
+  exceptionName: 'ReferenceError',
+  exceptionMessage: 'Worker is not defined',
+  exceptionStack: 'ReferenceError: Worker is not defined\n' +
+    '    at CpuWorkerSubstrateBackend.workerUrl.workerUrl (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:397:46)\n' +
+    '    at new CpuWorkerSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:149:21)\n' +
+    '    at createCpuWorkerSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:397:10)\n' +
+    '    at C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:45:42\n' +
+    '    at mountStateImpl (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:8268:24)\n' +
+    '    at mountState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:8289:22)\n' +
+    '    at Object.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react-dom\\cjs\\react-dom-client.development.js:26243:18)\n' +
+    '    at process.env.NODE_ENV.exports.useState (C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\\node_modules\\react\\cjs\\react.development.js:1263:34)\n' +
+    '    at useSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstrateBackend.ts:45:27)\n' +
+    '    at useSubstratePipeline (C:/Users/Breeze/Documents/Dev/type_react_kit/src/hooks/useSubstratePipeline.ts:59:15)'
+}
+
+ ✓ tests/webgpuAppFieldPreviewAdapter.test.ts (15 tests) 895ms
+       ✓ returns the latest mapping after a start() frame  340ms
+ ✓ tests/substrate.test.ts (8 tests) 533ms
+stderr | tests/substrateBackends.test.ts > substrate compute backends > preserves Worker constructor exceptions and reports the resolved worker URL
+[SUBSTRATE] Worker creation failed. {
+  workerUrl: 'http://127.0.0.1:5173/src/engine/substrate/substrate.worker.ts',
+  workerType: 'function',
+  offscreenCanvasType: 'undefined',
+  path2DType: 'undefined',
+  exceptionName: 'SecurityError',
+  exceptionMessage: 'Blocked by worker-src policy',
+  exceptionStack: 'SecurityError: Blocked by worker-src policy\n' +
+    '    at __vite_ssr_import_2__.CpuWorkerSubstrateBackend.workerUrl (C:/Users/Breeze/Documents/Dev/type_react_kit/tests/substrateBackends.test.ts:225:21)\n' +
+    '    at new CpuWorkerSubstrateBackend (C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/substrate/backends/cpuWorkerBackend.ts:149:21)\n' +
+    '    at C:/Users/Breeze/Documents/Dev/type_react_kit/tests/substrateBackends.test.ts:224:21\n' +
+    '    at file:///C:/Users/Breeze/Documents/Dev/type_react_kit/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11\n' +
+    '    at file:///C:/Users/Breeze/Documents/Dev/type_react_kit/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26\n' +
+    '    at file:///C:/Users/Breeze/Documents/Dev/type_react_kit/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20\n' +
+    '    at new Promise (<anonymous>)\n' +
+    '    at runWithCancel (file:///C:/Users/Breeze/Documents/Dev/type_react_kit/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)\n' +
+    '    at file:///C:/Users/Breeze/Documents/Dev/type_react_kit/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20\n' +
+    '    at new Promise (<anonymous>)'
+}
+
+ ✓ tests/substrateBackends.test.ts (15 tests) 500ms
+ ✓ tests/rendererQuality.test.ts (11 tests) 506ms
+ ✓ tests/sdfStreamlinesRenderer.test.ts (10 tests) 504ms
+ ✓ tests/sdfHalftoneRenderer.test.ts (11 tests) 471ms
+ ✓ tests/canvasFlowPreview.test.ts (3 tests) 495ms
+stderr | tests/canvasFlowPreview.test.ts > CanvasFlowPreview lifecycle > owns one rAF loop and cleans it up across preset/backend remounts
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+     ✓ owns one rAF loop and cleans it up across preset/backend remounts  479ms
+
+stderr | tests/canvasFlowPreview.test.ts > CanvasFlowPreview lifecycle > matches SVG xMidYMid meet when the canvas box is wider than the artboard
+The current testing environment is not configured to support act(...)
+
+stderr | tests/canvasFlowPreview.test.ts > CanvasFlowPreview lifecycle > includes the SVG viewBox origin in the centred Canvas world transform
+The current testing environment is not configured to support act(...)
+
+ ✓ tests/webgpuTexturePreviewRunner.test.ts (15 tests) 486ms
+     ✓ mounts every Gate 4C WebGPU mode or reports an explicit fallback  358ms
+ ✓ tests/sdfFlowRenderer.test.ts (7 tests) 449ms
+ ✓ tests/webgpuFieldParityDiagnostics.test.ts (16 tests) 415ms
+ ✓ tests/glyphLayout.test.ts (13 tests) 323ms
+ ✓ tests/fontEngineBoundary.test.ts (4 tests) 417ms
+ ✓ tests/glyphEmitters.test.ts (15 tests) 271ms
+ ✓ tests/webgpuFieldBenchmark.test.ts (5 tests) 272ms
+ ✓ tests/largeTypographySimpleRenderers.test.ts (3 tests) 171ms
+ ✓ tests/sceneFontPlacementContract.test.ts (3 tests) 224ms
+ ✓ tests/webgpuTexturePreview.test.ts (4 tests) 199ms
+ ✓ tests/exportAuthority.test.ts (7 tests) 94ms
+ ✓ tests/rendererManifest.test.ts (6 tests) 112ms
+ ✓ tests/animationPreview.test.ts (13 tests) 118ms
+ ✓ tests/previewTraceConfig.test.ts (4 tests) 87ms
+ ✓ tests/presets.test.ts (38 tests) 85ms
+ ✓ tests/projectSchema.test.ts (21 tests) 60ms
+ ✓ tests/dynamicArtboard.test.ts (3 tests) 68ms
+ ✓ tests/importBoundaries.test.ts (4 tests) 105ms
+ ✓ tests/interactionTrace.test.ts (8 tests) 24ms
+ ✓ tests/rendererRuntimeHook.test.ts (4 tests) 104ms
+ ✓ tests/webgpuBatchedFieldBenchmark.test.ts (6 tests) 45ms
+ ✓ tests/webgpuSupport.test.ts (6 tests) 33ms
+ ✓ tests/previewPerformanceMeter.test.ts (15 tests) 35ms
+ ✓ tests/contourBudget.test.ts (4 tests) 27ms
+ ✓ tests/safetyBudget.test.ts (7 tests) 27ms
+ ✓ tests/webgpuPersistentFieldBenchmark.test.ts (4 tests) 39ms
+ ✓ tests/runtimeBoundaries.test.ts (5 tests) 28ms
+ ✓ tests/webgpuRepeatedBenchmark.test.ts (4 tests) 27ms
+ ✓ tests/graphRuntime.test.ts (6 tests) 23ms
+ ✓ tests/renderContext.test.ts (5 tests) 22ms
+ ✓ tests/sceneEffectiveArtboard.test.ts (7 tests) 24ms
+ ✓ tests/sceneTypographyPlacement.test.ts (6 tests) 24ms
+ ✓ tests/sceneNoAutoWrites.test.ts (4 tests) 23ms
+ ✓ tests/sceneV8Compatibility.test.ts (3 tests) 22ms
+ ✓ tests/contourDomain.test.ts (5 tests) 21ms
+ ✓ tests/sceneAuthoredMinimum.test.ts (2 tests) 19ms
+ ✓ tests/textBounds.test.ts (3 tests) 19ms
+ ✓ tests/invalidationKeys.test.ts (3 tests) 16ms
+ ✓ tests/rendererSampling.test.ts (4 tests) 16ms
+ ✓ tests/previewRuntimeDiagnostics.test.ts (2 tests) 19ms
+ ✓ tests/viewportNavigation.test.ts (3 tests) 16ms
+ ✓ tests/numericBounds.test.ts (6 tests) 18ms
+ ✓ tests/sceneOffsetPreservation.test.ts (2 tests) 17ms
+ ✓ tests/contourStrokePlumbing.test.ts (2 tests) 15ms
+ ✓ tests/contourStroke.test.ts (3 tests) 17ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 15 ⎯⎯⎯⎯⎯⎯⎯
+
+
+ FAIL  tests/controls.test.ts > Safe Typography controls > preserves the fallback text bounds center when changing size
+AssertionError: expected +0 not to be +0 // Object.is equality
+ ❯ tests/controls.test.ts:125:34
+    123|     expect(after.y + after.height / 2).toBeCloseTo(before.y + before.h…
+    124|     expect(next.fontSize).toBe(500);
+    125|     expect(next.textOffsetY).not.toBe(baseState.textOffsetY);
+       |                                  ^
+    126|   });
+    127|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > edge-current-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "canonicalHash": "79922bf46b832dfea5e694cd57455ccbe9d50558046f9e2007f8fc3b6b5a8b44",
++   "canonicalHash": "f95c797b9c76c1ff7aa34f12d56b96d444d6a76b7a7f13e55d9597b743d4f80f",
+    "elementCounts": {
+      "canvas": 0,
+      "circle": 0,
+      "foreignObject": 0,
+      "image": 0,
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > dot-field-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "canonicalHash": "a4a8faa7e52c039694db1e1ca7b8199e7f73fb2c71561cb0a1f064d65598ce34",
++   "canonicalHash": "54b95da53941cd1ed0049698606a00172c39ac46819f154be18527f434e3fd0b",
+    "elementCounts": {
+      "canvas": 0,
+      "circle": 900,
+      "foreignObject": 0,
+      "image": 0,
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > sdf-contours-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "canonicalHash": "5d32db13e9b241a804a1f5b15ff1ef0e1ab11e037902c342f9c4551b4d92fd3f",
++   "canonicalHash": "e2d8f3504b47dd8778c4d4d53366bdc391753eb6661b126693de1c31b8ff9db0",
+    "elementCounts": {
+      "canvas": 0,
+      "circle": 0,
+      "foreignObject": 0,
+      "image": 0,
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > sdf-halftone-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+@@ -1,10 +1,10 @@
+  {
+-   "canonicalHash": "38b4865ade89aa8d443a85f259af4586cf836d031628bab0cea7fa97c2e598bd",
++   "canonicalHash": "f0d30a26fc0ffcb455aa30f08a58862e45eea8acbda38bf72d166d4e50c1af3e",
+    "elementCounts": {
+      "canvas": 0,
+-     "circle": 46,
++     "circle": 58,
+      "foreignObject": 0,
+      "image": 0,
+      "line": 0,
+      "path": 0,
+      "polyline": 0,
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > wave-contours-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+  {
+-   "canonicalHash": "28f81ae6a27aa6bc89e40bb2ccf8cf9f03d59430b00761094abcb4b15c3c672d",
++   "canonicalHash": "23be3b805f938788043aa08c35ea40fadc6f69613c9f71e8b720656c01519111",
+    "elementCounts": {
+      "canvas": 0,
+      "circle": 0,
+      "foreignObject": 0,
+      "image": 0,
+      "line": 0,
+      "path": 0,
+-     "polyline": 32,
++     "polyline": 30,
+    },
+    "hasBase64": false,
+    "hasDataImage": false,
+    "viewBox": "0 0 1200 720",
+  }
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯
+
+ FAIL  tests/exportGolden.test.ts > Final Artwork SVG golden corpus > glyph-diffuser-native matches its canonical export summary
+AssertionError: expected { viewBox: '0 0 1200 720', …(4) } to deeply equal { viewBox: '0 0 1200 720', …(4) }
+
+- Expected
++ Received
+
+@@ -1,7 +1,7 @@
+  {
+-   "canonicalHash": "70b879d377d2da2acca5a8613c981002c77cf8c0a55d20dbb616b166d3bd8fe8",
++   "canonicalHash": "0b1a8f786ac39b792d9efb6f144341461a32fcdf60051d2b071f3a3bac64c0e5",
+    "elementCounts": {
+      "canvas": 0,
+      "circle": 204,
+      "foreignObject": 0,
+      "image": 0,
+
+ ❯ tests/exportGolden.test.ts:36:25
+     34|       } else {
+     35|         const expected = JSON.parse(readFileSync(summaryPath, "utf8"))…
+     36|         expect(summary).toEqual(expected);
+       |                         ^
+     37|       }
+     38|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯
+
+ FAIL  tests/exportSvg.test.ts > SVG export > keeps Editable Text export as native SVG text
+AssertionError: expected '420.68' to be '405' // Object.is equality
+
+Expected: "405"
+Received: "420.68"
+
+ ❯ tests/exportSvg.test.ts:52:45
+     50|     expect(editableText?.querySelector("tspan")).toBeNull();
+     51|     expect(editableText?.getAttribute("x")).toBe("600");
+     52|     expect(editableText?.getAttribute("y")).toBe("405");
+       |                                             ^
+     53|     expect(editableText?.getAttribute("text-anchor")).toBe("middle");
+     54|     expect(editableText?.getAttribute("letter-spacing")).toBe("-3");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯
+
+ FAIL  tests/exportSvg.test.ts > SVG export > keeps typography-enhanced Editable Text as one honest native text element
+AssertionError: expected '445.68' to be '430' // Object.is equality
+
+Expected: "430"
+Received: "445.68"
+
+ ❯ tests/exportSvg.test.ts:202:37
+    200|     expect(document.querySelectorAll("#generated-artwork text")).toHav…
+    201|     expect(text?.querySelector("tspan")).toBeNull();
+    202|     expect(text?.getAttribute("y")).toBe("430");
+       |                                     ^
+    203|     expect(text?.getAttribute("font-kerning")).toBe("none");
+    204|     expect(text?.hasAttribute("data-kerning-strength")).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > edge-current-native matches registry geometry and golden export
+AssertionError: expected 'f95c797b9c76c1ff7aa34f12d56b96d444d6a…' to be '79922bf46b832dfea5e694cd57455ccbe9d50…' // Object.is equality
+
+Expected: "79922bf46b832dfea5e694cd57455ccbe9d50558046f9e2007f8fc3b6b5a8b44"
+Received: "f95c797b9c76c1ff7aa34f12d56b96d444d6a76b7a7f13e55d9597b743d4 Test Files  4 failed | 70 passed (74)
+      Tests  15 failed | 606 passed (621)
+   Start at  04:16:38
+   Duration  145.50s (transform 13.79s, setup 0ms, import 119.83s, tests 66.81s, environment 706.30s)
+
+f80f"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > dot-field-native matches registry geometry and golden export
+AssertionError: expected '54b95da53941cd1ed0049698606a00172c39a…' to be 'a4a8faa7e52c039694db1e1ca7b8199e7f73f…' // Object.is equality
+
+Expected: "a4a8faa7e52c039694db1e1ca7b8199e7f73fb2c71561cb0a1f064d65598ce34"
+Received: "54b95da53941cd1ed0049698606a00172c39ac46819f154be18527f434e3fd0b"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > sdf-contours-native matches registry geometry and golden export
+AssertionError: expected 'e2d8f3504b47dd8778c4d4d53366bdc391753…' to be '5d32db13e9b241a804a1f5b15ff1ef0e1ab11…' // Object.is equality
+
+Expected: "5d32db13e9b241a804a1f5b15ff1ef0e1ab11e037902c342f9c4551b4d92fd3f"
+Received: "e2d8f3504b47dd8778c4d4d53366bdc391753eb6661b126693de1c31b8ff9db0"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > sdf-halftone-native matches registry geometry and golden export
+AssertionError: expected 'f0d30a26fc0ffcb455aa30f08a58862e45eea…' to be '38b4865ade89aa8d443a85f259af4586cf836…' // Object.is equality
+
+Expected: "38b4865ade89aa8d443a85f259af4586cf836d031628bab0cea7fa97c2e598bd"
+Received: "f0d30a26fc0ffcb455aa30f08a58862e45eea8acbda38bf72d166d4e50c1af3e"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > wave-contours-native matches registry geometry and golden export
+AssertionError: expected '23be3b805f938788043aa08c35ea40fadc6f6…' to be '28f81ae6a27aa6bc89e40bb2ccf8cf9f03d59…' // Object.is equality
+
+Expected: "28f81ae6a27aa6bc89e40bb2ccf8cf9f03d59430b00761094abcb4b15c3c672d"
+Received: "23be3b805f938788043aa08c35ea40fadc6f69613c9f71e8b720656c01519111"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/15]⎯
+
+ FAIL  tests/graphExecution.test.ts > internal CPU graph execution prototype > glyph-diffuser-native matches registry geometry and golden export
+AssertionError: expected '0b1a8f786ac39b792d9efb6f144341461a32f…' to be '70b879d377d2da2acca5a8613c981002c77cf…' // Object.is equality
+
+Expected: "70b879d377d2da2acca5a8613c981002c77cf8c0a55d20dbb616b166d3bd8fe8"
+Received: "0b1a8f786ac39b792d9efb6f144341461a32fcdf60051d2b071f3a3bac64c0e5"
+
+ ❯ tests/graphExecution.test.ts:44:66
+     42|         "utf8",
+     43|       )) as SvgExportSummary;
+     44|       expect(extractSvgExportSummary(registrySvg).canonicalHash).toBe(…
+       |                                                                  ^
+     45|       expect(extractSvgExportSummary(graphSvg).canonicalHash).toBe(exp…
+     46|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯
+

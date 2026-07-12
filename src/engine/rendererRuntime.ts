@@ -5,6 +5,8 @@ import type { GlyphEmitter, ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
 import { glyphModulationCacheKey } from "./controlOwnership";
 import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
+import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
+import { roundSceneNumber } from "./sceneLayout";
 
 const substrateIds = new WeakMap<object, number>();
 let nextSubstrateId = 1;
@@ -98,9 +100,11 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
   const time = renderer.usesTime ? `${context.timeMs}:${context.frame}` : "0:0";
   // Use `|` between top-level fields and `~` within the emitter, plus separators
   // that ensure adjacent numeric fields cannot collide. Field order matters.
+  const viewport = context.viewport;
   return [
     state.renderer,
     `${state.artboard.width}x${state.artboard.height}`,
+    `${roundSceneNumber(viewport?.x ?? 0)},${roundSceneNumber(viewport?.y ?? 0)},${roundSceneNumber(viewport?.width ?? state.artboard.width)}x${roundSceneNumber(viewport?.height ?? state.artboard.height)}`,
     substrate,
     state.text,
     state.font?.fileName ?? "native",
@@ -133,9 +137,37 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
 
 export function generateRendererGeometry(state: ProjectState, context: RenderContext): GeometryGroup {
   const renderer = getRenderer(state.renderer);
+  const traceInputKey = interactionTraceEnabled ? rendererGeometryCacheKey(state, context) : undefined;
+  const rendererTrace = traceStartSpan("renderer.build", {
+    inputKey: traceInputKey,
+    frameKey: traceInputKey,
+    detail: {
+      rendererId: renderer.id,
+      authority: context.frame === 0 && context.timeMs === 0 ? "static-or-authoritative" : "preview",
+    },
+  });
+  const completeTrace = (geometry: GeometryGroup, cached: boolean, generationDurationMs: number) => {
+    rendererTrace({
+      outputKey: geometry.id,
+      frameKey: geometry.id,
+      counts: {
+        elements: geometry.geometries.length,
+        points: summarizeGeometry(geometry).pointCount,
+        accepted: geometry.diagnostics?.acceptedCandidates ?? 0,
+        retained: geometry.diagnostics?.acceptedCandidates ?? geometry.geometries.length,
+      },
+      detail: {
+        rendererId: renderer.id,
+        cached,
+        generationDurationMs,
+        maxNodesClipped: Boolean(geometry.diagnostics?.maxNodesClipped),
+      },
+    });
+  };
   if (renderer.usesTime) {
     const result = measure(() => renderer.generateGeometry(state, context));
     geometryTimings.set(result.value, { durationMs: result.durationMs, cached: false });
+    completeTrace(result.value, false, result.durationMs);
     return result.value;
   }
   const key = rendererGeometryCacheKey(state, context);
@@ -143,6 +175,7 @@ export function generateRendererGeometry(state: ProjectState, context: RenderCon
   if (cached) {
     const timing = geometryTimings.get(cached);
     geometryTimings.set(cached, { durationMs: timing?.durationMs ?? 0, cached: true });
+    completeTrace(cached, true, timing?.durationMs ?? 0);
     return cached;
   }
   const result = measure(() => renderer.generateGeometry(state, context));
@@ -150,6 +183,7 @@ export function generateRendererGeometry(state: ProjectState, context: RenderCon
   geometryTimings.set(geometry, { durationMs: result.durationMs, cached: false });
   geometryCache.set(key, geometry);
   if (geometryCache.size > CACHE_LIMIT) geometryCache.delete(geometryCache.keys().next().value!);
+  completeTrace(geometry, false, result.durationMs);
   return geometry;
 }
 

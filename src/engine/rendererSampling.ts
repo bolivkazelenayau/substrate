@@ -21,26 +21,46 @@ export interface GlyphSamplingDiagnostic {
   visibility: "outside" | "partial" | "inside";
 }
 
+/**
+ * Intersect glyph bounds with the effective artboard rect (origin-aware).
+ * Returns the overlap of `bounds` with `[rect.x, rect.x+rect.width]
+ * × [rect.y, rect.y+rect.height]` or `null` if there is no overlap.
+ */
 export function intersectArtboard(
   bounds: GlyphBounds,
-  artboard: { width: number; height: number } = VIEWPORT,
+  artboard: { x?: number; y?: number; width: number; height: number } = VIEWPORT,
 ): GlyphBounds | null {
-  const x = Math.max(0, bounds.x);
-  const y = Math.max(0, bounds.y);
-  const right = Math.min(artboard.width, bounds.x + bounds.width);
-  const bottom = Math.min(artboard.height, bounds.y + bounds.height);
+  const left = artboard.x ?? 0;
+  const top = artboard.y ?? 0;
+  const x = Math.max(left, bounds.x);
+  const y = Math.max(top, bounds.y);
+  const right = Math.min(left + artboard.width, bounds.x + bounds.width);
+  const bottom = Math.min(top + artboard.height, bounds.y + bounds.height);
   return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : null;
 }
 
-export function resolveSimpleMarkBounds(state: ProjectState): GlyphBounds {
-  const artboard = projectArtboard(state);
+/**
+ * Resolve the authored-space fallback mark sampling bounds. The renderer
+ * always receives the EFFECTIVE rect via context; this helper performs the
+ * authored-space derivation (used as the fallback bound for static sampling
+ * when no glyph-intersected bound is available).
+ */
+export function resolveSimpleMarkBounds(
+  state: ProjectState,
+  effectiveArtboard: { x: number; y: number; width: number; height: number } = projectArtboard(state),
+): GlyphBounds {
   return state.fontSize > LARGE_TYPE_SAMPLING_THRESHOLD
-    ? { x: 0, y: 0, width: artboard.width, height: artboard.height }
+    ? {
+        x: effectiveArtboard.x,
+        y: effectiveArtboard.y,
+        width: effectiveArtboard.width,
+        height: effectiveArtboard.height,
+      }
     : {
-        x: VIEWPORT.paddingX,
-        y: VIEWPORT.paddingY,
-        width: artboard.width - VIEWPORT.paddingX * 2,
-        height: artboard.height - VIEWPORT.paddingY * 2,
+        x: effectiveArtboard.x + VIEWPORT.paddingX,
+        y: effectiveArtboard.y + VIEWPORT.paddingY,
+        width: effectiveArtboard.width - VIEWPORT.paddingX * 2,
+        height: effectiveArtboard.height - VIEWPORT.paddingY * 2,
       };
 }
 

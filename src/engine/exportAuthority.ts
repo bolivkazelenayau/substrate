@@ -4,6 +4,7 @@ import { createStaticRenderContext } from "./renderContextLifecycle";
 import { generateRendererGeometry, rendererGeometryStateKey } from "./rendererRuntime";
 import { getRendererManifest } from "./renderers/rendererManifest";
 import type { GeometryGroup } from "./geometry";
+import type { ArtboardRect, AuthoredArtboard } from "./sceneLayout";
 import type { SubstrateBuildInput, SubstrateData } from "./substrate";
 import type { ProjectState, RenderContext } from "../types";
 
@@ -16,7 +17,7 @@ export interface FontResolution {
 }
 
 export interface ExportReadiness {
-  status: "ready" | "font-missing" | "typography-pending" | "substrate-pending" | "renderer-pending" | "auto-grow-pending" | "revision-mismatch" | "failed";
+  status: "ready" | "font-missing" | "typography-pending" | "substrate-pending" | "renderer-pending" | "scene-safety-limit" | "revision-mismatch" | "failed";
   reason: string;
   technicalReason: string;
   expectedKey?: ExportKey;
@@ -26,6 +27,14 @@ export interface ExportReadiness {
 export interface ExportSnapshot {
   document: ProjectState;
   documentKey: ExportKey;
+  /** Authored artboard minimum as persisted in the document (schema v8). */
+  authoredArtboard: AuthoredArtboard;
+  /** Resolved effective scene rect (origin-aware). Never persisted. */
+  effectiveArtboard: ArtboardRect;
+  /** Stable identity for the resolved scene (authored + effective + typography). */
+  sceneLayoutKey: ExportKey;
+  /** Stable identity for the typographic placement inside the scene. */
+  typographyPlacementKey: ExportKey;
   font: { status: "exact" | "native-approximate"; resourceKey: ExportKey };
   typography: { inputKey: ExportKey; outputKey: ExportKey; geometry: TextGeometry | null };
   substrate?: { inputKey: ExportKey; outputKey: ExportKey; data: SubstrateData };
@@ -129,14 +138,14 @@ export interface ResolveExportReadinessInput {
   substrateData: SubstrateData | null;
   rendererInputKey: ExportKey;
   rendererGeometryKey: ExportKey | null;
-  autoGrowPending: boolean;
+  /** True when the resolved effective rect hit ARTBOARD_LIMITS.max. */
+  sceneSafetyLimitHit: boolean;
   failureReason?: string | null;
   renderer: ProjectState["renderer"];
 }
 
 export function resolveExportReadiness(input: ResolveExportReadinessInput): ExportReadiness {
   if (input.failureReason) return { status: "failed", reason: "Export preparation failed.", technicalReason: input.failureReason };
-  if (input.autoGrowPending) return { status: "auto-grow-pending", reason: "Preparing export… updating artboard.", technicalReason: "A valid auto-grow plan is pending." };
   if (input.font.status === "missing") return { status: "font-missing", reason: "Upload the project font before exporting.", technicalReason: "The project requests an exact font resource that is not resolved." };
   if (!input.typographyOutputKey) return { status: "typography-pending", reason: "Preparing export… typography is updating.", technicalReason: "Typography geometry is unavailable." };
   if (input.typographyOutputKey !== key("typography-output", input.typographyInputKey)) {
@@ -150,6 +159,9 @@ export function resolveExportReadiness(input: ResolveExportReadinessInput): Expo
   }
   if (input.rendererGeometryKey !== input.rendererInputKey) {
     return { status: "renderer-pending", reason: "Preparing export… renderer geometry is updating.", technicalReason: "Renderer geometry does not match the active renderer input.", expectedKey: input.rendererInputKey, actualKey: input.rendererGeometryKey };
+  }
+  if (input.sceneSafetyLimitHit) {
+    return { status: "scene-safety-limit", reason: "Export is ready but the artwork was clipped to the safe artboard limit.", technicalReason: "The resolved effective artboard hit ARTBOARD_LIMITS.max." };
   }
   return { status: "ready", reason: "Ready to export.", technicalReason: "All authoritative stage identities match." };
 }
@@ -166,6 +178,10 @@ export function captureExportSnapshot(args: {
   substrateData: SubstrateData | null;
   context: { mode: ProjectState["exportFrameMode"]; timeMs: number; frame: number };
   appVersion: string;
+  authoredArtboard: AuthoredArtboard;
+  effectiveArtboard: ArtboardRect;
+  sceneLayoutKey: ExportKey;
+  typographyPlacementKey: ExportKey;
 }): ExportSnapshot {
   if (!args.font.resourceKey || args.font.status === "missing") throw new Error("Exact font resource is not resolved.");
   const manifest = getRendererManifest(args.state.renderer);
@@ -174,8 +190,10 @@ export function captureExportSnapshot(args: {
   }
   const document = structuredClone(args.state);
   // Rebuild the context from authoritative CPU-owned values; never reuse Canvas context.
+  // The effective rect is fed in explicitly so the static export context matches
+  // the live preview's resolved scene geometry exactly.
   const context: RenderContext = {
-    ...createStaticRenderContext(document, args.typographyGeometry, manifest.usesSubstrate ? args.substrateData : null),
+    ...createStaticRenderContext(document, args.typographyGeometry, manifest.usesSubstrate ? args.substrateData : null, args.effectiveArtboard),
     timeMs: args.context.timeMs,
     frame: args.context.frame,
   };
@@ -184,6 +202,10 @@ export function captureExportSnapshot(args: {
   return Object.freeze({
     document,
     documentKey: args.documentKey,
+    authoredArtboard: args.authoredArtboard,
+    effectiveArtboard: args.effectiveArtboard,
+    sceneLayoutKey: args.sceneLayoutKey,
+    typographyPlacementKey: args.typographyPlacementKey,
     font: { status: args.font.status, resourceKey: args.font.resourceKey },
     typography: { inputKey: args.typographyInputKey, outputKey: args.typographyOutputKey, geometry: args.typographyGeometry },
     substrate: manifest.usesSubstrate && args.substrateData && args.substrateOutputKey

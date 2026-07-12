@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Profiler, Suspense, type ChangeEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Controls } from "./components/Controls";
 import { Viewport } from "./components/Viewport";
 import { createTimedSvg, createTimedSvgFromSnapshot, download } from "./engine/exportSvg";
@@ -13,8 +13,8 @@ import { getExportBudgetWarnings } from "./engine/exportBudget";
 import { getSubstratePerformanceWarnings } from "./engine/performance";
 import { getTextArtboardOverflowWarning } from "./engine/contourDomain";
 import { NATIVE_TEXT_BOUNDS_WARNING } from "./engine/textBounds";
-import { projectArtboard } from "./engine/artboard";
-import { AUTO_GROW_ARTBOARD_WARNING } from "./engine/artboardExpansion";
+import { artboardViewport } from "./engine/artboard";
+import { SCENE_SAFETY_LIMIT_WARNING } from "./engine/sceneLayout";
 import { getRenderer } from "./engine/renderers";
 import { requestedMarkCount } from "./engine/renderers/types";
 import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
@@ -33,7 +33,7 @@ import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
 import { useRendererRuntime } from "./hooks/useRendererRuntime";
-import { useAutoGrowArtboard } from "./hooks/useAutoGrowArtboard";
+import { useSceneLayout } from "./hooks/useSceneLayout";
 import {
   captureExportSnapshot,
   documentKey,
@@ -44,6 +44,7 @@ import {
   typographyOutputKey,
 } from "./engine/exportAuthority";
 import { APP_VERSION } from "./engine/constants";
+import { activeTraceGestureId, interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "./dev/interactionTrace";
 
 const DevWebGpuFieldOverlay = import.meta.env.DEV
   ? lazy(() => import("./components/dev/WebGpuFieldOverlay").then(({ WebGpuFieldOverlay }) => ({ default: WebGpuFieldOverlay })))
@@ -51,6 +52,24 @@ const DevWebGpuFieldOverlay = import.meta.env.DEV
 const DevPreviewPerformanceMeter = import.meta.env.DEV
   ? lazy(() => import("./components/dev/PreviewPerformanceMeter").then(({ PreviewPerformanceMeter }) => ({ default: PreviewPerformanceMeter })))
   : null;
+
+function recordReactCommit(
+  id: string,
+  phase: "mount" | "update" | "nested-update",
+  actualDuration: number,
+  baseDuration: number,
+  startTime: number,
+  commitTime: number,
+) {
+  traceEvent({
+    stage: "react.commit",
+    phase: "instant",
+    gestureId: activeTraceGestureId(),
+    durationMs: actualDuration,
+    counts: { commit: 1 },
+    detail: { profilerId: id, commitPhase: phase, actualDuration, baseDuration, startTime, commitTime },
+  });
+}
 
 export default function App() {
   recordPreviewAppRender();
@@ -90,6 +109,11 @@ export default function App() {
   );
   const textGeometryBuild = useTypographyGeometry(state, fontResolution.loadedFont);
   const textGeometry = textGeometryBuild.value;
+  // The single production scene authority. Pure: no document writes back.
+  // Determines canonical typography placement (authored center + user offset)
+  // and the symmetric effective artboard rect (origin-aware). Replaces the
+  // previous automatic artboard-growth mutation hook entirely.
+  const sceneLayout = useSceneLayout(state, textGeometry);
   const activeTypographyOutputKey = useMemo(
     () => typographyOutputKey(activeTypographyInputKey, fontResolution, textGeometry),
     [activeTypographyInputKey, fontResolution, textGeometry],
@@ -105,7 +129,7 @@ export default function App() {
         emitter: { ...state.emitter },
         emitters: state.emitters.map((emitter) => ({ ...emitter })),
       },
-      bounds: { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height },
+      bounds: { x: sceneLayout.effectiveArtboard.x, y: sceneLayout.effectiveArtboard.y, width: sceneLayout.effectiveArtboard.width, height: sceneLayout.effectiveArtboard.height },
       singleAnchor: singleGlyph
         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
             x: state.emitter.customX,
@@ -128,7 +152,7 @@ export default function App() {
         delete devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__;
       }
     };
-  }, [state, textGeometry, emitterGlyphs]);
+  }, [state, textGeometry, emitterGlyphs, sceneLayout.effectiveArtboard]);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -150,7 +174,7 @@ export default function App() {
         emitter: { ...state.emitter },
         emitters: state.emitters.map((emitter) => ({ ...emitter })),
       },
-      bounds: { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height },
+      bounds: { x: sceneLayout.effectiveArtboard.x, y: sceneLayout.effectiveArtboard.y, width: sceneLayout.effectiveArtboard.width, height: sceneLayout.effectiveArtboard.height },
       singleAnchor: singleGlyph
         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
             x: state.emitter.customX,
@@ -163,9 +187,9 @@ export default function App() {
         y: source.anchor.y,
       })),
     };
-    return snapshot;
-  }, [state, textGeometry, emitterGlyphs]);
-  const substrateBuild = useSubstratePipeline(state, textGeometry, activeTypographyOutputKey);
+return snapshot;
+  }, [state, textGeometry, emitterGlyphs, sceneLayout.effectiveArtboard]);
+  const substrateBuild = useSubstratePipeline(state, textGeometry, activeTypographyOutputKey, sceneLayout.effectiveArtboard);
   const emitterFieldKey = emitterGeometryKey(state, textGeometry);
   useEffect(() => setCanvasFailed(false), [state.renderer, previewSettings.backend]);
 
@@ -175,32 +199,46 @@ export default function App() {
   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
   const staticRenderContext: RenderContext = useMemo(
-    () => createStaticRenderContext(state, textGeometry, substrateBuild.data),
-    [state, textGeometry, substrateBuild.data]
+    () => createStaticRenderContext(state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard),
+    [state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard]
+  );
+  const effectiveArtboardViewport = useMemo(
+    () => artboardViewport(sceneLayout.effectiveArtboard),
+    [sceneLayout.effectiveArtboard],
   );
   const renderContext: RenderContext = useMemo(() => ({
     ...staticRenderContext,
     ...activeClockContext,
     textGeometry,
     substrateData: substrateBuild.data,
-    viewport: projectArtboard(state),
-  }), [activeClockContext, state, staticRenderContext, textGeometry, substrateBuild.data]);
+    viewport: effectiveArtboardViewport,
+  }), [activeClockContext, effectiveArtboardViewport, staticRenderContext, textGeometry, substrateBuild.data]);
   const {
     liveGeometry: geometry,
     estimateContext,
     estimateGeometry,
     geometrySummary,
   } = useRendererRuntime(state, renderContext, staticRenderContext);
+  useLayoutEffect(() => {
+    if (!interactionTraceEnabled) return;
+    traceEvent({
+      stage: "react.commit",
+      phase: "instant",
+      gestureId: activeTraceGestureId(),
+      counts: { commit: 1 },
+      detail: {
+        profilerId: "commit-observer",
+        commitPhase: "commit",
+        actualDuration: null,
+        baseDuration: null,
+        durationAvailable: false,
+      },
+    });
+  }, [geometry.id, previewSettings.backend, state, substrateBuild.outputKey]);
   const textOverflowWarning = useMemo(
     () => getTextArtboardOverflowWarning(state, textGeometry),
     [state, textGeometry],
   );
-  const autoGrowArtboard = useAutoGrowArtboard({
-    mode: "auto-grow",
-    project: state,
-    textGeometry,
-    updateProject: setState,
-  });
   const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
     ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
     : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
@@ -224,14 +262,46 @@ export default function App() {
     rendererGeometryKey: activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
       ? activeRendererInputKey
       : null,
-    autoGrowPending: autoGrowArtboard.pending,
+    sceneSafetyLimitHit: sceneLayout.safetyLimitHit,
     failureReason: substrateBuild.error,
     renderer: state.renderer,
-  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, autoGrowArtboard.pending, fontResolution, renderer.usesSubstrate, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
-  const displayedTextOverflowWarning = textOverflowWarning
-    && !autoGrowArtboard.pending
-    && autoGrowArtboard.failureReason
-      ? AUTO_GROW_ARTBOARD_WARNING
+  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
+  const previousReadinessRef = useRef<string | null>(null);
+  useEffect(() => {
+    const marker = [
+      exportReadiness.status,
+      exportReadiness.technicalReason,
+      activeTypographyOutputKey,
+      substrateBuild.outputKey,
+      activeRendererInputKey,
+    ].join("|");
+    if (previousReadinessRef.current === marker) return;
+    previousReadinessRef.current = marker;
+    traceEvent({
+      stage: "export.readiness",
+      phase: "instant",
+      inputKey: activeRendererInputKey,
+      outputKey: exportReadiness.status === "ready" ? activeRendererInputKey : undefined,
+      detail: {
+        status: exportReadiness.status,
+        reason: exportReadiness.reason,
+        technicalReason: exportReadiness.technicalReason,
+      },
+    });
+    if (exportReadiness.status === "ready") {
+      traceEvent({
+        stage: "export.exact-visible",
+        phase: "instant",
+        outputKey: activeRendererInputKey,
+        frameKey: geometry.id,
+        detail: { status: "ready", exactVisible: true },
+      });
+      traceEvent({ stage: "export.ready", phase: "instant", outputKey: activeRendererInputKey, detail: { status: "ready" } });
+    }
+  }, [activeRendererInputKey, activeTypographyOutputKey, exportReadiness.reason, exportReadiness.status, exportReadiness.technicalReason, geometry.id, substrateBuild.outputKey]);
+const displayedTextOverflowWarning = textOverflowWarning
+    && sceneLayout.safetyLimitHit
+      ? SCENE_SAFETY_LIMIT_WARNING
       : null;
   const exportWarnings = useMemo(() => [
     ...getExportBudgetWarnings({
@@ -271,7 +341,7 @@ export default function App() {
       return;
     }
     const timer = setTimeout(() => {
-      const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry);
+      const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry, undefined, sceneLayout.effectiveArtboard);
       setDiagnostics(getSvgDiagnostics(timed.svg, timed.serializationTimeMs));
     }, 200);
     return () => clearTimeout(timer);
@@ -295,18 +365,24 @@ export default function App() {
   }), [canvasFlowActive, canvasSample, clockDiagnostics, exporting, playing, previewSettings.pauseWhenHidden, previewSettings.reducedMotion, renderer.usesTime]);
   const exportSvg = () => {
     if (state.exportMode === "artwork" && presetExportKinds[state.preset] === "preview-only") {
+      traceEvent({ stage: "export.request", phase: "instant", detail: { status: "preview-only" } });
       setMessage(PREVIEW_ONLY_EXPORT_WARNING);
       return;
     }
     if (exportReadiness.status !== "ready") {
+      traceEvent({ stage: "export.request", phase: "instant", detail: { status: exportReadiness.status, reason: exportReadiness.reason } });
       setMessage(exportReadiness.reason);
       return;
     }
     // Capture every authoritative input before yielding to presentation work.
     // The later serializer receives only this immutable, CPU-generated snapshot.
     let snapshot;
+    const snapshotTrace = traceStartSpan("export.snapshot.capture", {
+      inputKey: activeRendererInputKey,
+      detail: { documentKey: interactionTraceEnabled ? traceKey(state) : null, renderer: state.renderer },
+    });
     try {
-      snapshot = captureExportSnapshot({
+snapshot = captureExportSnapshot({
         state,
         documentKey: documentKey(state),
         font: fontResolution,
@@ -318,29 +394,43 @@ export default function App() {
         substrateData: substrateBuild.data,
         context: capturedExportContext,
         appVersion: APP_VERSION,
+        authoredArtboard: sceneLayout.authoredArtboard,
+        effectiveArtboard: sceneLayout.effectiveArtboard,
+        sceneLayoutKey: sceneLayout.key,
+        typographyPlacementKey: sceneLayout.typography.key,
+      });
+      snapshotTrace({
+        outputKey: snapshot.renderer.geometryKey,
+        frameKey: snapshot.renderer.geometry.id,
+        counts: { geometryNodes: snapshot.renderer.geometry.geometries.length },
+        detail: { captured: true },
       });
     } catch (error) {
+      snapshotTrace({ detail: { captured: false, error: error instanceof Error ? error.message : String(error) } });
       setMessage(error instanceof Error ? error.message : "Export snapshot could not be captured.");
       return;
     }
+    traceEvent({ stage: "export.request", phase: "instant", inputKey: activeRendererInputKey, detail: { status: "ready" } });
     setExporting(true);
     requestAnimationFrame(() => {
+      const serializationTrace = traceStartSpan("export.serialize", { inputKey: snapshot.renderer.inputKey });
       try {
     const filename = (state.text.trim() || "substrate").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
     const timed = createTimedSvgFromSnapshot(snapshot);
-    const svg = timed.svg;
+      const svg = timed.svg;
     const validation = reportSvgValidation(
       svg,
       Boolean(textGeometry?.hasOutlines) && state.exportMode === "artwork",
       state.exportMode === "artwork",
     );
-    if (!validation.valid) {
-      setMessage(validation.errors.join(" "));
-      return;
-    }
+      if (!validation.valid) {
+        serializationTrace({ detail: { valid: false, error: validation.errors.join(" ") } });
+        setMessage(validation.errors.join(" "));
+        return;
+      }
     download(svg, `${filename}.svg`, "image/svg+xml");
     const exactDiagnostics = getSvgDiagnostics(svg, timed.serializationTimeMs);
-    const exactWarnings = [
+      const exactWarnings = [
       ...getExportBudgetWarnings({
         ...geometrySummary,
         substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
@@ -348,11 +438,13 @@ export default function App() {
       }),
       ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
       ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
-    ];
+      ];
+      serializationTrace({ bytes: { svg: exactDiagnostics.byteSize }, detail: { valid: true, exactVisible: true } });
     setMessage(exactWarnings.length > 0
       ? `Exported ${formatBytes(exactDiagnostics.byteSize)} in ${timed.serializationTimeMs.toFixed(1)} ms. ${exactWarnings.join(" ")}`
       : `SVG exported · ${formatBytes(exactDiagnostics.byteSize)} · ${timed.serializationTimeMs.toFixed(1)} ms.`);
       } catch (error) {
+        serializationTrace({ detail: { valid: false, error: error instanceof Error ? error.message : String(error) } });
         setMessage(error instanceof Error ? error.message : "SVG export failed.");
       } finally {
         setExporting(false);
@@ -411,51 +503,56 @@ export default function App() {
       </header>
 
       <div className="workspace">
-        <Controls
-          state={state}
-          setState={setState}
-          fileRef={fileRef}
-          onImport={importJson}
-          fontFileRef={fontFileRef}
-          onFontUpload={uploadFont}
-          onClearFont={clearFont}
-          fontLoaded={Boolean(loadedFont)}
-          parsedFontPathsAvailable={Boolean(textGeometry?.hasOutlines)}
-          previewSettings={previewSettings}
-          onPreviewSettingsChange={setPreviewSettings}
-          emitterGlyphs={emitterGlyphs}
-          textGeometry={textGeometry}
-          diagnosticsMode={diagnosticsState.mode}
-          onDiagnosticsModeChange={diagnosticsState.setMode}
-          webGpuOverlayOpen={webGpuOverlayOpen}
-          fpsMeterOpen={fpsMeterOpen}
-          onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
-          onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
-        />
-        <section className="viewport-shell">
-          <CanvasNavigation>
-            <Viewport
+        <Profiler id="Size/control pane" onRender={recordReactCommit}>
+          <Controls
             state={state}
-            context={renderContext}
-            geometry={geometry}
-            textGeometry={textGeometry}
-            exportDiagnostics={diagnostics}
-            exportWarnings={exportWarnings}
-            performanceWarnings={performanceWarnings}
-            glyphLayoutTimeMs={textGeometryBuild.durationMs}
-            substrateError={substrateBuild.error}
-            substrateBackendStatus={substrateBuild.status}
-            previewDiagnostics={previewDiagnostics}
-            previewBackend={selectedPreviewBackend}
+            setState={setState}
+            fileRef={fileRef}
+            onImport={importJson}
+            fontFileRef={fontFileRef}
+            onFontUpload={uploadFont}
+            onClearFont={clearFont}
+            fontLoaded={Boolean(loadedFont)}
+            parsedFontPathsAvailable={Boolean(textGeometry?.hasOutlines)}
             previewSettings={previewSettings}
-            previewRunning={previewAnimationRunning}
-            canvasSample={canvasSample}
-            onCanvasSample={setCanvasSample}
-            onCanvasFailure={handleCanvasFailure}
+            onPreviewSettingsChange={setPreviewSettings}
+            emitterGlyphs={emitterGlyphs}
+            textGeometry={textGeometry}
             diagnosticsMode={diagnosticsState.mode}
-            svgTraceConfig={activeSvgTraceConfig}
+            onDiagnosticsModeChange={diagnosticsState.setMode}
+            webGpuOverlayOpen={webGpuOverlayOpen}
+            fpsMeterOpen={fpsMeterOpen}
+            onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
+            onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
           />
-          </CanvasNavigation>
+        </Profiler>
+        <section className="viewport-shell">
+          <Profiler id="artwork/Viewport" onRender={recordReactCommit}>
+            <CanvasNavigation>
+<Viewport
+              state={state}
+              context={renderContext}
+              geometry={geometry}
+              textGeometry={textGeometry}
+              sceneLayout={sceneLayout}
+              exportDiagnostics={diagnostics}
+              exportWarnings={exportWarnings}
+              performanceWarnings={performanceWarnings}
+              glyphLayoutTimeMs={textGeometryBuild.durationMs}
+              substrateError={substrateBuild.error}
+              substrateBackendStatus={substrateBuild.status}
+              previewDiagnostics={previewDiagnostics}
+              previewBackend={selectedPreviewBackend}
+              previewSettings={previewSettings}
+              previewRunning={previewAnimationRunning}
+              canvasSample={canvasSample}
+              onCanvasSample={setCanvasSample}
+              onCanvasFailure={handleCanvasFailure}
+              diagnosticsMode={diagnosticsState.mode}
+              svgTraceConfig={activeSvgTraceConfig}
+            />
+            </CanvasNavigation>
+          </Profiler>
           <div className="transport">
             <button className="play" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => setPlaying(!playing)}>{playing ? "Ⅱ" : "▶"}</button>
             <button onClick={reset}>Reset</button>

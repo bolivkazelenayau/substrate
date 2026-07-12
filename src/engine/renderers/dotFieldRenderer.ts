@@ -16,7 +16,7 @@ export const dotFieldRenderer: VectorRenderer = {
   generateGeometry(state, context) {
     const artboard = contextArtboard(context);
     const random = createSeededRandom(state.seed);
-    const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state));
+    const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state, artboard));
     const geometries: CircleMark[] = [];
     for (let i = 0; i < requestedMarkCount(state); i += 1) {
       const { x, y } = sampleBoundsFairly(bounds, i, random);

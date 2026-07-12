@@ -15,6 +15,7 @@ import {
   recordWheelEvent,
 } from "../dev/viewportNavigationInstrumentation";
 import { ViewportHudHostContext } from "./viewportHudContext";
+import { traceEvent } from "../dev/interactionTrace";
 
 interface CanvasNavigationProps {
   children: ReactNode;
@@ -74,6 +75,15 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
   const commitPendingViewport = useCallback(() => {
     wheelRafIdRef.current = null;
     setViewport(pendingViewportRef.current);
+    traceEvent({
+      stage: "navigation.commit",
+      phase: "instant",
+      detail: {
+        zoom: pendingViewportRef.current.zoom,
+        panX: pendingViewportRef.current.panX,
+        panY: pendingViewportRef.current.panY,
+      },
+    });
     recordViewportActiveUpdate();
   }, []);
 
@@ -137,6 +147,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     const handleWheel = (event: globalThis.WheelEvent) => {
       event.preventDefault();
       recordWheelEvent();
+      traceEvent({ stage: "navigation.wheel", phase: "instant", detail: { deltaY: event.deltaY, clientX: event.clientX, clientY: event.clientY } });
       const bounds = frame.getBoundingClientRect();
       const anchor = {
         x: event.clientX - (bounds.left + bounds.width / 2),
@@ -164,6 +175,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     panPointerId.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
     setPanning(true);
+    traceEvent({ stage: "navigation.pointerdown", phase: "instant", detail: { pointerId: event.pointerId, button: event.button } });
     markActiveInteraction();
   };
 
@@ -171,6 +183,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     if (panPointerId.current !== event.pointerId) return;
     event.preventDefault();
     recordPointerMoveEvent();
+    traceEvent({ stage: "navigation.pointermove", phase: "instant", detail: { pointerId: event.pointerId, movementX: event.movementX, movementY: event.movementY } });
     pendingViewportRef.current = panBy(pendingViewportRef.current, event.movementX, event.movementY);
     markActiveInteraction();
     scheduleViewportCommit();
@@ -183,6 +196,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     }
     panPointerId.current = null;
     setPanning(false);
+    traceEvent({ stage: "navigation.pointerup", phase: "instant", detail: { pointerId: event.pointerId } });
   };
 
   // Crisp default: a 2D `translate(...) scale(...)` keeps the SVG subtree on

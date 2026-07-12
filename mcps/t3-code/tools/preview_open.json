@@ -1,0 +1,66 @@
+{
+  "name": "preview_open",
+  "description": "Show and initialize a collaborative browser tab. Pass tabId to reuse a specific existing tab, set reuseExistingTab=false to create another tab, or omit both to use this agent session's current tab.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
+      "url": {
+        "anyOf": [
+          {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+              },
+              {
+                "minLength": 1,
+                "description": "Absolute http(s) URL or a schemeless host such as t3.chat or localhost:5173. Schemeless public hosts use https; loopback hosts use http."
+              },
+              {
+                "maxLength": 2048
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Optional initial page URL, for example https://t3.chat or localhost:5173. Omit to open a blank tab."
+      },
+      "show": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Whether to reveal the preview panel to the human. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "reuseExistingTab": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Reuse tabId when supplied, otherwise this agent session's current tab. Defaults to true; set false to create a new tab."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "additionalProperties": false
+  }
+}

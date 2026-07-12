@@ -117,7 +117,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   const toggleGroup = (id: keyof typeof defaultOpen) => 
     setUserToggles(prev => ({ ...prev, [id]: !isOpen(id) }));
   return (
-    <aside className="controls">
+    <aside className="controls" data-testid="controls-pane">
       <ArtworkTypographyPanels
         state={state}
         setState={setState}

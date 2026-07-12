@@ -1,0 +1,61 @@
+---
+pid: 21944
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; npx vitest run tests/sceneEffectiveArtboard.test.ts tests/sceneNonZeroOriginRenderers.test.ts tests/sceneNoAutoWrites.test.ts tests/glyphLayout.test.ts tests/rendererSampling.test.ts --reporter=verbose 2>&1 | Select-Object -Last 50"
+started_at: 2026-07-12T01:07:44.437Z
+running_for_ms: 4599993  
+---
+ ✓ tests/rendererSampling.test.ts > large typography renderer sampling > returns null only for fully outside bounds 4ms
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > does not mutate ProjectState while resolving scene layout 9ms
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > keeps artboard and textOffsetY unchanged when only fontSize changes in the resolver inputs 4ms
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > commits only the Size-owned field from the typography Size control 2ms
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > does not emit automatic artboard or textOffsetY patches from production hooks 2ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > preserves the legacy default paths, origins, advances, and bounds 28ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > loads the licensed font fixture and extracts metadata 7ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > generates non-empty paths and finite bounds for basic Latin 12ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > tracking changes total advance width 8ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > lays out multiline text with preserved indentation and empty lines 11ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > changes only multiline baseline spacing when line height changes 16ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > applies parsed-font kerning mode and strength predictably 3ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > keeps optical spacing deterministic, opt-in, and bounded per pair 25ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > aligns parsed runs to the artboard and offsets the shared baseline once 13ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > aligns native fallback bounds and reports parsed-font-only limitations 2ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > font size changes path bounds 7ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > handles empty and whitespace text without crashing 1ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > handles missing glyphs safely through the font fallback glyph 3ms
+node.exe : 
+
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\Breeze\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯ Failed Suites 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/sceneEffectiveArtboard.test.ts [ tests/sceneEffectiveArtboard.test.ts ]
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts [ tests/sceneNonZeroOriginRenderers.test.ts ]
+Error: Transform failed with 1 error:
+C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/renderers/dotFieldRenderer.ts:19:10: ERROR: The symbol 
+"artboard" has already been declared
+  Plugin: vite:esbuild
+  File: C:/Users/Breeze/Documents/Dev/type_react_kit/src/engine/renderers/dotFieldRenderer.ts:19:10
+ Test Files  2 failed | 3 passed (5)
+      Tests  21 passed (21)
+   Start at  04:07:50
+   Duration  9.63s (transform 2.02s, setup 0ms, import 1.53s, tests 443ms, environment 32.63s)
+
+  
+  The symbol "artboard" has already been declared
+  17 |      const artboard = contextArtboard(context);
+  18 |      const random = createSeededRandom(state.seed);
+  19 |      const artboard = contextArtboard(context);
+     |            ^
+  20 |      const bounds = resolveVisibleGlyphSamplingBounds(state, context, resolveSimpleMarkBounds(state, artboard));
+  21 |      const geometries: CircleMark[] = [];
+  
+ ❯ failureErrorWithLog node_modules/esbuild/lib/main.js:1467:15
+ ❯ node_modules/esbuild/lib/main.js:736:50
+ ❯ responseCallbacks.<computed> node_modules/esbuild/lib/main.js:603:9
+ ❯ handleIncomingPacket node_modules/esbuild/lib/main.js:658:12
+ ❯ Socket.readFromStdout node_modules/esbuild/lib/main.js:581:7
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯

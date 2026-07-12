@@ -1,0 +1,65 @@
+{
+  "name": "preview_evaluate",
+  "description": "Evaluate JavaScript in the tab selected by tabId, or this agent session's current tab when omitted. Returns a serializable result up to 64 KB; the expression may mutate page state.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "tabId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Exact collaborative browser tab to target. Omit to use this agent session's current tab."
+      },
+      "expression": {
+        "type": "string",
+        "allOf": [
+          {
+            "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$"
+          },
+          {
+            "minLength": 1,
+            "description": "JavaScript expression evaluated in the page's main frame, for example document.title or (() => ({href: location.href}))()."
+          },
+          {
+            "maxLength": 64000
+          },
+          {
+            "description": "JavaScript expression evaluated in the page's main frame, for example document.title or (() => ({href: location.href}))()."
+          }
+        ]
+      },
+      "awaitPromise": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Await a returned Promise. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "returnByValue": {
+        "anyOf": [
+          {
+            "type": "boolean",
+            "description": "Serialize and return the value instead of a remote object reference. Defaults to true."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "expression"
+    ],
+    "additionalProperties": false,
+    "description": "Evaluates JavaScript in the page. Prefer snapshot and semantic actions; use evaluate for inspection or unsupported interactions."
+  }
+}

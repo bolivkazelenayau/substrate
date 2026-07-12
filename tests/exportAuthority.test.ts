@@ -29,7 +29,7 @@ function readiness(overrides: Partial<Parameters<typeof resolveExportReadiness>[
     substrateData: substrate,
     rendererInputKey: rendererKey,
     rendererGeometryKey: rendererKey,
-    autoGrowPending: false,
+    sceneSafetyLimitHit: false,
     renderer: state.renderer,
     ...overrides,
   });
@@ -87,6 +87,10 @@ describe("authoritative export readiness", () => {
       substrateData: null,
       context: { mode: "current", timeMs: 1234, frame: 37 },
       appVersion: "test",
+      authoredArtboard: { width: state.artboard.width, height: state.artboard.height },
+      effectiveArtboard: { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height },
+      sceneLayoutKey: "scene-layout:test",
+      typographyPlacementKey: "typography-placement:test",
     });
     const svg = createTimedSvgFromSnapshot(snapshot).svg;
     const metadata = JSON.parse(new DOMParser().parseFromString(svg, "image/svg+xml").querySelector("metadata")!.textContent!);
@@ -102,6 +106,6 @@ describe("authoritative export readiness", () => {
   });
 
   it("blocks a pending auto-grow expansion", () => {
-    expect(readiness({ autoGrowPending: true }).status).toBe("auto-grow-pending");
+    expect(readiness({ sceneSafetyLimitHit: true }).status).toBe("scene-safety-limit");
   });
 });

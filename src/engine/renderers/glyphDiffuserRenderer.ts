@@ -1,4 +1,5 @@
 import { contextArtboard } from "../artboard";
+import { artboardBottom, artboardLeft, artboardRight, artboardTop } from "../sceneLayout";
 import { buildCompositeWaveField, getEmitterContributionAtPoint, getFalloffWeight, sampleGlyphField } from "../field/compositeWaveField";
 import type { CircleMark, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
@@ -89,19 +90,19 @@ export const glyphDiffuserRenderer: VectorRenderer = {
       radius: haloRadius * source.radiusMultiplier,
     }));
     const artboardBoundsClipped = sourceDomains.some(({ source, radius }) =>
-      source.anchor.x - radius < 0
-      || source.anchor.y - radius < 0
-      || source.anchor.x + radius > artboard.width
-      || source.anchor.y + radius > artboard.height);
+      source.anchor.x - radius < artboardLeft(artboard)
+      || source.anchor.y - radius < artboardTop(artboard)
+      || source.anchor.x + radius > artboardRight(artboard)
+      || source.anchor.y + radius > artboardBottom(artboard));
     const artboardEdgeFeather = artboardBoundsClipped ? 56 : 0;
     const multiple = state.emitterMode === "multiple";
     // Multiple mode uses an artboard-anchored lattice. Union bounds are only
     // an acceptance mask; they must not shift every candidate when one row's
     // radius changes. Single mode retains the legacy anchor-relative lattice.
-    const minX = multiple ? 0 : Math.max(0, field.anchor.x - haloRadius);
-    const maxX = multiple ? artboard.width : Math.min(artboard.width, field.anchor.x + haloRadius);
-    const minY = multiple ? 0 : Math.max(0, field.anchor.y - haloRadius);
-    const maxY = multiple ? artboard.height : Math.min(artboard.height, field.anchor.y + haloRadius);
+    const minX = multiple ? artboardLeft(artboard) : Math.max(artboardLeft(artboard), field.anchor.x - haloRadius);
+    const maxX = multiple ? artboardRight(artboard) : Math.min(artboardRight(artboard), field.anchor.x + haloRadius);
+    const minY = multiple ? artboardTop(artboard) : Math.max(artboardTop(artboard), field.anchor.y - haloRadius);
+    const maxY = multiple ? artboardBottom(artboard) : Math.min(artboardBottom(artboard), field.anchor.y + haloRadius);
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
@@ -157,7 +158,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         const fixedGrain = multiple ? 0.72 + random() * 0.56 : 0;
         const fixedAcceptanceRoll = multiple ? random() : 0;
         const fixedRadiusNoise = multiple ? 0.82 + random() * 0.36 : 0;
-        if (x < 0 || x > artboard.width || y < 0 || y > artboard.height) continue;
+        if (x < artboardLeft(artboard) || x > artboardRight(artboard) || y < artboardTop(artboard) || y > artboardBottom(artboard)) continue;
         let nearestDomain = sourceDomains[0];
         let distance = Math.hypot(x - nearestDomain.source.anchor.x, y - nearestDomain.source.anchor.y);
         let normalizedDistance = distance / Math.max(1, nearestDomain.radius);
@@ -207,7 +208,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         const reactive = state.diffuserComposition === "text-reactive"
           ? reactiveBase + Math.min(1, edge * 1.8) * reactiveScale
           : 1;
-        const edgeDistance = Math.min(x, artboard.width - x, y, artboard.height - y);
+        const edgeDistance = Math.min(x - artboardLeft(artboard), artboardRight(artboard) - x, y - artboardTop(artboard), artboardBottom(artboard) - y);
         const edgeT = artboardEdgeFeather
           ? Math.max(0, Math.min(1, edgeDistance / artboardEdgeFeather))
           : 1;
@@ -341,10 +342,10 @@ export const glyphDiffuserRenderer: VectorRenderer = {
           effectiveRadius: state.emitter.radius * source.radiusMultiplier,
           samplingRadius: radius,
           bounds: {
-            minX: Math.max(0, source.anchor.x - radius),
-            minY: Math.max(0, source.anchor.y - radius),
-            maxX: Math.min(artboard.width, source.anchor.x + radius),
-            maxY: Math.min(artboard.height, source.anchor.y + radius),
+            minX: Math.max(artboardLeft(artboard), source.anchor.x - radius),
+            minY: Math.max(artboardTop(artboard), source.anchor.y - radius),
+            maxX: Math.min(artboardRight(artboard), source.anchor.x + radius),
+            maxY: Math.min(artboardBottom(artboard), source.anchor.y + radius),
           },
           sampleCount: sampleCountPerEmitter[source.id],
           renderedMarkCount: renderedMarkCountPerEmitter[source.id],

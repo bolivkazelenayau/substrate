@@ -2,7 +2,8 @@ import { VIEWPORT } from "./constants";
 import type { GlyphBounds, TextGeometry } from "./glyphGeometry";
 import type { ProjectState } from "../types";
 import { resolveTextBoundsModel } from "./textBounds";
-import { artboardBounds, projectArtboard } from "./artboard";
+import { artboardBounds } from "./artboard";
+import type { ArtboardRect } from "./sceneLayout";
 
 export interface ContourDomain {
   bounds: GlyphBounds;
@@ -33,6 +34,12 @@ export function resolveSourceTextBounds(
   return model.glyphUnionBounds ?? reportedBounds ?? model.inkBounds;
 }
 
+/**
+ * Compares ink bounds against the AUTHORED artboard minimum. Used to surface
+ * an authored-overflow warning. The effective rect grows to contain ink
+ * deterministically; this authored-space check only informs diagnostics that
+ * the artwork expanded past the persisted minimum.
+ */
 export function textBoundsExceedArtboard(
   bounds: GlyphBounds,
   artboard: { width: number; height: number } = { width: VIEWPORT.width, height: VIEWPORT.height },
@@ -49,15 +56,27 @@ export function getTextArtboardOverflowWarning(state: ProjectState, textGeometry
     : null;
 }
 
+/**
+ * Resolve the substrate domain. For small typography and non-overscan
+ * renderers, the domain is the effective scene rect (origin-aware). For
+ * large-SDF renderers (OVERSCANNED_RENDERERS), the domain may overscan
+ * further when the typography itself extends the artboard and the renderer
+ * needs extra room for line/sampling spread.
+ *
+ * The `effectiveArtboard` becomes the base domain (origin-aware). The
+ * previous authored-artboard-only domain (`artboardBounds(state.artboard)`)
+ * is replaced entirely with the scene effective rect; this is what makes the
+ * substrate raster span the same space the renderer iterates over.
+ */
 export function resolveContourDomain(
   state: ProjectState,
   textGeometry: TextGeometry | null,
   reportedBounds: GlyphBounds | null,
+  effectiveArtboard?: ArtboardRect,
 ): ContourDomain {
-  const viewport = projectArtboard(state);
-  const artboard = artboardBounds(state.artboard);
+  const effective = artboardBounds(effectiveArtboard ?? { x: 0, y: 0, width: state.artboard.width, height: state.artboard.height });
   if (state.fontSize <= LARGE_TYPE_DOMAIN_THRESHOLD || !OVERSCANNED_RENDERERS.has(state.renderer)) {
-    return { bounds: artboard, padding: 0, resolutionScaleX: 1, resolutionScaleY: 1, expanded: false };
+    return { bounds: effective, padding: 0, resolutionScaleX: 1, resolutionScaleY: 1, expanded: false };
   }
 
   const effectiveBounds = resolveSourceTextBounds(state, textGeometry, reportedBounds);
@@ -65,15 +84,18 @@ export function resolveContourDomain(
   const overlaySpread = state.overlayMode === "warped-outline"
     ? state.outlineWarpMaxDisplacement + state.outlineStrokeWidth / 2
     : state.outlineStrokeWidth / 2;
-  const padding = Math.min(viewport.width * 0.3, Math.max(24, contourSpread, overlaySpread));
-  const desiredLeft = Math.min(0, effectiveBounds.x - padding);
-  const desiredTop = Math.min(0, effectiveBounds.y - padding);
-  const desiredRight = Math.max(viewport.width, effectiveBounds.x + effectiveBounds.width + padding);
-  const desiredBottom = Math.max(viewport.height, effectiveBounds.y + effectiveBounds.height + padding);
-  const hardLeft = -viewport.width;
-  const hardTop = -viewport.height;
-  const hardRight = viewport.width * (MAX_DOMAIN_SCALE - 1);
-  const hardBottom = viewport.height * (MAX_DOMAIN_SCALE - 1);
+  const padding = Math.min(effective.width * 0.3, Math.max(24, contourSpread, overlaySpread));
+  const desiredLeft = Math.min(effective.x, effectiveBounds.x - padding);
+  const desiredTop = Math.min(effective.y, effectiveBounds.y - padding);
+  const desiredRight = Math.max(effective.x + effective.width, effectiveBounds.x + effectiveBounds.width + padding);
+  const desiredBottom = Math.max(effective.y + effective.height, effectiveBounds.y + effectiveBounds.height + padding);
+  // Hard safety caps remain relative to the effective rect to preserve the
+  // substrate domain's clamping semantics. The effective rect is the new
+  // domain anchor; the hard caps grow proportionally with it.
+  const hardLeft = effective.x - effective.width * (MAX_DOMAIN_SCALE - 1);
+  const hardTop = effective.y - effective.height * (MAX_DOMAIN_SCALE - 1);
+  const hardRight = effective.x + effective.width * (MAX_DOMAIN_SCALE - 1);
+  const hardBottom = effective.y + effective.height * (MAX_DOMAIN_SCALE - 1);
   const left = Math.max(hardLeft, desiredLeft);
   const top = Math.max(hardTop, desiredTop);
   const right = Math.min(hardRight, desiredRight);
@@ -86,6 +108,6 @@ export function resolveContourDomain(
     // coverage, not candidate density or maxNodes demand.
     resolutionScaleX: 1,
     resolutionScaleY: 1,
-    expanded: bounds.x !== 0 || bounds.y !== 0 || bounds.width !== viewport.width || bounds.height !== viewport.height,
+    expanded: bounds.x !== effective.x || bounds.y !== effective.y || bounds.width !== effective.width || bounds.height !== effective.height,
   };
 }

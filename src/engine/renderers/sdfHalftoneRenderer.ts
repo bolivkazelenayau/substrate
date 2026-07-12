@@ -1,6 +1,7 @@
 import type { CircleMark, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
 import { contextArtboard, projectArtboard } from "../artboard";
+import { artboardBottom, artboardLeft, artboardRight, artboardTop, worldToLocal } from "../sceneLayout";
 import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
@@ -68,10 +69,10 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const jitter = spacing * 0.42 * Math.max(0, Math.min(1, state.turbulence / 100));
     const edgeBand = Math.max(spacing, substrate.diagnostics.maxDistance * (0.72 - influence * 0.52));
     const bounds = substrate.bounds;
-    const minX = Math.max(0, (bounds?.x ?? 0) - spacing);
-    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + spacing);
-    const minY = Math.max(0, (bounds?.y ?? 0) - spacing);
-    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + spacing);
+    const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - spacing);
+    const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + spacing);
+    const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - spacing);
+    const maxY = Math.min(artboardBottom(artboard), (bounds ? bounds.y + bounds.height : artboardBottom(artboard)) + spacing);
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
@@ -175,8 +176,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         const radiusModulation = glyph.radiusEnabled ? 1 + fieldValue * state.glyphFieldRadius / 100 * glyph.strength * 0.75 : 1;
         const radius = Math.max(minRadius, Math.min(maxRadius * 1.35, (minRadius + (maxRadius - minRadius) * edgeWeightedRatio) * radiusNoise * gradientSafety * radiusModulation));
 
-        const cellX = Math.floor(x / occupancyCellSize);
-        const cellY = Math.floor(y / occupancyCellSize);
+        const cellX = Math.floor(worldToLocal(artboard, { x, y }).x / occupancyCellSize);
+        const cellY = Math.floor(worldToLocal(artboard, { x, y }).y / occupancyCellSize);
         let overlaps = false;
         for (let oy = -1; oy <= 1 && !overlaps; oy += 1) {
           for (let ox = -1; ox <= 1 && !overlaps; ox += 1) {

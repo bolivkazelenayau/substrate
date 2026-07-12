@@ -1,0 +1,27 @@
+---
+pid: 3980
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; npx vitest run tests/controls.test.ts tests/exportSvg.test.ts tests/exportGolden.test.ts tests/graphExecution.test.ts tests/sceneEffectiveArtboard.test.ts"
+started_at: 2026-07-12T01:20:18.672Z
+running_for_ms: 3844999  
+---
+
+ RUN  v4.1.9 C:/Users/Breeze/Documents/Dev/type_react_kit
+
+ ✓ tests/sceneEffectiveArtboard.test.ts (7 tests) 27ms
+ ✓ tests/exportSvg.test.ts (13 tests) 641ms
+ ✓ tests/controls.test.ts (14 tests) 1561ms
+ ✓ tests/exportGolden.test.ts (6 tests) 2750ms
+     ✓ edge-current-native matches its canonical export summary  947ms
+     ✓ dot-field-native matches its canonical export summary  719ms
+     ✓ sdf-contours-native matches its canonical export summary  438ms
+ ✓ tests/graphExecution.test.ts (8 tests) 3160ms
+     ✓ edge-current-native matches registry geometry and golden export  1269ms
+     ✓ dot-field-native matches registry geometry and golden export  876ms
+     ✓ sdf-contours-native matches registry geometry and golden export  435ms
+
+ Test Files  5 passed (5)
+      Tests  48 passed (48)
+   Start at  04:20:22
+   Duration  15.76s (transform 7.42s, setup 0ms, import 14.01s, tests 8.14s, environment 39.20s)
+

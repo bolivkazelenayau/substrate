@@ -1,0 +1,841 @@
+
+ RUN  v4.1.9 C:/Users/Breeze/Documents/Dev/type_react_kit
+
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > does not mutate ProjectState while resolving scene layout 9ms
+ ✓ tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > keeps artboard and textOffsetY unchanged when only fontSize changes in the resolver inputs 4ms
+ × tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > commits only the Size-owned field from the typography Size control 21ms
+   → expected [] to deeply equal [ 'fontSize' ]
+ × tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > does not emit automatic artboard or textOffsetY patches from production hooks 9ms
+   → expected 'import { lazy, Profiler, Suspense, ty…' not to contain 'useAutoGrowArtboard'
+ × tests/glyphLayout.test.ts > font and glyph layout > preserves the legacy default paths, origins, advances, and bounds 50ms
+   → expected [ …(4) ] to deeply equal [ …(4) ]
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > loads the licensed font fixture and extracts metadata 2ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > generates non-empty paths and finite bounds for basic Latin 9ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > tracking changes total advance width 9ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > lays out multiline text with preserved indentation and empty lines 10ms
+ × tests/glyphLayout.test.ts > font and glyph layout > changes only multiline baseline spacing when line height changes 19ms
+   → expected 420.68 to be 405 // Object.is equality
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > applies parsed-font kerning mode and strength predictably 3ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > keeps optical spacing deterministic, opt-in, and bounded per pair 22ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > aligns parsed runs to the artboard and offsets the shared baseline once 15ms
+ × tests/glyphLayout.test.ts > font and glyph layout > aligns native fallback bounds and reports parsed-font-only limitations 3ms
+   → expected 396.68 to be 381 // Object.is equality
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > font size changes path bounds 6ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > handles empty and whitespace text without crashing 2ms
+ ✓ tests/glyphLayout.test.ts > font and glyph layout > handles missing glyphs safely through the font fallback glyph 4ms
+ ✓ tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > does not expand when native artwork fits the authored minimum 8ms
+ × tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > grows symmetrically on the horizontal axis 10ms
+   → expect is not defined
+ × tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > grows symmetrically on the vertical axis when ink exceeds authored height 2ms
+   → expect is not defined
+ × tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > can grow on both axes while preserving the authored center 2ms
+   → expect is not defined
+ ✓ tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > never shrinks below the authored minimum floor 2ms
+ ✓ tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > applies deterministic rounding and non-zero origins when expanded 2ms
+ ✓ tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > returns the same key for identical authored inputs 1ms
+ × tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > flow uses the effective rect origin in context.viewport 877ms
+   → expected false to be true // Object.is equality
+ × tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > ripple uses the effective rect origin in context.viewport 498ms
+   → expected false to be true // Object.is equality
+ × tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > dots uses the effective rect origin in context.viewport 530ms
+   → expected false to be true // Object.is equality
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > sdf-flow samples within the shifted effective rect 301ms
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > sdf-halftone samples within the shifted effective rect 91ms
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > sdf-streamlines samples within the shifted effective rect 55ms
+ ✓ tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > sdf-contours samples within the shifted effective rect 90ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ × tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > wave-contours samples within the shifted effective rect 15ms
+   → expected 0 to be greater than 0
+ × tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > glyph-diffuser samples within the shifted effective rect 14ms
+   → expected 0 to be greater than 0
+ FAIL  tests/glyphLayout.test.ts > font and glyph layout > preserves the legacy default paths, origins, advances, and bounds
+AssertionError: expected [ …(4) ] to deeply equal [ …(4) ]
+
+- Expected
++ Received
+
+  [
+-   "M483.3 405L483.3 319Q477.9 319.1 473.5 319.1Q469.1 319.2 466 319.4Q462.4 319.5 459.6 319.7Q459.4 318.8 459.4 317.9Q459.1 316.4 459.1 314.2Q459.1 312.9 459.3 311Q459.5 309.2 460 306.9L524.3 306.9Q524.4 307.6 524.5 308.4Q524.5 309 524.6 309.9Q524.7 310.7 524.7 311.5Q524.7 312.9 524.4 315.2Q524.2 317.6 523.5 319.6Q522.9 319.5 520.5 319.4Q518.1 319.3 514.7 319.2Q511.3 319.1 507.3 319.1Q503.4 319 499.6 319L499.6 405",
+-   "M551.7 405L551.7 368.1L522.3 306.9L539.9 306.9L555.6 343.6L559.8 356.3L564 343.6L579.9 306.9L597.5 306.9L568.1 368.1L568.1 405",
+-   "M604.5 405L604.5 306.9L638.1 306.9Q645.3 306.9 651 308.9Q656.7 310.8 660.7 314.6Q664.7 318.4 666.7 323.9Q668.8 329.3 668.8 336.3Q668.8 342.6 666.6 348.3Q664.4 354.1 660 358.5Q655.6 362.9 649.1 365.6Q642.6 368.2 634 368.2Q631.3 368.2 628.9 368.1Q626.5 368.1 624.7 367.9Q622.6 367.8 620.9 367.6L620.9 405L604.5 405M620.9 319.4L620.9 355.4Q622 355.5 624.1 355.7Q626.3 355.9 629.3 355.9Q634.2 355.9 638.4 354.8Q642.5 353.8 645.6 351.6Q648.6 349.4 650.3 345.9Q652 342.3 652 337.3Q652 333.2 651.2 330Q650.4 326.7 648.6 324.3Q646.8 322 644 320.7Q641.2 319.4 637.2 319.4",
+-   "M680.7 405L680.7 306.9L737 306.9Q737 307.4 737 307.9Q737.1 308.5 737.1 309.1Q737.2 309.7 737.2 310.4Q737.2 311.6 736.7 314.1Q736.2 316.6 734.6 319.9Q728.6 319.7 722.2 319.4Q716.7 319.3 710.1 319.1Q703.4 318.9 697.1 318.9L697.1 348.6Q699.2 348.6 701.8 348.5Q704.4 348.5 707.3 348.4Q710.1 348.3 713 348.3Q715.9 348.2 718.7 348.1Q725 347.9 731.8 347.8Q731.8 348.3 731.8 349Q731.9 349.6 731.9 350.3Q732 351.1 732 351.9Q732 352.2 731.9 353.3Q731.8 354.3 731.5 355.6Q731.3 356.9 730.9 358.2Q730.6 359.5 730.2 360.4Q723.4 360.4 717.2 360.3Q714.6 360.3 711.7 360.3Q708.9 360.3 706.3 360.3Q703.6 360.3 701.3 360.3Q698.9 360.3 697.1 360.3L697.1 392.6Q703.4 392.6 710.5 392.4Q717.5 392.2 723.6 392Q730.7 391.7 737.5 391.3Q737.5 392 737.6 392.7Q737.7 393.3 737.7 394.1Q737.8 395 737.8 395.8Q737.8 397.3 737.5 399.7Q737.3 402.2 736.6 405",
++   "M483.3 420.7L483.3 334.7Q477.9 334.8 473.5 334.8Q469.1 334.9 466 335Q462.4 335.2 459.6 335.3Q459.4 334.5 459.4 333.6Q459.1 332.1 459.1 329.8Q459.1 328.5 459.3 326.7Q459.5 324.9 460 322.5L524.3 322.5Q524.4 323.3 524.5 324.1Q524.5 324.7 524.6 325.5Q524.7 326.4 524.7 327.2Q524.7 328.6 524.4 330.9Q524.2 333.2 523.5 335.3Q522.9 335.2 520.5 335.1Q518.1 335 514.7 334.9Q511.3 334.8 507.3 334.8Q503.4 334.7 499.6 334.7L499.6 420.7",
++   "M551.7 420.7L551.7 383.8L522.3 322.5L539.9 322.5L555.6 359.3L559.8 372L564 359.3L579.9 322.5L597.5 322.5L568.1 383.8L568.1 420.7",
++   "M604.5 420.7L604.5 322.5L638.1 322.5Q645.3 322.5 651 324.5Q656.7 326.5 660.7 330.3Q664.7 334.1 666.7 339.6Q668.8 345 668.8 352Q668.8 358.2 666.6 364Q664.4 369.7 660 374.2Q655.6 378.6 649.1 381.3Q642.6 383.9 634 383.9Q631.3 383.9 628.9 383.8Q626.5 383.8 624.7 383.6Q622.6 383.5 620.9 383.2L620.9 420.7L604.5 420.7M620.9 335.1L620.9 371Q622 371.2 624.1 371.4Q626.3 371.5 629.3 371.5Q634.2 371.5 638.4 370.5Q642.5 369.5 645.6 367.3Q648.6 365.1 650.3 361.6Q652 358 652 353Q652 348.9 651.2 345.6Q650.4 342.3 648.6 340Q646.8 337.6 644 336.4Q641.2 335.1 637.2 335.1",
++   "M680.7 420.7L680.7 322.5L737 322.5Q737 323 737 323.6Q737.1 324.1 737.1 324.7Q737.2 325.4 737.2 326.1Q737.2 327.3 736.7 329.8Q736.2 332.3 734.6 335.6Q728.6 335.3 722.2 335.1Q716.7 335 710.1 334.8Q703.4 334.6 697.1 334.6L697.1 364.2Q699.2 364.2 701.8 364.2Q704.4 364.2 707.3 364.1Q710.1 364 713 364Q715.9 363.9 718.7 363.8Q725 363.6 731.8 363.4Q731.8 364 731.8 364.7Q731.9 365.3 731.9 366Q732 366.8 732 367.6Q732 367.9 731.9 369Q731.8 370 731.5 371.3Q731.3 372.6 730.9 373.9Q730.6 375.2 730.2 376.1Q723.4 376.1 717.2 376Q714.6 376 711.7 376Q708.9 376 706.3 376Q703.6 375.9 701.3 375.9Q698.9 375.9 697.1 375.9L697.1 408.3Q703.4 408.3 710.5 408.1Q717.5 407.9 723.6 407.7Q730.7 407.4 737.5 407Q737.5 407.7 737.6 408.4Q737.7 409 737.7 409.8Q737.8 410.6 737.8 411.4Q737.8 412.9 737.5 415.4Q737.3 417.9 736.6 420.7",
+  ]
+
+ ❯ tests/glyphLayout.test.ts:51:58
+     49|       : null));
+     50|
+     51|     expect(geometry.glyphs.map((glyph) => glyph.path.d)).toEqual(legac…
+       |                                                          ^
+     52|     expect(geometry.glyphs.map((glyph) => ({ x: glyph.x, y: glyph.y })…
+     53|       legacy.map((glyph) => ({ x: glyph.x, y: glyph.y })),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  tests/glyphLayout.test.ts > font and glyph layout > changes only multiline baseline spacing when line height changes
+AssertionError: expected 420.68 to be 405 // Object.is equality
+
+- Expected
++ Received
+
+- 405
++ 420.68
+
+ ❯ tests/glyphLayout.test.ts:104:30
+    102|     const loose = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", li…
+    103|
+    104|     expect(single.baselineY).toBe(TEXT_LAYOUT.baselineY);
+       |                              ^
+    105|     expect(loose.lines![1].baselineY - loose.lines![0].baselineY)
+    106|       .toBeCloseTo((compact.lines![1].baselineY - compact.lines![0].ba…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  tests/glyphLayout.test.ts > font and glyph layout > aligns native fallback bounds and reports parsed-font-only limitations
+AssertionError: expected 396.68 to be 381 // Object.is equality
+
+- Expected
++ Received
+
+- 381
++ 396.68
+
+ ❯ tests/glyphLayout.test.ts:161:51
+    159|     expect(getTextLayoutBounds(left).x).toBe(VIEWPORT.paddingX);
+    160|     expect(getTextLayoutBounds(right).x + getTextLayoutBounds(right).w…
+    161|     expect(getTextLayout(right, false).baselineY).toBe(TEXT_LAYOUT.bas…
+       |                                                   ^
+    162|     expect(getTypographyLimitations({
+    163|       ...baseState,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > grows symmetrically on the horizontal axis
+ReferenceError: expect is not defined
+ ❯ assertCenterPreserved tests/utils/sceneLayoutHarness.ts:124:3
+    122|   };
+    123|   const effectiveCenter = artboardCenter(scene.effectiveArtboard);
+    124|   expect(effectiveCenter.x).toBeCloseTo(authoredCenter.x, 3);
+       |   ^
+    125|   expect(effectiveCenter.y).toBeCloseTo(authoredCenter.y, 3);
+    126| }
+ ❯ tests/sceneEffectiveArtboard.test.ts:27:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > grows symmetrically on the vertical axis when ink exceeds authored height
+ReferenceError: expect is not defined
+ ❯ assertCenterPreserved tests/utils/sceneLayoutHarness.ts:124:3
+    122|   };
+    123|   const effectiveCenter = artboardCenter(scene.effectiveArtboard);
+    124|   expect(effectiveCenter.x).toBeCloseTo(authoredCenter.x, 3);
+       |   ^
+    125|   expect(effectiveCenter.y).toBeCloseTo(authoredCenter.y, 3);
+    126| }
+ ❯ tests/sceneEffectiveArtboard.test.ts:44:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  tests/sceneEffectiveArtboard.test.ts > symmetric effective artboard resolver > can grow on both axes while preserving the authored center
+ReferenceError: expect is not defined
+ ❯ assertCenterPreserved tests/utils/sceneLayoutHarness.ts:124:3
+    122|   };
+    123|   const effectiveCenter = artboardCenter(scene.effectiveArtboard);
+    124|   expect(effectiveCenter.x).toBeCloseTo(authoredCenter.x, 3);
+       |   ^
+    125|   expect(effectiveCenter.y).toBeCloseTo(authoredCenter.y, 3);
+    126| }
+ ❯ tests/sceneEffectiveArtboard.test.ts:55:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > commits only the Size-owned field from the typography Size control
+AssertionError: expected [] to deeply equal [ 'fontSize' ]
+
+- Expected
++ Received
+
+- [
+-   "fontSize",
+- ]
++ []
+
+ ❯ tests/sceneNoAutoWrites.test.ts:39:37
+     37|   it("commits only the Size-owned field from the typography Size contr…
+     38|     const source = readFileSync(resolve("src/components/panels/Artwork…
+     39|     expect(sizePatchFields(source)).toEqual(["fontSize"]);
+       |                                     ^
+     40|     expect(source).not.toContain("useAutoGrowArtboard");
+     41|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  tests/sceneNoAutoWrites.test.ts > no automatic ProjectState writes > does not emit automatic artboard or textOffsetY patches from production hooks
+AssertionError: expected 'import { lazy, Profiler, Suspense, ty…' not to contain 'useAutoGrowArtboard'
+
+- Expected
++ Received
+
+- useAutoGrowArtboard
++ import { lazy, Profiler, Suspense, type ChangeEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
++ import { Controls } from "./components/Controls";
++ import { Viewport } from "./components/Viewport";
++ import { createTimedSvg, createTimedSvgFromSnapshot, download } from "./engine/exportSvg";
++ import { loadFontFile, validateLoadedFont, type LoadedFont } from "./engine/fontLoader";
++ import { layoutGlyphs } from "./engine/glyphLayout";
++ import { validateTextGeometry } from "./engine/glyphGeometry";
++ import { getSvgDiagnostics, reportSvgValidation, type SvgDiagnostics } from "./engine/svgValidation";
++ import { useAnimationClock } from "./hooks/useAnimationClock";
++ import type { PreviewDiagnostics, RenderContext } from "./types";
++ import { emitterGeometryKey } from "./engine/rendererRuntime";
++ import { getExportBudgetWarnings } from "./engine/exportBudget";
++ import { getSubstratePerformanceWarnings } from "./engine/performance";
++ import { getTextArtboardOverflowWarning } from "./engine/contourDomain";
++ import { NATIVE_TEXT_BOUNDS_WARNING } from "./engine/textBounds";
++ import { artboardViewport } from "./engine/artboard";
++ import { SCENE_SAFETY_LIMIT_WARNING } from "./engine/sceneLayout";
++ import { getRenderer } from "./engine/renderers";
++ import { requestedMarkCount } from "./engine/renderers/types";
++ import { selectPreviewBackend, shouldRunPreviewAnimation } from "./engine/previewBackend";
++ import type { CanvasPreviewSample } from "./components/CanvasFlowPreview";
++ import { getGlyphEmitterAnchor, getGlyphEmitterMetadata, resolveEmitterGlyph, resolveGlyphEmitterSources } from "./engine/field/glyphEmitters";
++ import { createStaticRenderContext } from "./engine/renderContextLifecycle";
++ import type { DevWebGpuAppFieldSnapshot } from "./engine/gpu/webgpuAppFieldPreviewAdapter";
++ import { CanvasNavigation } from "./components/CanvasNavigation";
++ import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetExportability";
++ import { recordPreviewAppRender } from "./engine/previewRuntimeDiagnostics";
++ import { DEFAULT_SVG_TRACE_CONFIG, traceConfigForPreviewQuality, type SvgTraceConfig } from "./engine/previewTraceConfig";
++ import { useProjectDocument, serializeProjectDocument } from "./hooks/useProjectDocument";
++ import { usePreviewSettings } from "./hooks/usePreviewSettings";
++ import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
++ import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
++ import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
++ import { useExportController } from "./hooks/useExportController";
++ import { useRendererRuntime } from "./hooks/useRendererRuntime";
++ import { useSceneLayout } from "./hooks/useSceneLayout";
++ import {
++   captureExportSnapshot,
++   documentKey,
++   rendererInputKey,
++   resolveExportReadiness,
++   resolveFontResolution,
++   typographyInputKey,
++   typographyOutputKey,
++ } from "./engine/exportAuthority";
++ import { APP_VERSION } from "./engine/constants";
++ import { activeTraceGestureId, interactionTraceEnabled, traceEvent, traceKey, traceStartSpan } from "./dev/interactionTrace";
++ 
++ const DevWebGpuFieldOverlay = import.meta.env.DEV
++   ? lazy(() => import("./components/dev/WebGpuFieldOverlay").then(({ WebGpuFieldOverlay }) => ({ default: WebGpuFieldOverlay })))
++   : null;
++ const DevPreviewPerformanceMeter = import.meta.env.DEV
++   ? lazy(() => import("./components/dev/PreviewPerformanceMeter").then(({ PreviewPerformanceMeter }) => ({ default: PreviewPerformanceMeter })))
++   : null;
++
++ function recordReactCommit(
++   id: string,
++   phase: "mount" | "update" | "nested-update",
++   actualDuration: number,
++   baseDuration: number,
++   startTime: number,
++   commitTime: number,
++ ) {
++   traceEvent({
++     stage: "react.commit",
++     phase: "instant",
++     gestureId: activeTraceGestureId(),
++     durationMs: actualDuration,
++     counts: { commit: 1 },
++     detail: { profilerId: id, commitPhase: phase, actualDuration, baseDuration, startTime, commitTime },
++   });
++ }
++ 
++ export default function App() {
++   recordPreviewAppRender();
++   const { project: state, setProject: setState, importUnknown } = useProjectDocument();
++   const [playing, setPlaying] = useState(true);
++   const { exporting, setExporting } = useExportController();
++   const [previewSettings, setPreviewSettings] = usePreviewSettings();
++   const [message, setMessage] = useState("");
++   const [loadedFont, setLoadedFont] = useState<LoadedFont | null>(null);
++   const [canvasSample, setCanvasSample] = useState<CanvasPreviewSample | null>(null);
++   const [canvasFailed, setCanvasFailed] = useState(false);
++   const diagnosticsState = useDiagnosticsState();
++   const [diagnostics, setDiagnostics] = useState<SvgDiagnostics | null>(null);
++   const [webGpuOverlayOpen, setWebGpuOverlayOpen] = useState(false);
++   const [fpsMeterOpen, setFpsMeterOpen] = useState(false);
++   const [svgTraceConfig, setSvgTraceConfig] = useState<SvgTraceConfig>(DEFAULT_SVG_TRACE_CONFIG);
++   const fileRef = useRef<HTMLInputElement>(null);
++   const fontFileRef = useRef<HTMLInputElement>(null);
++   const renderer = getRenderer(state.renderer);
++   const selectedPreviewBackend = selectPreviewBackend(state.renderer, requestedMarkCount(state), previewSettings.backend, !canvasFailed);
++   const canvasFlowActive = selectedPreviewBackend === "canvas-2d";
++   const previewAnimationRunning = shouldRunPreviewAnimation(renderer.usesTime, playing, previewSettings.reducedMotion, exporting);
++   const qualityTraceConfig = traceConfigForPreviewQuality(previewSettings.quality);
++   const activeSvgTraceConfig = import.meta.env.DEV && svgTraceConfig.mode !== "normal"
++     ? svgTraceConfig
++     : qualityTraceConfig;
++   const clockRunning = previewAnimationRunning && !canvasFlowActive && activeSvgTraceConfig.mode !== "local-clock";
++   const { context, diagnostics: clockDiagnostics, reset } = useAnimationClock(
++     clockRunning,
++     previewSettings.fpsCap,
++     previewSettings.pauseWhenHidden,
++   );
++   const fontResolution = useMemo(() => resolveFontResolution(state, loadedFont), [state, loadedFont]);
++   const activeTypographyInputKey = useMemo(
++     () => typographyInputKey(state, fontResolution.resourceKey ?? "font:missing"),
++     [state, fontResolution.resourceKey],
++   );
++   const textGeometryBuild = useTypographyGeometry(state, fontResolution.loadedFont);
++   const textGeometry = textGeometryBuild.value;
++   // The single production scene authority. Pure: no document writes back.
++   // Determines canonical typography placement (authored center + user offset)
++   // and the symmetric effective artboard rect (origin-aware). Replaces the
++   // previous `useAutoGrowArtboard` mutation hook entirely.
++   const sceneLayout = useSceneLayout(state, textGeometry);
++   const activeTypographyOutputKey = useMemo(
++     () => typographyOutputKey(activeTypographyInputKey, fontResolution, textGeometry),
++     [activeTypographyInputKey, fontResolution, textGeometry],
++   );
++   const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state, textGeometry]);
++   useEffect(() => {
++     if (!import.meta.env.DEV) return;
++     const multiple = resolveGlyphEmitterSources(state, textGeometry);
++     const singleGlyph = resolveEmitterGlyph(emitterGlyphs, state.emitter.glyphId);
++     const snapshot: DevWebGpuAppFieldSnapshot = {
++       project: {
++         ...state,
++         emitter: { ...state.emitter },
++         emitters: state.emitters.map((emitter) => ({ ...emitter })),
++       },
++       bounds: { x: sceneLayout.effectiveArtboard.x, y: sceneLayout.effectiveArtboard.y, width: sceneLayout.effectiveArtboard.width, height: sceneLayout.effectiveArtboard.height },
++       singleAnchor: singleGlyph
++         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
++             x: state.emitter.customX,
++             y: state.emitter.customY,
++           })
++         : null,
++       resolvedEmitterAnchors: multiple.sources.map((source) => ({
++         id: source.id,
++         x: source.anchor.x,
++         y: source.anchor.y,
++       })),
++     };
++     const devGlobal = globalThis as typeof globalThis & {
++       __SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__?: () => DevWebGpuAppFieldSnapshot;
++     };
++     const getter = () => snapshot;
++     devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__ = getter;
++     return () => {
++       if (devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__ === getter) {
++         delete devGlobal.__SUBSTRATE_GET_WEBGPU_DEV_SNAPSHOT__;
++       }
++     };
++   }, [state, textGeometry, emitterGlyphs, sceneLayout.effectiveArtboard]);
++   useEffect(() => {
++     if (!import.meta.env.DEV) return;
++     const onKeyDown = (event: KeyboardEvent) => {
++       // Ctrl/Cmd + Shift + G toggles the dev WebGPU field overlay.
++       if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "g" || event.key === "G")) {
++         event.preventDefault();
++         setWebGpuOverlayOpen((open) => !open);
++       }
++     };
++     window.addEventListener("keydown", onKeyDown);
++     return () => window.removeEventListener("keydown", onKeyDown);
++   }, [setState]);
++   const getWebGpuDevSnapshot = useCallback(() => {
++     const multiple = resolveGlyphEmitterSources(state, textGeometry);
++     const singleGlyph = resolveEmitterGlyph(emitterGlyphs, state.emitter.glyphId);
++     const snapshot: DevWebGpuAppFieldSnapshot = {
++       project: {
++         ...state,
++         emitter: { ...state.emitter },
++         emitters: state.emitters.map((emitter) => ({ ...emitter })),
++       },
++       bounds: { x: sceneLayout.effectiveArtboard.x, y: sceneLayout.effectiveArtboard.y, width: sceneLayout.effectiveArtboard.width, height: sceneLayout.effectiveArtboard.height },
++       singleAnchor: singleGlyph
++         ? getGlyphEmitterAnchor(singleGlyph, state.emitter.sourceMode, {
++             x: state.emitter.customX,
++             y: state.emitter.customY,
++           })
++         : null,
++       resolvedEmitterAnchors: multiple.sources.map((source) => ({
++         id: source.id,
++         x: source.anchor.x,
++         y: source.anchor.y,
++       })),
++     };
++ return snapshot;
++   }, [state, textGeometry, emitterGlyphs, sceneLayout.effectiveArtboard]);
++   const substrateBuild = useSubstratePipeline(state, textGeometry, activeTypographyOutputKey, sceneLayout.effectiveArtboard);
++   const emitterFieldKey = emitterGeometryKey(state, textGeometry);
++   useEffect(() => setCanvasFailed(false), [state.renderer, previewSettings.backend]);
++ 
++   const randomize = useCallback(() => {
++     setState((current) => ({ ...current, seed: Math.floor(Math.random() * 1_000_000), preset: "Custom" }));
++   }, [setState]);
++   const handleCanvasFailure = useCallback(() => setCanvasFailed(true), []);
++   const activeClockContext = canvasFlowActive && canvasSample ? canvasSample.context : context;
++   const staticRenderContext: RenderContext = useMemo(
++     () => createStaticRenderContext(state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard),
++     [state, textGeometry, substrateBuild.data, sceneLayout.effectiveArtboard]
++   );
++   const effectiveArtboardViewport = useMemo(
++     () => artboardViewport(sceneLayout.effectiveArtboard),
++     [sceneLayout.effectiveArtboard],
++   );
++   const renderContext: RenderContext = useMemo(() => ({
++     ...staticRenderContext,
++     ...activeClockContext,
++     textGeometry,
++     substrateData: substrateBuild.data,
++     viewport: effectiveArtboardViewport,
++   }), [activeClockContext, effectiveArtboardViewport, staticRenderContext, textGeometry, substrateBuild.data]);
++   const {
++     liveGeometry: geometry,
++     estimateContext,
++     estimateGeometry,
++     geometrySummary,
++   } = useRendererRuntime(state, renderContext, staticRenderContext);
++   useLayoutEffect(() => {
++     if (!interactionTraceEnabled) return;
++     traceEvent({
++       stage: "react.commit",
++       phase: "instant",
++       gestureId: activeTraceGestureId(),
++       counts: { commit: 1 },
++       detail: {
++         profilerId: "commit-observer",
++         commitPhase: "commit",
++         actualDuration: null,
++         baseDuration: null,
++         durationAvailable: false,
++       },
++     });
++   }, [geometry.id, previewSettings.backend, state, substrateBuild.outputKey]);
++   const textOverflowWarning = useMemo(
++     () => getTextArtboardOverflowWarning(state, textGeometry),
++     [state, textGeometry],
++   );
++   const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
++     ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
++     : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
++   [context.frame, context.timeMs, state.exportFrameMode]);
++   const activeRendererInputKey = useMemo(
++     () => activeTypographyOutputKey
++       ? rendererInputKey(state, activeTypographyOutputKey, substrateBuild.outputKey, capturedExportContext)
++       : "renderer-input:typography-pending",
++     [activeTypographyOutputKey, capturedExportContext, state, substrateBuild.outputKey],
++   );
++   const exportReadiness = useMemo(() => resolveExportReadiness({
++     font: fontResolution,
++     typographyInputKey: activeTypographyInputKey,
++     typographyOutputKey: activeTypographyOutputKey,
++     substrateInputKey: substrateBuild.inputKey,
++     substrateOutputKey: substrateBuild.outputKey,
++     substrateData: substrateBuild.data,
++     rendererInputKey: activeRendererInputKey,
++     // Renderer generation is synchronous and recreated from the same input in the
++     // snapshot. Stale substrate is rejected before this stage can become current.
++     rendererGeometryKey: activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
++       ? activeRendererInputKey
++       : null,
++     sceneSafetyLimitHit: sceneLayout.safetyLimitHit,
++     failureReason: substrateBuild.error,
++     renderer: state.renderer,
++   }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
++   const previousReadinessRef = useRef<string | null>(null);
++   useEffect(() => {
++     const marker = [
++       exportReadiness.status,
++       exportReadiness.technicalReason,
++       activeTypographyOutputKey,
++       substrateBuild.outputKey,
++       activeRendererInputKey,
++     ].join("|");
++     if (previousReadinessRef.current === marker) return;
++     previousReadinessRef.current = marker;
++     traceEvent({
++       stage: "export.readiness",
++       phase: "instant",
++       inputKey: activeRendererInputKey,
++       outputKey: exportReadiness.status === "ready" ? activeRendererInputKey : undefined,
++       detail: {
++         status: exportReadiness.status,
++         reason: exportReadiness.reason,
++         technicalReason: exportReadiness.technicalReason,
++       },
++     });
++     if (exportReadiness.status === "ready") {
++       traceEvent({
++         stage: "export.exact-visible",
++         phase: "instant",
++         outputKey: activeRendererInputKey,
++         frameKey: geometry.id,
++         detail: { status: "ready", exactVisible: true },
++       });
++       traceEvent({ stage: "export.ready", phase: "instant", outputKey: activeRendererInputKey, detail: { status: "ready" } });
++     }
++   }, [activeRendererInputKey, activeTypographyOutputKey, exportReadiness.reason, exportReadiness.status, exportReadiness.technicalReason, geometry.id, substrateBuild.outputKey]);
++ const displayedTextOverflowWarning = textOverflowWarning
++     && sceneLayout.safetyLimitHit
++       ? SCENE_SAFETY_LIMIT_WARNING
++       : null;
++   const exportWarnings = useMemo(() => [
++     ...getExportBudgetWarnings({
++       ...geometrySummary,
++       substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
++     }),
++     ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
++     ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
++   ], [displayedTextOverflowWarning, geometrySummary, textGeometry]);
++   const performanceWarnings = useMemo(
++     () => substrateBuild.data
++       ? getSubstratePerformanceWarnings(substrateBuild.data.diagnostics.buildTimeMs, state.substrateQuality)
++       : [],
++     [state.substrateQuality, substrateBuild.data],
++   );
++   // Serialization + DOMParser only run when the runtime boundary's cached
++   // estimate geometry identity changes.
++   const estimateExportKey = [
++     state.exportMode,
++     state.precision,
++     state.overlayMode,
++     state.textOverlayOpacity,
++     state.edgeErosionAmount,
++     state.edgeErosionWidth,
++     state.interiorProtection,
++     state.diffuserComposition,
++     state.outlineWarpAmount,
++     state.outlineWarpScale,
++     state.outlineWarpSmoothing,
++     state.outlineWarpEdgeBias,
++     state.outlineWarpMaxDisplacement,
++     state.preserveCounters,
++   ].join("|");
++   useEffect(() => {
++     if (!state.debug.costEstimate) {
++       setDiagnostics(null);
++       return;
++     }
++     const timer = setTimeout(() => {
++       const timed = createTimedSvg(state, estimateContext, textGeometry, estimateGeometry, undefined, sceneLayout.effectiveArtboard);
++       setDiagnostics(getSvgDiagnostics(timed.svg, timed.serializationTimeMs));
++     }, 200);
++     return () => clearTimeout(timer);
++     // eslint-disable-next-line react-hooks/exhaustive-deps
++   }, [state.debug.costEstimate, estimateGeometry, estimateContext, textGeometry, estimateExportKey]);
++   const previewDiagnostics: PreviewDiagnostics = useMemo(() => ({
++     estimatedFps: canvasFlowActive && canvasSample ? canvasSample.estimatedFps : clockDiagnostics.estimatedFps,
++     frameTimeMs: canvasFlowActive && canvasSample ? canvasSample.frameTimeMs : clockDiagnostics.frameTimeMs,
++     timingValidity: canvasFlowActive && canvasSample ? canvasSample.timingValidity : clockDiagnostics.timingValidity,
++     clockState: exporting
++       ? "exporting"
++       : previewSettings.reducedMotion
++         ? "reduced-motion"
++         : clockDiagnostics.hidden && previewSettings.pauseWhenHidden
++           ? "hidden"
++           : !renderer.usesTime
++             ? "static"
++             : playing
++               ? "running"
++               : "paused",
++   }), [canvasFlowActive, canvasSample, clockDiagnostics, exporting, playing, previewSettings.pauseWhenHidden, previewSettings.reducedMotion, renderer.usesTime]);
++   const exportSvg = () => {
++     if (state.exportMode === "artwork" && presetExportKinds[state.preset] === "preview-only") {
++       traceEvent({ stage: "export.request", phase: "instant", detail: { status: "preview-only" } });
++       setMessage(PREVIEW_ONLY_EXPORT_WARNING);
++       return;
++     }
++     if (exportReadiness.status !== "ready") {
++       traceEvent({ stage: "export.request", phase: "instant", detail: { status: exportReadiness.status, reason: exportReadiness.reason } });
++       setMessage(exportReadiness.reason);
++       return;
++     }
++     // Capture every authoritative input before yielding to presentation work.
++     // The later serializer receives only this immutable, CPU-generated snapshot.
++     let snapshot;
++     const snapshotTrace = traceStartSpan("export.snapshot.capture", {
++       inputKey: activeRendererInputKey,
++       detail: { documentKey: interactionTraceEnabled ? traceKey(state) : null, renderer: state.renderer },
++     });
++     try {
++ snapshot = captureExportSnapshot({
++         state,
++         documentKey: documentKey(state),
++         font: fontResolution,
++         typographyInputKey: activeTypographyInputKey,
++         typographyOutputKey: activeTypographyOutputKey!,
++         typographyGeometry: textGeometry,
++         substrateInputKey: substrateBuild.inputKey,
++         substrateOutputKey: substrateBuild.outputKey,
++         substrateData: substrateBuild.data,
++         context: capturedExportContext,
++         appVersion: APP_VERSION,
++         authoredArtboard: sceneLayout.authoredArtboard,
++         effectiveArtboard: sceneLayout.effectiveArtboard,
++         sceneLayoutKey: sceneLayout.key,
++         typographyPlacementKey: sceneLayout.typography.key,
++       });
++       snapshotTrace({
++         outputKey: snapshot.renderer.geometryKey,
++         frameKey: snapshot.renderer.geometry.id,
++         counts: { geometryNodes: snapshot.renderer.geometry.geometries.length },
++         detail: { captured: true },
++       });
++     } catch (error) {
++       snapshotTrace({ detail: { captured: false, error: error instanceof Error ? error.message : String(error) } });
++       setMessage(error instanceof Error ? error.message : "Export snapshot could not be captured.");
++       return;
++     }
++     traceEvent({ stage: "export.request", phase: "instant", inputKey: activeRendererInputKey, detail: { status: "ready" } });
++     setExporting(true);
++     requestAnimationFrame(() => {
++       const serializationTrace = traceStartSpan("export.serialize", { inputKey: snapshot.renderer.inputKey });
++       try {
++     const filename = (state.text.trim() || "substrate").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
++     const timed = createTimedSvgFromSnapshot(snapshot);
++       const svg = timed.svg;
++     const validation = reportSvgValidation(
++       svg,
++       Boolean(textGeometry?.hasOutlines) && state.exportMode === "artwork",
++       state.exportMode === "artwork",
++     );
++       if (!validation.valid) {
++         serializationTrace({ detail: { valid: false, error: validation.errors.join(" ") } });
++         setMessage(validation.errors.join(" "));
++         return;
++       }
++     download(svg, `${filename}.svg`, "image/svg+xml");
++     const exactDiagnostics = getSvgDiagnostics(svg, timed.serializationTimeMs);
++       const exactWarnings = [
++       ...getExportBudgetWarnings({
++         ...geometrySummary,
++         substrateType: textGeometry?.hasOutlines ? "glyph-paths" : "native-text",
++         exactByteSize: exactDiagnostics.byteSize,
++       }),
++       ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
++       ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
++       ];
++       serializationTrace({ bytes: { svg: exactDiagnostics.byteSize }, detail: { valid: true, exactVisible: true } });
++     setMessage(exactWarnings.length > 0
++       ? `Exported ${formatBytes(exactDiagnostics.byteSize)} in ${timed.serializationTimeMs.toFixed(1)} ms. ${exactWarnings.join(" ")}`
++       : `SVG exported · ${formatBytes(exactDiagnostics.byteSize)} · ${timed.serializationTimeMs.toFixed(1)} ms.`);
++       } catch (error) {
++         serializationTrace({ detail: { valid: false, error: error instanceof Error ? error.message : String(error) } });
++         setMessage(error instanceof Error ? e
+ Test Files  4 failed (4)
+      Tests  13 failed | 20 passed (33)
+   Start at  04:05:14
+   Duration  9.29s (transform 1.99s, setup 0ms, import 4.23s, tests 3.10s, environment 16.52s)
+
+rror.message : "SVG export failed.");
++       } finally {
++         setExporting(false);
++       }
++     });
++   };
++   const exportJson = () => download(serializeProjectDocument(state), "substrate-project.json", "application/json");
++   const importJson = async (event: ChangeEvent<HTMLInputElement>) => {
++     const file = event.target.files?.[0];
++     if (!file) return;
++     try {
++       const { project, warnings } = importUnknown(JSON.parse(await file.text()));
++       setLoadedFont(null);
++       reset();
++       const fontWarning = project.font ? `Re-upload ${project.font.fileName} to restore glyph outlines.` : "";
++       setMessage([...warnings, fontWarning].filter(Boolean).join(" "));
++     } catch (error) {
++       setMessage(error instanceof Error ? error.message : "That file is not a valid SUBSTRATE project.");
++     }
++     event.target.value = "";
++   };
++   const uploadFont = async (event: ChangeEvent<HTMLInputElement>) => {
++     const file = event.target.files?.[0];
++     if (!file) return;
++     setMessage("Loading font engineâ€¦");
++     try {
++       const loaded = await loadFontFile(file);
++       if (!validateLoadedFont(loaded)) throw new Error("The parsed font did not pass validation.");
++       const geometry = layoutGlyphs({ ...state, font: loaded.metadata }, loaded);
++       const validation = state.text ? validateTextGeometry(geometry) : { valid: true };
++       if (!validation.valid) throw new Error("The font loaded, but valid glyph outlines could not be produced for the current text.");
++       setLoadedFont(loaded);
++       setState({ ...state, font: loaded.metadata });
++       reset();
++       setMessage(`${loaded.metadata.fullName} loaded · ${loaded.font.glyphs.length} glyphs.`);
++     } catch (error) {
++       setMessage(error instanceof Error ? error.message : "The font could not be loaded.");
++     }
++     event.target.value = "";
++   };
++   const clearFont = () => {
++     setLoadedFont(null);
++     setState({ ...state, font: null });
++     reset();
++     setMessage("Custom font cleared. Native SVG text fallback is active.");
++   };
++ 
++   return (
++     <main>
++       <header className="header">
++         <div className="brand"><span className="brand-mark" aria-hidden="true" /><strong>SUBSTRATE</strong><small>TYPE / FIELD STUDY 001</small></div>
++         <div className="header-actions">
++           <button className="quiet" onClick={exportJson}>Save project</button>
++           <button className="export" disabled={exporting || exportReadiness.status !== "ready"} onClick={exportSvg} title={exportReadiness.reason}>{exporting ? "Exporting…" : exportReadiness.status === "ready" ? "Export SVG" : "Preparing export…"} <span>↗</span></button>
++         </div>
++       </header>
++ 
++       <div className="workspace">
++         <Profiler id="Size/control pane" onRender={recordReactCommit}>
++           <Controls
++             state={state}
++             setState={setState}
++             fileRef={fileRef}
++             onImport={importJson}
++             fontFileRef={fontFileRef}
++             onFontUpload={uploadFont}
++             onClearFont={clearFont}
++             fontLoaded={Boolean(loadedFont)}
++             parsedFontPathsAvailable={Boolean(textGeometry?.hasOutlines)}
++             previewSettings={previewSettings}
++             onPreviewSettingsChange={setPreviewSettings}
++             emitterGlyphs={emitterGlyphs}
++             textGeometry={textGeometry}
++             diagnosticsMode={diagnosticsState.mode}
++             onDiagnosticsModeChange={diagnosticsState.setMode}
++             webGpuOverlayOpen={webGpuOverlayOpen}
++             fpsMeterOpen={fpsMeterOpen}
++             onToggleWebGpuOverlay={import.meta.env.DEV ? () => setWebGpuOverlayOpen((open) => !open) : undefined}
++             onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
++           />
++         </Profiler>
++         <section className="viewport-shell">
++           <Profiler id="artwork/Viewport" onRender={recordReactCommit}>
++             <CanvasNavigation>
++ <Viewport
++               state={state}
++               context={renderContext}
++               geometry={geometry}
++               textGeometry={textGeometry}
++               sceneLayout={sceneLayout}
++               exportDiagnostics={diagnostics}
++               exportWarnings={exportWarnings}
++               performanceWarnings={performanceWarnings}
++               glyphLayoutTimeMs={textGeometryBuild.durationMs}
++               substrateError={substrateBuild.error}
++               substrateBackendStatus={substrateBuild.status}
++               previewDiagnostics={previewDiagnostics}
++               previewBackend={selectedPreviewBackend}
++               previewSettings={previewSettings}
++               previewRunning={previewAnimationRunning}
++               canvasSample={canvasSample}
++               onCanvasSample={setCanvasSample}
++               onCanvasFailure={handleCanvasFailure}
++               diagnosticsMode={diagnosticsState.mode}
++               svgTraceConfig={activeSvgTraceConfig}
++             />
++             </CanvasNavigation>
++           </Profiler>
++           <div className="transport">
++             <button className="play" aria-label={playing ? "Pause animation" : "Play animation"} onClick={() => setPlaying(!playing)}>{playing ? "Ⅱ" : "▶"}</button>
++             <button onClick={reset}>Reset</button>
++             <button onClick={randomize}>Randomize seed</button>
++             <span className="seed">SEED <strong>{String(state.seed).padStart(6, "0")}</strong></span>
++             <span className="status"><i /> {previewDiagnostics.clockState.replace("-", " ").toUpperCase()}</span>
++           </div>
++           {message && <p className="error" role="status">{message}</p>}
++         </section>
++       </div>
++       {import.meta.env.DEV && (
++         <>
++           {webGpuOverlayOpen && DevWebGpuFieldOverlay && (
++             <Suspense fallback={null}><DevWebGpuFieldOverlay
++               getSnapshot={getWebGpuDevSnapshot}
++               rendererComparison={{
++                 activeFieldEmitterCount: geometry.diagnostics?.rendererActiveFieldEmitterCount,
++                 consumedFieldMode: geometry.diagnostics?.consumedFieldMode,
++                 cacheEmitterKey: emitterFieldKey,
++                 renderedMarkCountPerEmitter: geometry.diagnostics?.renderedMarkCountPerEmitter,
++                 normalizationMode: geometry.diagnostics?.fieldNormalizationMode,
++                 emitterDomains: geometry.diagnostics?.emitterDomainDiagnostics,
++                 artboardBoundsClipped: geometry.diagnostics?.artboardBoundsClipped,
++                 maxNodesClipped: geometry.diagnostics?.maxNodesClipped,
++                 activeContributingEmitterCount: geometry.diagnostics?.activeContributingEmitterCount,
++                 zeroStrengthEmitterCount: geometry.diagnostics?.zeroStrengthEmitterCount,
++               }}
++               onClose={() => setWebGpuOverlayOpen(false)}
++             /></Suspense>
++           )}
++           {fpsMeterOpen && DevPreviewPerformanceMeter && (
++             <Suspense fallback={null}><DevPreviewPerformanceMeter
++               state={state}
++               context={renderContext}
++               fpsCap={previewSettings.fpsCap}
++               onFpsCapChange={(fpsCap) => setPreviewSettings((current) => ({ ...current, fpsCap }))}
++               traceConfig={activeSvgTraceConfig}
++               onTraceConfigChange={setSvgTraceConfig}
++               onClose={() => setFpsMeterOpen(false)}
++             /></Suspense>
++           )}
++         </>
++       )}
++     </main>
++   );
++ }
++ 
++ function formatBytes(bytes: number) {
++   return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
++ }
++
+
+ ❯ tests/sceneNoAutoWrites.test.ts:46:21
+     44|     const app = readFileSync(resolve("src/App.tsx"), "utf8");
+     45|     const hooks = readFileSync(resolve("src/hooks/useSceneLayout.ts"),…
+     46|     expect(app).not.toContain("useAutoGrowArtboard");
+       |                     ^
+     47|     expect(hooks).not.toContain("patch(");
+     48|     expect(hooks).toContain("never writes to `ProjectState`");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > flow uses the effective rect origin in context.viewport
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > ripple uses the effective rect origin in context.viewport
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > dots uses the effective rect origin in context.viewport
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/sceneNonZeroOriginRenderers.test.ts:64:85
+     62|       const geometry = getRenderer(rendererId).generateGeometry(state,…
+     63|       const points = geometry.geometries.map(coordinate).filter((point…
+     64|       expect(points.some((point) => point.x < 0 || point.x > state.art…
+       |                                                                                     ^
+     65|       expect(points.length).toBeGreaterThan(0);
+     66|       expect(points.some((point) => worldToLocal(scene.effectiveArtboa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > wave-contours samples within the shifted effective rect
+ FAIL  tests/sceneNonZeroOriginRenderers.test.ts > non-zero-origin renderer domains > glyph-diffuser samples within the shifted effective rect
+AssertionError: expected 0 to be greater than 0
+ ❯ tests/sceneNonZeroOriginRenderers.test.ts:99:29
+     97|       const geometry = getRenderer(rendererId).generateGeometry(state,…
+     98|       const points = geometry.geometries.map(coordinate).filter((point…
+     99|       expect(points.length).toBeGreaterThan(0);
+       |                             ^
+    100|       for (const point of points) {
+    101|         const local = worldToLocal(scene.effectiveArtboard, point);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/13]⎯
+

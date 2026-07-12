@@ -7,6 +7,7 @@ import type {
   WorkerSelfTestResult,
 } from "./types";
 import type { SubstrateWorkerRequest, SubstrateWorkerResponse } from "./workerMessages";
+import { traceKey, traceStartSpan } from "../../../dev/interactionTrace";
 
 export const DEFAULT_WORKER_TIMEOUT_MS = 8_000;
 
@@ -276,6 +277,11 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
   }
 
   async compute(input: SubstrateBuildInput): Promise<SubstrateBackendResult> {
+    const workerTrace = traceStartSpan("substrate.worker", {
+      inputKey: traceKey(input),
+      detail: { backend: "cpu-worker" },
+    });
+    try {
     if (!this.worker || !this.available) {
       throw new WorkerBackendError(
         this.capability?.failureCode ?? "worker-unavailable",
@@ -293,7 +299,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
     }
     const requestId = ++this.nextRequestId;
     const started = now();
-    return new Promise((resolve, reject) => {
+    const result = await new Promise<SubstrateBackendResult>((resolve, reject) => {
       this.registerPending(requestId, "build", (message) => {
         if (message.type === "error") {
           reject(new WorkerBackendError("worker-build-failed", `${message.code}: ${message.error}`, this.creationDiagnostics));
@@ -318,6 +324,20 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
       }, reject);
       this.worker!.postMessage({ type: "build", requestId, input });
     });
+    workerTrace({
+      outputKey: traceKey(result),
+      counts: { width: result.data.width, height: result.data.height, cells: result.data.width * result.data.height },
+      detail: {
+        backend: result.backend,
+        workerComputeMs: result.timing.workerComputeMs,
+        roundTripMs: result.timing.roundTripMs,
+      },
+    });
+    return result;
+    } catch (error) {
+      workerTrace({ detail: { error: error instanceof Error ? error.message : String(error) } });
+      throw error;
+    }
   }
 
   dispose() {

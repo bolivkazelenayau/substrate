@@ -5,6 +5,7 @@ import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { resolveVisibleGlyphSamplingBounds, sampleBoundsFairly } from "../rendererSampling";
 import { contextArtboard } from "../artboard";
+import { artboardBottom, artboardLeft, artboardRight, artboardTop, worldToLocal, type ArtboardRect } from "../sceneLayout";
 import { resolveSdfScaleContext } from "../sdfScale";
 import { planDenseOccupancy } from "../safetyBudget";
 
@@ -15,14 +16,15 @@ function deterministicNoise(seed: number, x: number, y: number) {
   return value - Math.floor(value);
 }
 
-function occupancyIndex(x: number, y: number, width: number, height: number, cellSize: number) {
-  const cellX = Math.max(0, Math.min(width - 1, Math.floor(x / cellSize)));
-  const cellY = Math.max(0, Math.min(height - 1, Math.floor(y / cellSize)));
+function occupancyIndex(x: number, y: number, width: number, height: number, cellSize: number, rect: ArtboardRect) {
+  const local = worldToLocal(rect, { x, y });
+  const cellX = Math.max(0, Math.min(width - 1, Math.floor(local.x / cellSize)));
+  const cellY = Math.max(0, Math.min(height - 1, Math.floor(local.y / cellSize)));
   return { cellX, cellY, index: cellY * width + cellX };
 }
 
-function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: number, height: number, cellSize: number) {
-  const cell = occupancyIndex(x, y, width, height, cellSize);
+function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: number, height: number, cellSize: number, rect: ArtboardRect) {
+  const cell = occupancyIndex(x, y, width, height, cellSize, rect);
   for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
     for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
       const nx = cell.cellX + offsetX;
@@ -33,9 +35,9 @@ function isOccupiedNearby(occupancy: Uint8Array, x: number, y: number, width: nu
   return false;
 }
 
-function markOccupied(occupancy: Uint8Array, points: Point[], width: number, height: number, cellSize: number) {
+function markOccupied(occupancy: Uint8Array, points: Point[], width: number, height: number, cellSize: number, rect: ArtboardRect) {
   points.forEach((point) => {
-    occupancy[occupancyIndex(point.x, point.y, width, height, cellSize).index] = 1;
+    occupancy[occupancyIndex(point.x, point.y, width, height, cellSize, rect).index] = 1;
   });
 }
 
@@ -96,7 +98,7 @@ function traceHalf(
       x: current.x + Math.cos(angle) * stepSize,
       y: current.y + Math.sin(angle) * stepSize,
     };
-    if (next.x < 0 || next.x > artboard.width || next.y < 0 || next.y > artboard.height || sampleMask(substrate, next.x, next.y) < 0.5) {
+    if (next.x < artboardLeft(artboard) || next.x > artboardRight(artboard) || next.y < artboardTop(artboard) || next.y > artboardBottom(artboard) || sampleMask(substrate, next.x, next.y) < 0.5) {
       counters.stoppedOutsideMask += 1;
       break;
     }
@@ -105,7 +107,7 @@ function traceHalf(
       counters.stoppedInvalidGradient += 1;
       break;
     }
-    if (isOccupiedNearby(occupancy, next.x, next.y, occupancyWidth, occupancyHeight, occupancyCellSize)) {
+    if (isOccupiedNearby(occupancy, next.x, next.y, occupancyWidth, occupancyHeight, occupancyCellSize, artboard)) {
       counters.occupancyRejections += 1;
       break;
     }
@@ -170,10 +172,10 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
     const edgeBand = Math.max(2, state.fontSize * (0.46 - influence * 0.37));
     const bounds = substrate.bounds;
     const samplingPadding = sdfScale.world(5, 1);
-    const minX = Math.max(0, (bounds?.x ?? 0) - samplingPadding);
-    const maxX = Math.min(artboard.width, (bounds ? bounds.x + bounds.width : artboard.width) + samplingPadding);
-    const minY = Math.max(0, (bounds?.y ?? 0) - samplingPadding);
-    const maxY = Math.min(artboard.height, (bounds ? bounds.y + bounds.height : artboard.height) + samplingPadding);
+    const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - samplingPadding);
+    const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + samplingPadding);
+    const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - samplingPadding);
+    const maxY = Math.min(artboardBottom(artboard), (bounds ? bounds.y + bounds.height : artboardBottom(artboard)) + samplingPadding);
     const samplingBounds = resolveVisibleGlyphSamplingBounds(state, context, {
       x: minX,
       y: minY,
@@ -200,7 +202,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
         rejectedSeeds += 1;
         continue;
       }
-      if (isOccupiedNearby(occupancy, seedPoint.x, seedPoint.y, occupancyWidth, occupancyHeight, occupancyCellSize)) {
+      if (isOccupiedNearby(occupancy, seedPoint.x, seedPoint.y, occupancyWidth, occupancyHeight, occupancyCellSize, artboard)) {
         rejectedSeeds += 1;
         counters.occupancyRejections += 1;
         continue;
@@ -236,7 +238,7 @@ export const sdfStreamlinesRenderer: VectorRenderer = {
         continue;
       }
 
-      markOccupied(occupancy, points, occupancyWidth, occupancyHeight, occupancyCellSize);
+      markOccupied(occupancy, points, occupancyWidth, occupancyHeight, occupancyCellSize, artboard);
       sampledDistanceTotal += streamlineDistance.value + distance;
       totalPoints += points.length;
       polylines.push({

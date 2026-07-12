@@ -13,10 +13,10 @@ const reviewedProductionModules = [
   "src/components/Viewport.tsx",
   "src/components/CanvasNavigation.tsx",
   "src/components/panels/ArtworkTypographyPanels.tsx",
-  "src/engine/artboardExpansion.ts",
+  "src/engine/sceneLayout.ts",
   "src/engine/exportSvg.ts",
   "src/engine/renderers/index.ts",
-  "src/hooks/useAutoGrowArtboard.ts",
+  "src/hooks/useSceneLayout.ts",
 ];
 
 // These files were the removed, test-backed architecture island. Keeping this
@@ -33,6 +33,8 @@ const removedArchitectureModules = [
   "src/engine/typographyPlacement.ts",
   "src/engine/projectedScenePresentation.ts",
   "src/engine/glyphDomain.ts",
+  "src/engine/artboardExpansion.ts",
+  "src/hooks/useAutoGrowArtboard.ts",
 ];
 
 const sourceExtensions = [".ts", ".tsx", ".js", ".jsx"];

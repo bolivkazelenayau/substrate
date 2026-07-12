@@ -1,0 +1,88 @@
+---
+pid: 21196
+cwd: "C:\Users\Breeze\Documents\Dev\type_react_kit"
+command: "Set-Location \"C:\\Users\\Breeze\\Documents\\Dev\\type_react_kit\"; npx vitest run --maxWorkers=1 tests/scene*.test.ts tests/controls.test.ts tests/glyphLayout.test.ts tests/exportAuthority.test.ts tests/exportSvg.test.ts tests/exportGolden.test.ts tests/textBounds.test.ts tests/graphExecution.test.ts tests/graphRuntime.test.ts"
+started_at: 2026-07-12T01:27:05.184Z
+running_for_ms: 3440000  
+---
+
+ RUN  v4.1.9 C:/Users/Breeze/Documents/Dev/type_react_kit
+
+ ✓ tests/graphExecution.test.ts (8 tests) 2711ms
+     ✓ edge-current-native matches registry geometry and golden export  998ms
+     ✓ dot-field-native matches registry geometry and golden export  646ms
+     ✓ sdf-contours-native matches registry geometry and golden export  374ms
+
+
+#
+# Fatal process out of memory: Zone
+#
+----- Native stack trace -----
+
+
+
+#
+# Fatal process out of memory: Zone
+#
+----- Native stack trace -----
+
+ 1: 00007FF75FEC1427 
+ 2: 00007FF75FD95D3F 
+ 3: 00007FF760FFBC16 
+ 4: 00007FF760982D41 
+ 5: 00007FF760465A4B 
+ 6: 00007FF7611DD577 
+ 7: 00007FF76122B341 
+ 8: 00007FF76122C4AA 
+ 9: 00007FF761228E12 
+10: 00007FF761222B01 
+11: 00007FF76114B227 
+12: 00007FF76111DA01 
+13: 00007FF76114AE18 
+14: 00007FF76114B5CE 
+15: 00007FF76114B2B2 
+16: 00007FF76111E7FF 
+17: 00007FF761115475 
+18: 00007FF761116045 
+19: 00007FF760900074 
+20: 00007FF7608C6C52 
+21: 00007FF760B87B96 
+22: 00007FF75FD98AC0 
+23: 00007FF75FF22263 
+24: 00007FF761710BCB 
+25: 00007FFDA725E957 
+26: 00007FFDA7DC7C1C RtlUserThreadStart+44
+ ✓ tests/controls.test.ts (14 tests) 2038ms
+     ✓ keeps advanced, preview, export, and diagnostic controls available  312ms
+ ✓ tests/exportSvg.test.ts (13 tests) 747ms
+ ✓ tests/glyphLayout.test.ts (13 tests) 262ms
+ ✓ tests/exportAuthority.test.ts (7 tests) 44ms
+ ✓ tests/graphRuntime.test.ts (6 tests) 16ms
+ ✓ tests/textBounds.test.ts (3 tests) 13ms
+
+ Test Files  7 passed (8)
+      Tests  65 passed (70)
+     Errors  1 error
+   Start at  04:27:10
+   Duration  54.28s (transform 2.48s, setup 0ms, import 6.78s, tests 5.83s, environment 32.14s)
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯⎯⎯ Unhandled Error ⎯⎯⎯⎯⎯⎯⎯
+Error: [vitest-pool]: Worker forks emitted error.
+ ❯ EventEmitter.onTaskError node_modules/vitest/dist/chunks/cli-api.24X8XwN1.js:3459:21
+ ❯ EventEmitter.emit node:events:518:28
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.24X8XwN1.js:3025:22
+ ❯ ChildProcess.emit node:events:518:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:293:12
+
+Caused by: Error: Worker exited unexpectedly
+ ❯ ChildProcess.emitUnexpectedExit node_modules/vitest/dist/chunks/cli-api.24X8XwN1.js:3023:33
+ ❯ ChildProcess.emit node:events:518:28
+ ❯ Process.ChildProcess._handle.onexit node:internal/child_process:293:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+

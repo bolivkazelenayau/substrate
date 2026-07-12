@@ -169,6 +169,8 @@ export interface RenderContext {
   sampleGlyphFieldGradient?: (x: number, y: number) => GlyphFieldGradient;
   glyphFieldDiagnostics?: GlyphFieldDiagnostics | null;
   viewport?: {
+    x: number;
+    y: number;
     width: number;
     height: number;
     centerX: number;

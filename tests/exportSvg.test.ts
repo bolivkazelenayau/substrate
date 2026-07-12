@@ -5,6 +5,7 @@ import { createSvg } from "../src/engine/exportSvg";
 import { parseFontBuffer, type LoadedFont } from "../src/engine/fontLoader";
 import { layoutGlyphs } from "../src/engine/glyphLayout";
 import { baseState } from "../src/engine/presets";
+import { canonicalBaselineAtAuthoredCenter } from "../src/engine/sceneLayout";
 import { getSvgDiagnostics, validateSvgReload } from "../src/engine/svgValidation";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
@@ -18,6 +19,10 @@ beforeAll(async () => {
 });
 
 const lightState = { ...baseState, text: "TYPE", density: 1, maxNodes: 20 };
+
+function canonicalBaselineY(state: typeof lightState) {
+  return canonicalBaselineAtAuthoredCenter(state.artboard.height / 2, state.fontSize);
+}
 
 describe("SVG export", () => {
   it("uses a path-based mask when glyph geometry is available", () => {
@@ -49,7 +54,7 @@ describe("SVG export", () => {
     expect(validation.document?.querySelectorAll("#generated-artwork text")).toHaveLength(1);
     expect(editableText?.querySelector("tspan")).toBeNull();
     expect(editableText?.getAttribute("x")).toBe("600");
-    expect(editableText?.getAttribute("y")).toBe("405");
+    expect(editableText?.getAttribute("y")).toBe(String(canonicalBaselineY(state)));
     expect(editableText?.getAttribute("text-anchor")).toBe("middle");
     expect(editableText?.getAttribute("letter-spacing")).toBe("-3");
     expect(validation.document?.querySelector("mask")).toBeNull();
@@ -199,7 +204,7 @@ describe("SVG export", () => {
     const text = document.querySelector("#generated-artwork text");
     expect(document.querySelectorAll("#generated-artwork text")).toHaveLength(1);
     expect(text?.querySelector("tspan")).toBeNull();
-    expect(text?.getAttribute("y")).toBe("430");
+    expect(text?.getAttribute("y")).toBe(String(canonicalBaselineY(state) + state.textOffsetY));
     expect(text?.getAttribute("font-kerning")).toBe("none");
     expect(text?.hasAttribute("data-kerning-strength")).toBe(false);
     expect(text?.hasAttribute("data-optical-spacing")).toBe(false);
