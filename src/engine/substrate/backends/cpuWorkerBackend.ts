@@ -7,7 +7,7 @@ import type {
   WorkerSelfTestResult,
 } from "./types";
 import type { SubstrateWorkerRequest, SubstrateWorkerResponse } from "./workerMessages";
-import { traceKey, traceStartSpan } from "../../../dev/interactionTrace";
+import { interactionTraceEnabled, traceKey, traceStartSpan } from "../../../dev/interactionTrace";
 
 export const DEFAULT_WORKER_TIMEOUT_MS = 8_000;
 
@@ -278,7 +278,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
 
   async compute(input: SubstrateBuildInput): Promise<SubstrateBackendResult> {
     const workerTrace = traceStartSpan("substrate.worker", {
-      inputKey: traceKey(input),
+      inputKey: interactionTraceEnabled ? traceKey(input) : undefined,
       detail: { backend: "cpu-worker" },
     });
     try {
@@ -325,7 +325,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
       this.worker!.postMessage({ type: "build", requestId, input });
     });
     workerTrace({
-      outputKey: traceKey(result),
+      outputKey: interactionTraceEnabled ? traceKey(result) : undefined,
       counts: { width: result.data.width, height: result.data.height, cells: result.data.width * result.data.height },
       detail: {
         backend: result.backend,

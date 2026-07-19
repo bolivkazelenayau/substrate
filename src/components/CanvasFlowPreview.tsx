@@ -3,6 +3,7 @@ import { consumeFrameBudget, updateTimingAverage } from "../engine/animationTimi
 import { batchFlowLinesForCanvas, createFlowPreviewFrame } from "../engine/flowPreviewFrame";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import { getTextLayout } from "../engine/textLayout";
+import { rendererGeometryStateKey } from "../engine/rendererRuntime";
 import type { PreviewFpsCap, ProjectState, RenderContext } from "../types";
 import { planCanvasBackingStore } from "../engine/safetyBudget";
 import { sizeSceneTransformToCanvas, type SizeSceneTransform } from "../engine/sizeSceneTransform";
@@ -50,6 +51,7 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
     onFailure,
   } = props;
   const stableSceneTransform = sceneTransform;
+  const geometryKey = rendererGeometryStateKey(state);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stableArtboardRect = useMemo(
     () => ({
@@ -242,7 +244,11 @@ export const CanvasFlowPreview = memo(function CanvasFlowPreview(props: Props) {
       cancelAnimationFrame(animationFrame);
       traceEvent({ stage: "canvas.lifecycle", phase: "end", frameKey, detail: { reason: "effect-cleanup" } });
     };
-  }, [fpsCap, frameKey, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, stableSceneTransform, state, textGeometry]);
+    // Semantic scene/geometry identity plus the appearance fields that affect
+    // canvas rendering. `state` as a whole is intentionally omitted because
+    // debug/presentation-only changes must not rebuild the canvas scene.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fpsCap, frameKey, onFailure, onSample, pauseWhenHidden, running, stableArtboardRect, stableSceneTransform, geometryKey, state.primaryColor, state.backgroundColor, state.transparentBackground, textGeometry]);
 
   return <canvas ref={canvasRef} className="flow-canvas" data-testid="artwork-canvas" aria-hidden="true" />;
 });

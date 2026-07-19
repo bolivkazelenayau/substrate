@@ -82,7 +82,6 @@ describe("useRendererRuntime ownership", () => {
     expect(second.liveGeometry).not.toBe(first.liveGeometry);
     expect(second.estimateGeometry).toBe(first.estimateGeometry);
     expect(second.exportGeometry).toBe(first.exportGeometry);
-    expect(second.exportContext).toBe(staticContext);
   });
 
   it("appearance-only changes retain static renderer geometry", () => {

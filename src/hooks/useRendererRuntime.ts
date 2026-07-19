@@ -8,10 +8,7 @@ import {
   rendererGeometryStateKey,
   summarizeGeometry,
 } from "../engine/rendererRuntime";
-import {
-  selectEstimateContext,
-  selectExportContext,
-} from "../engine/renderContextLifecycle";
+import { selectEstimateContext } from "../engine/renderContextLifecycle";
 import { recordPreviewGeometryBuild } from "../engine/previewRuntimeDiagnostics";
 import type { ProjectState, RenderContext } from "../types";
 import { traceStartSpan } from "../dev/interactionTrace";
@@ -44,32 +41,22 @@ export function useRendererRuntime(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [geometryKey, liveRevisionKey, project],
   );
-  const exportContext = selectExportContext(project, liveContext, staticContext);
-  const staticExportGeometry = useMemo(
+  // Static (time-zero / estimate) geometry is shared: both consumers read the
+  // same authoritative static context, so a single memo removes one of the
+  // three flow-geometry regeneration sites noted in the architecture audit.
+  const staticGeometry = useMemo(
     () => {
-      if (project.exportFrameMode !== "time-zero") return null;
-      const exportTrace = traceStartSpan("renderer.runtime.export", { inputKey: geometryKey });
+      const staticTrace = traceStartSpan("renderer.runtime.static", { inputKey: geometryKey });
       const geometry = generateRendererGeometry(project, staticContext);
-      exportTrace({ outputKey: geometry.id, detail: { authority: "export-time-zero" } });
+      staticTrace({ outputKey: geometry.id, detail: { authority: "static" } });
       return geometry;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryKey, project.exportFrameMode, staticContext],
+    [geometryKey, staticContext],
   );
-  const exportGeometry = project.exportFrameMode === "current"
-    ? liveGeometry
-    : staticExportGeometry!;
+  const exportGeometry = project.exportFrameMode === "current" ? liveGeometry : staticGeometry;
   const estimateContext = selectEstimateContext(staticContext);
-  const estimateGeometry = useMemo(
-    () => {
-      const estimateTrace = traceStartSpan("renderer.runtime.estimate", { inputKey: geometryKey });
-      const geometry = generateRendererGeometry(project, estimateContext);
-      estimateTrace({ outputKey: geometry.id, detail: { authority: "estimate" } });
-      return geometry;
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [geometryKey, estimateContext],
-  );
+  const estimateGeometry = staticGeometry;
   const geometrySummary = useMemo(
     () => summarizeGeometry(exportGeometry),
     [exportGeometry],
@@ -78,7 +65,6 @@ export function useRendererRuntime(
   return {
     geometryKey,
     liveGeometry,
-    exportContext,
     exportGeometry,
     estimateContext,
     estimateGeometry,

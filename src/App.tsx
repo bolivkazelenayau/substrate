@@ -244,8 +244,10 @@ return snapshot;
       pipelineRequirements.substrate ? substrateBuild.outputKey : null,
     ),
     // Static context rebuilds only when focused semantic inputs change.
+    // `staticContextInputKey` already covers renderer, scene, typography and
+    // substrate identities; `effectiveArtboard` is the remaining spatial input.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [staticContextInputKey, sceneLayout.effectiveArtboard, state, textGeometry, substrateBuild.data, activeTypographyOutputKey, substrateBuild.outputKey],
+    [staticContextInputKey, sceneLayout.effectiveArtboard],
   );
   const effectiveArtboardViewport = useMemo(
     () => artboardViewport(sceneLayout.effectiveArtboard),
