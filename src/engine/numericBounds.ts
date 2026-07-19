@@ -24,6 +24,16 @@ export const SIZE_HARD_LIMITS = {
   textOffset: 2048,
 } as const;
 
+/** Line-height: slider uses soft band; typed entry may reach hard limits. */
+export const LINE_HEIGHT_BOUNDS = {
+  softMin: 0.5,
+  softMax: 4,
+  hardMin: 0.25,
+  hardMax: 8,
+  step: 0.05,
+  defaultValue: 1,
+} as const;
+
 function expandableSoftMax(base: number, currentValue: number, hardMax: number, quantum: number) {
   const finiteCurrent = Number.isFinite(currentValue) ? currentValue : 0;
   const target = Math.min(hardMax, Math.max(base, finiteCurrent));

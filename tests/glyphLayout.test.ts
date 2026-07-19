@@ -113,6 +113,20 @@ describe("font and glyph layout", () => {
       .toBeCloseTo((compact.lines![1].baselineY - compact.lines![0].baselineY) * 1.5);
   });
 
+  it("does not change glyph path size when only lineHeight changes", () => {
+    const compact = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 1, font: loaded.metadata }, loaded);
+    const loose = layoutGlyphs({ ...baseState, text: "TYPE\nFIELD", lineHeight: 2.5, font: loaded.metadata }, loaded);
+    const compactGlyph = compact.glyphs[0].path.bounds!;
+    const looseGlyph = loose.glyphs[0].path.bounds!;
+
+    expect(looseGlyph.width).toBeCloseTo(compactGlyph.width, 5);
+    expect(looseGlyph.height).toBeCloseTo(compactGlyph.height, 5);
+    expect(loose.glyphs[0].advanceWidth).toBeCloseTo(compact.glyphs[0].advanceWidth, 5);
+    // Baselines must move; ink metrics of a single glyph must not.
+    expect(loose.glyphs.find((glyph) => glyph.lineIndex === 1)!.y - loose.glyphs[0].y)
+      .toBeGreaterThan(compact.glyphs.find((glyph) => glyph.lineIndex === 1)!.y - compact.glyphs[0].y);
+  });
+
   it("applies parsed-font kerning mode and strength predictably", () => {
     const text = "AV";
     const glyphs = Array.from(text).map((character) => loaded.font.charToGlyph(character));

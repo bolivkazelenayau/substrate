@@ -14,7 +14,7 @@ import { EmitterControls } from "./EmitterControls";
 
 export interface FieldControlsProps {
   state: ProjectState;
-  setState: (state: ProjectState) => void;
+  setState: (state: ProjectState | ((current: ProjectState) => ProjectState)) => void;
   fileRef: RefObject<HTMLInputElement | null>;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   fontFileRef: RefObject<HTMLInputElement | null>;

@@ -127,9 +127,11 @@ export function useSizeInteraction(
     baseFontSizeRef.current = committedFontSize;
     latestSizeRef.current = value;
     draftFrameCountRef.current = 0;
-    if (element && pointerId !== undefined && element.setPointerCapture) {
-      try { element.setPointerCapture(pointerId); } catch { /* unsupported */ }
-    }
+    // Do not setPointerCapture on <input type="range">. After double-click it
+    // breaks live thumb tracking (value only commits on release). The range
+    // element already owns pointer tracking natively.
+    void element;
+    void pointerId;
     publishInteraction({
       phase: "dragging",
       gestureId: nextGestureId,
@@ -288,7 +290,9 @@ export function useSizeInteraction(
       scheduleDraftFrame(nextValue);
       return;
     }
-    if (phaseRef.current === "idle" && eventType === "change") {
+    // Typed Size entry and keyboard-driven change: accept while idle *or*
+    // settling so a value commit is not blocked by an unfinished exact rebuild.
+    if (phaseRef.current !== "dragging" && eventType === "change") {
       if (nextValue !== committedFontSize) {
         const gestureId = ++gestureSeqRef.current;
         traceEvent({
@@ -355,9 +359,15 @@ export function useSizeInteraction(
         outputKey: `size:${defaultValue}`,
         detail: { canonicalDefault: defaultValue, valueBefore: value },
       });
+      // Abort open drag without committing the intermediate thumb value.
       if (activeGestureRef.current !== undefined) {
-        finishGesture(activeGestureRef.current, "reset", value);
+        const activeId = activeGestureRef.current;
+        finishedGesturesRef.current.add(activeId);
+        endTraceGesture(activeId, { reason: "reset-abort", value });
+        activeGestureRef.current = undefined;
       }
+      keyboardGestureRef.current = false;
+      latestSizeRef.current = defaultValue;
       if (defaultValue !== committedFontSize) {
         traceEvent({
           stage: "size.gesture.finish.commit",
@@ -374,9 +384,6 @@ export function useSizeInteraction(
         publishInteraction({ phase: "idle", presentedSize: defaultValue });
         traceEvent({ stage: "size.idle", phase: "instant", gestureId: gesture, detail: { reason: "reset-no-op" } });
       }
-      latestSizeRef.current = defaultValue;
-      keyboardGestureRef.current = false;
-      activeGestureRef.current = undefined;
     },
   };
 

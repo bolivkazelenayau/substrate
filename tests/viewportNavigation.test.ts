@@ -4,6 +4,7 @@ import {
   MIN_VIEWPORT_ZOOM,
   clampZoom,
   defaultViewportNavigation,
+  fitViewportToContent,
   panBy,
   resetViewportNavigation,
   zoomAtCenter,
@@ -30,9 +31,28 @@ describe("canvas viewport navigation math", () => {
     expect(clampZoom(100)).toBe(MAX_VIEWPORT_ZOOM);
   });
 
-  it("pans independently and resets to the canonical fit view", () => {
+  it("pans independently and resets to the canonical identity view", () => {
     expect(panBy(defaultViewportNavigation, 18, -7)).toEqual({ zoom: 1, panX: 18, panY: -7 });
     expect(resetViewportNavigation()).toEqual(defaultViewportNavigation);
     expect(resetViewportNavigation()).not.toBe(defaultViewportNavigation);
+  });
+
+  it("fits content that is larger than the frame by zooming out and clearing pan", () => {
+    const fit = fitViewportToContent({ width: 800, height: 480 }, { width: 1600, height: 960 });
+    expect(fit.zoom).toBeCloseTo(0.5, 8);
+    expect(fit.panX).toBe(0);
+    expect(fit.panY).toBe(0);
+  });
+
+  it("fits tall multi-line stages without changing the width-limited scale incorrectly", () => {
+    // Authored-stable stage: same width as a width-fitted host, but taller.
+    const frame = { width: 800, height: 480 };
+    const compact = { width: 1000, height: 480 };
+    const loose = { width: 1000, height: 960 };
+    const fitCompact = fitViewportToContent(frame, compact);
+    const fitLoose = fitViewportToContent(frame, loose);
+    expect(fitCompact.zoom).toBeCloseTo(0.8, 8);
+    expect(fitLoose.zoom).toBeCloseTo(0.5, 8);
+    expect(fitLoose.zoom).toBeLessThan(fitCompact.zoom);
   });
 });

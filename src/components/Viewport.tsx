@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { SVG_IDS } from "../engine/constants";
 import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
 import { getRenderer } from "../engine/renderers";
-import { getTextLayout, textAttributes } from "../engine/textLayout";
+import { getTextLayout, layoutUsesMultiLineTspans, textAttributes } from "../engine/textLayout";
 import type { TextGeometry } from "../engine/glyphGeometry";
 import type { SvgDiagnostics } from "../engine/svgValidation";
 import { sampleDistanceGradient } from "../engine/substrate";
@@ -37,6 +37,7 @@ import type { SizeInteractionState } from "../hooks/useSizeInteraction";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 import { traceEvent } from "../dev/interactionTrace";
+import { resolvePreviewStageScale } from "../engine/previewStageScale";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
@@ -65,6 +66,11 @@ export function Viewport({ state, context, geometry, textGeometry, sceneLayout, 
   // surfaced separately through `sceneLayout.authoredArtboard` for diagnostics.
   const artboard = contextArtboard(context);
   const effectiveRect = sceneLayout.effectiveArtboard;
+  const authoredArtboard = sceneLayout.authoredArtboard;
+  const previewStageScale = useMemo(
+    () => resolvePreviewStageScale(authoredArtboard, effectiveRect),
+    [authoredArtboard, effectiveRect],
+  );
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
   const sizePresentation = useMemo(
     () => resolveSizePresentation(sizeInteraction, sizeExactReady),
@@ -133,6 +139,11 @@ export function Viewport({ state, context, geometry, textGeometry, sceneLayout, 
     flowPreviewStatsRef.current = stats;
   }, []);
   const layout = getTextLayout(state, Boolean(textGeometry?.hasOutlines));
+  const nativeTextContent = layoutUsesMultiLineTspans(layout)
+    ? layout.lines.map((line) => (
+        <tspan key={line.lineIndex} x={line.x} y={line.baselineY}>{line.text}</tspan>
+      ))
+    : layout.text;
   const textBounds = resolveTextBoundsModel(state, textGeometry);
   const bounds = textBounds.inkBounds;
   const hasGlyphPaths = Boolean(textGeometry?.hasOutlines);
@@ -270,7 +281,37 @@ const gradientVectors = useMemo(() => {
 }, [effectiveRect.height, effectiveRect.width, geometry, presentationGeometry.id, previewBackend, sizePresentation.kind, state.renderer, textGeometry]);
 
   return (
-    <div className={`stage diagnostics-${diagnosticsMode}`} data-testid="viewport-stage" data-preview-backend={previewBackend} data-viewport-space="artwork" data-artboard-authored-width={sceneLayout.authoredArtboard.width} data-artboard-authored-height={sceneLayout.authoredArtboard.height} data-artboard-effective-x={effectiveRect.x} data-artboard-effective-y={effectiveRect.y} data-artboard-effective-width={effectiveRect.width} data-artboard-effective-height={effectiveRect.height} data-scene-layout-key={sceneLayout.key} data-text-geometry-key={context.textGeometryKey ?? "none"} data-substrate-key={context.substrateKey ?? "none"} data-substrate-phase={substrateBackendStatus.phase} data-renderer-element-count={geometry.geometries.length} data-size-interaction-phase={sizeInteraction.phase} data-size-presentation-kind={sizePresentation.kind} data-size-draft-active={sizePresentation.kind !== "exact" ? "true" : "false"} style={{ aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}` }}>
+    <div
+      className="stage-scale-host"
+      data-testid="viewport-stage-host"
+      style={{ aspectRatio: `${authoredArtboard.width} / ${authoredArtboard.height}` }}
+    >
+    <div
+      className={`stage diagnostics-${diagnosticsMode}`}
+      data-testid="viewport-stage"
+      data-preview-backend={previewBackend}
+      data-viewport-space="artwork"
+      data-artboard-authored-width={authoredArtboard.width}
+      data-artboard-authored-height={authoredArtboard.height}
+      data-artboard-effective-x={effectiveRect.x}
+      data-artboard-effective-y={effectiveRect.y}
+      data-artboard-effective-width={effectiveRect.width}
+      data-artboard-effective-height={effectiveRect.height}
+      data-scene-layout-key={sceneLayout.key}
+      data-text-geometry-key={context.textGeometryKey ?? "none"}
+      data-substrate-key={context.substrateKey ?? "none"}
+      data-substrate-phase={substrateBackendStatus.phase}
+      data-renderer-element-count={geometry.geometries.length}
+      data-size-interaction-phase={sizeInteraction.phase}
+      data-size-presentation-kind={sizePresentation.kind}
+      data-size-draft-active={sizePresentation.kind !== "exact" ? "true" : "false"}
+      style={{
+        // Authored host establishes stable px/world scale; stage is (effective/authored)
+        // of that host so line-height growth adds height without shrinking glyphs.
+        width: `${previewStageScale.widthRatio * 100}%`,
+        aspectRatio: `${effectiveRect.width} / ${effectiveRect.height}`,
+      }}
+    >
       <div
         className={`artboard-backing${state.transparentBackground ? " is-transparent" : ""}`}
         data-editor-transparent-preview={state.transparentBackground ? "true" : "false"}
@@ -301,7 +342,7 @@ const gradientVectors = useMemo(() => {
               <rect x={effectiveRect.x} y={effectiveRect.y} width={effectiveRect.width} height={effectiveRect.height} fill="black" />
               {hasGlyphPaths
                 ? textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} fill="white" />)
-                : <text {...textAttributes(layout)} fill="white">{layout.text}</text>}
+                : <text {...textAttributes(layout)} fill="white">{nativeTextContent}</text>}
             </g>
           </mask>
           {erodeOverlay && (
@@ -314,7 +355,7 @@ const gradientVectors = useMemo(() => {
                     </g>
                   </>
                 : <>
-                    <text {...textAttributes(layout)} fill="white" stroke="none">{layout.text}</text>
+                    <text {...textAttributes(layout)} fill="white" stroke="none">{nativeTextContent}</text>
                   </>}
               <g id="diffuser-erosion-marks" fill="black" stroke="none">
                 {erosionMarks.map((mark, index) => <circle key={index} cx={mark.x} cy={mark.y} r={mark.radius} opacity={mark.opacity} />)}
@@ -343,11 +384,11 @@ const gradientVectors = useMemo(() => {
             ? <g style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} fillRule="evenodd" strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} strokeLinejoin="round" strokeLinecap="round" mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined}>
                 {finalOutline.paths.map((path) => <path key={`overlay-${path.textIndex}`} d={path.d} data-warped-glyph={hasWarpedOutline ? path.glyphIndex : undefined} />)}
               </g>
-            : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{layout.text}</text>}
+            : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{nativeTextContent}</text>}
         </g>}
         {hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
-          : <text className="ghost-text" {...textAttributes(layout)}>{layout.text}</text>}
+          : <text className="ghost-text" {...textAttributes(layout)}>{nativeTextContent}</text>}
         {debugImage.url && <image className="debug-raster" href={debugImage.url} x={substrate?.domainBounds?.x ?? effectiveRect.x} y={substrate?.domainBounds?.y ?? effectiveRect.y} width={substrate?.domainBounds?.width ?? effectiveRect.width} height={substrate?.domainBounds?.height ?? effectiveRect.height} preserveAspectRatio="none" />}
         {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x={context.glyphField?.worldBounds.x ?? effectiveRect.x} y={context.glyphField?.worldBounds.y ?? effectiveRect.y} width={context.glyphField?.worldBounds.width ?? effectiveRect.width} height={context.glyphField?.worldBounds.height ?? effectiveRect.height} preserveAspectRatio="none" />}
         {state.debug.substrateMode === "gradient" && (
@@ -603,6 +644,7 @@ const gradientVectors = useMemo(() => {
       {performanceWarnings.length > 0 && <div className="performance-warnings"><strong>PERFORMANCE</strong> {performanceWarnings.join(" ")}</div>}
         {(substrateError || debugImage.error) && <div className="substrate-error">{substrateError ?? debugImage.error}</div>}
       </div>, hudHost)}
+    </div>
     </div>
   );
 }

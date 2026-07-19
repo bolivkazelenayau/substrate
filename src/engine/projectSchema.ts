@@ -1,5 +1,5 @@
 import { baseState, defaultDebugSettings, presetIds } from "./presets";
-import { SIZE_HARD_LIMITS } from "./numericBounds";
+import { LINE_HEIGHT_BOUNDS, SIZE_HARD_LIMITS } from "./numericBounds";
 import type { ExportFrameMode, ExportMode, FontMetadata, ProjectState, RendererId } from "../types";
 import { ARTBOARD_LIMITS, DEFAULT_ARTBOARD } from "./artboard";
 import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
@@ -157,7 +157,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     },
     text: typeof source.text === "string" ? source.text.slice(0, 280) : baseState.text,
     fontSize: clamp(source.fontSize, baseState.fontSize, 1, SIZE_HARD_LIMITS.typographySize),
-    lineHeight: clamp(source.lineHeight, baseState.lineHeight, 0.8, 2.5),
+    lineHeight: clamp(source.lineHeight, baseState.lineHeight, LINE_HEIGHT_BOUNDS.hardMin, LINE_HEIGHT_BOUNDS.hardMax),
     tracking: clamp(source.tracking, baseState.tracking, -10, 18),
     kerningMode: enumValue(source.kerningMode, ["font", "none"], baseState.kerningMode),
     kerningStrength: clamp(source.kerningStrength, baseState.kerningStrength, 0, 2),

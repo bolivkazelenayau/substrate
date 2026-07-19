@@ -7,9 +7,11 @@ import type { SizeRangeHandlers } from "../src/hooks/useSizeInteraction";
 import type { ProjectState } from "../src/types";
 import { getTextBounds } from "../src/engine/textLayout";
 
+type ProjectSetter = (state: ProjectState | ((current: ProjectState) => ProjectState)) => void;
+
 function createTestSizeHandlers(
   getState: () => ProjectState,
-  setState: (state: ProjectState) => void,
+  setState: ProjectSetter,
 ): SizeRangeHandlers {
   let dragging = false;
   let latest = getState().fontSize;
@@ -88,9 +90,9 @@ describe("Safe Typography controls", () => {
 
   const renderControls = (state: ProjectState = baseState) => {
     let current = state;
-    const setState = (next: ProjectState) => {
-      current = next;
-      updated = next;
+    const setState: ProjectSetter = (next) => {
+      current = typeof next === "function" ? next(current) : next;
+      updated = current;
     };
     act(() => {
       root.render(createElement(Controls, {
@@ -180,6 +182,52 @@ describe("Safe Typography controls", () => {
     expect(after.y + after.height / 2).toBeCloseTo(before.y + before.height / 2, 8);
     expect(next.fontSize).toBe(500);
     expect(next.textOffsetY).toBe(baseState.textOffsetY);
+  });
+
+  const typeRangeValue = (label: string, raw: string) => {
+    const wrapper = [...container.querySelectorAll("label.range")]
+      .find((candidate) => {
+        const heading = candidate.querySelector(":scope > span");
+        return heading?.childNodes[0]?.textContent?.trim() === label
+          || heading?.textContent?.trim().startsWith(label);
+      });
+    expect(wrapper, `${label} range`).toBeTruthy();
+    const output = wrapper!.querySelector("output");
+    expect(output, `${label} output`).toBeTruthy();
+    act(() => output!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    const editor = wrapper!.querySelector<HTMLInputElement>("input.range-value-edit");
+    expect(editor, `${label} value editor`).toBeTruthy();
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(editor!, raw);
+      editor!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      editor!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+  };
+
+  it("accepts typed values via double-click on Size, Tracking, Line height, Kerning strength, and Vertical offset", () => {
+    renderControls();
+    openDisclosure("Advanced typography");
+
+    typeRangeValue("Size", "777");
+    expect(getUpdated()?.fontSize).toBe(777);
+
+    updated = null;
+    typeRangeValue("Tracking", "12");
+    expect(getUpdated()?.tracking).toBe(12);
+
+    updated = null;
+    typeRangeValue("Line height", "5.5");
+    expect(getUpdated()?.lineHeight).toBe(5.5);
+
+    updated = null;
+    typeRangeValue("Kerning strength", "1.75");
+    expect(getUpdated()?.kerningStrength).toBe(1.75);
+
+    updated = null;
+    typeRangeValue("Vertical offset", "-64");
+    expect(getUpdated()?.textOffsetY).toBe(-64);
   });
 
   it("renders all six controls and wires their existing state fields", () => {

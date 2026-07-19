@@ -17,7 +17,9 @@ describe("project schema", () => {
     const text = "TYPE\n    FIELD";
     expect(validateProject({ ...baseState, text, lineHeight: 1.35 }).project).toMatchObject({ text, lineHeight: 1.35 });
     expect(validateProject({ ...baseState, text, lineHeight: Infinity }).project.lineHeight).toBe(baseState.lineHeight);
-    expect(validateProject({ ...baseState, text, lineHeight: 99 }).project.lineHeight).toBe(2.5);
+    expect(validateProject({ ...baseState, text, lineHeight: 99 }).project.lineHeight).toBe(8);
+    expect(validateProject({ ...baseState, text, lineHeight: 0.1 }).project.lineHeight).toBe(0.25);
+    expect(validateProject({ ...baseState, text, lineHeight: 5 }).project.lineHeight).toBe(5);
   });
 
   it("defaults, repairs, and round-trips contour thickness", () => {

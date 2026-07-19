@@ -129,3 +129,13 @@ export function textAttributes(layout: TextLayout) {
     letterSpacing: layout.tracking,
   };
 }
+
+/**
+ * Multi-line native SVG text must use absolute-positioned tspans.
+ * A single text node with `\n` lets the browser apply CSS line-height, which
+ * reflows and can appear to scale the type when lineHeight changes. Absolute
+ * tspans keep glyph size at `fontSize` and only move baselines.
+ */
+export function layoutUsesMultiLineTspans(layout: TextLayout): boolean {
+  return layout.lines.length > 1 || layout.lines.some((line) => line.text !== layout.text);
+}

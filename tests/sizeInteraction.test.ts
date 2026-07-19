@@ -219,4 +219,45 @@ describe("useSizeInteraction", () => {
     expect(latest!.state.phase).toBe("idle");
     expect(commits).toEqual([220]);
   });
+
+  it("keeps live draft tracking after a double-click reset", async () => {
+    const commits: number[] = [];
+    let latest: ReturnType<typeof useSizeInteraction> | null = null;
+
+    function Harness({ committedFontSize }: { committedFontSize: number }) {
+      const interaction = useSizeInteraction(committedFontSize, "ripple", (fontSize) => commits.push(fontSize));
+      latest = interaction;
+      return null;
+    }
+
+    await act(async () => {
+      root.render(createElement(Harness, { committedFontSize: 200 }));
+    });
+
+    act(() => {
+      const el = document.createElement("input");
+      latest!.handlers.onPointerDown(200, 1, el);
+      latest!.handlers.onPointerUp(200, 1);
+      latest!.handlers.onPointerDown(200, 2, el);
+      latest!.handlers.onPointerUp(200, 2);
+      latest!.handlers.onDoubleClickReset(200, 148);
+    });
+    expect(commits).toEqual([148]);
+
+    await act(async () => {
+      root.render(createElement(Harness, { committedFontSize: 148 }));
+    });
+    act(() => latest!.completeSettlement());
+
+    act(() => {
+      const el = document.createElement("input");
+      latest!.handlers.onPointerDown(148, 3, el);
+      latest!.handlers.onInput(180, "input");
+      latest!.handlers.onInput(220, "input");
+      latest!.handlers.onPointerUp(220, 3);
+    });
+    // Live draft + single commit after reset (no mid-drag exact rebuild thrash).
+    expect(commits).toEqual([148, 220]);
+    expect(latest!.state.phase).toBe("settling");
+  });
 });

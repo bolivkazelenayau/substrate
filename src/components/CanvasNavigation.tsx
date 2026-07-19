@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   defaultViewportNavigation,
+  fitViewportToContent,
   panBy,
-  resetViewportNavigation,
   zoomAtCenter,
   zoomFromWheel,
   type ViewportNavigationState,
@@ -167,6 +167,22 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     [applyViewportSync],
   );
 
+  const fitToStage = useCallback(() => {
+    const frame = frameRef.current;
+    // Measure the artwork stage (effective rect), not the authored-aspect host.
+    const stage = frame?.querySelector<HTMLElement>("[data-testid='viewport-stage']");
+    if (!frame || !stage) {
+      applyViewportSync(fitViewportToContent({ width: 1, height: 1 }, { width: 1, height: 1 }));
+      return;
+    }
+    // offset* is layout size before the navigation CSS transform, so FIT is
+    // independent of the current zoom/pan.
+    applyViewportSync(fitViewportToContent(
+      { width: frame.clientWidth, height: frame.clientHeight },
+      { width: stage.offsetWidth, height: stage.offsetHeight },
+    ));
+  }, [applyViewportSync]);
+
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest(".canvas-navigation-controls")) return;
     const beginsPan = event.button === 1 || (event.button === 0 && spacePressed);
@@ -252,7 +268,7 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)}>−</button>
           <output aria-live="polite" aria-label="Canvas zoom">{Math.round(viewport.zoom * 100)}%</output>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)}>+</button>
-          <button type="button" aria-label="Fit canvas" title="Reset zoom and pan" onClick={() => applyViewportSync(resetViewportNavigation())}>FIT</button>
+          <button type="button" aria-label="Fit canvas" title="Fit artwork in view" onClick={fitToStage}>FIT</button>
         </div>
       </div>
     </div>
