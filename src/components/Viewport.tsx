@@ -173,7 +173,9 @@ export function Viewport({ state, context, geometry, textGeometry, sceneLayout, 
   const warpRegenerated = previousFrame.current.warpedOutline !== warpedOutline;
   const substrateRebuilt = previousFrame.current.substrate !== substrate;
   const debugRegenerated = previousFrame.current.debugGenerationId !== debugImage.generationId;
-  previousFrame.current = { geometry, warpedOutline, warpCacheKey, substrate, debugGenerationId: debugImage.generationId };
+  useEffect(() => {
+    previousFrame.current = { geometry, warpedOutline, warpCacheKey, substrate, debugGenerationId: debugImage.generationId };
+  }, [geometry, warpedOutline, warpCacheKey, substrate, debugImage.generationId]);
 const gradientVectors = useMemo(() => {
     if (!substrate || state.debug.substrateMode !== "gradient") return [];
     const vectors: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];

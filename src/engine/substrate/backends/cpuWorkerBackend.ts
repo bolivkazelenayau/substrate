@@ -126,10 +126,13 @@ export function mapWorkerFailure(error: unknown): { code: WorkerFailureCode; rea
   return { code: "unknown", reason };
 }
 
+const CIRCUIT_BREAKER_THRESHOLD = 2;
+
 export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
   readonly id = "cpu-worker" as const;
   readonly label = "CPU / Web Worker";
-  readonly available: boolean;
+  private _available: boolean;
+  get available(): boolean { return this._available; }
   readonly availabilityReason: string | null;
   readonly creationDiagnostics: WorkerCreationDiagnostics;
   capability: WorkerSelfTestResult | null = null;
@@ -138,6 +141,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
   private startupPromise: Promise<void> | null = null;
   private selfTestPromise: Promise<WorkerSelfTestResult> | null = null;
   private pending = new Map<number, PendingRequest>();
+  private consecutiveFailures = 0;
 
   constructor(
     private readonly workerFactory: WorkerFactory,
@@ -147,7 +151,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
     this.creationDiagnostics = createDiagnostics(workerUrl);
     try {
       this.worker = workerFactory();
-      this.available = true;
+      this._available = true;
       this.availabilityReason = null;
       this.worker.onmessage = (event) => this.handleMessage(event.data);
       this.worker.onerror = (event) => this.failAll(new WorkerBackendError(
@@ -158,7 +162,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
     } catch (error) {
       const diagnostics = createDiagnostics(workerUrl, error);
       Object.assign(this.creationDiagnostics, diagnostics);
-      this.available = false;
+      this._available = false;
       const code: WorkerFailureCode = diagnostics.workerType === "function"
         ? "worker-constructor-failed"
         : "worker-unavailable";
@@ -324,6 +328,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
       }, reject);
       this.worker!.postMessage({ type: "build", requestId, input });
     });
+    this.consecutiveFailures = 0;
     workerTrace({
       outputKey: interactionTraceEnabled ? traceKey(result) : undefined,
       counts: { width: result.data.width, height: result.data.height, cells: result.data.width * result.data.height },
@@ -336,6 +341,7 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
     return result;
     } catch (error) {
       workerTrace({ detail: { error: error instanceof Error ? error.message : String(error) } });
+      this.recordFailure(error);
       throw error;
     }
   }
@@ -385,6 +391,35 @@ export class CpuWorkerSubstrateBackend implements SubstrateComputeBackend {
       reject(error);
     });
     this.pending.clear();
+    this.recordFailure(error);
+  }
+
+  private recordFailure(error: unknown) {
+    const failure = mapWorkerFailure(error);
+    const isRecoverable = failure.code !== "worker-unavailable" && failure.code !== "worker-constructor-failed";
+    if (isRecoverable) {
+      this.consecutiveFailures += 1;
+      if (this.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+        this.tripCircuitBreaker(failure.code, failure.reason);
+      }
+    }
+  }
+
+  private tripCircuitBreaker(code: WorkerFailureCode, reason: string) {
+    this._available = false;
+    this.worker?.terminate();
+    this.worker = null;
+    this.capability = {
+      status: "unavailable",
+      moduleWorker: false,
+      offscreenCanvas: false,
+      path2D: false,
+      rasterization: false,
+      transferableArrays: false,
+      failureCode: code,
+      reason: `Circuit breaker opened after ${this.consecutiveFailures} consecutive failures: ${reason}`,
+      creation: this.creationDiagnostics,
+    };
   }
 
   private get timeoutMs() {

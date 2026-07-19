@@ -78,6 +78,14 @@ export function substrateProjectSliceKey(state: ProjectState): string {
     substrateQuality: state.substrateQuality,
     font: state.font?.fileName ?? "native-fallback",
     renderer: state.renderer,
+    amplitude: state.amplitude,
+    overlayMode: state.overlayMode,
+    outlineStrokeWidth: state.outlineStrokeWidth,
+    outlineWarpAmount: state.outlineWarpAmount,
+    outlineWarpScale: state.outlineWarpScale,
+    outlineWarpSmoothing: state.outlineWarpSmoothing,
+    outlineWarpEdgeBias: state.outlineWarpEdgeBias,
+    outlineWarpMaxDisplacement: state.outlineWarpMaxDisplacement,
   });
 }
 

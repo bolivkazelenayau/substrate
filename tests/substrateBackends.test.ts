@@ -122,6 +122,29 @@ describe("substrate compute backends", () => {
     expect(result.fallbackReason).toBe("worker unavailable");
   });
 
+  it("trips a circuit breaker after consecutive worker crashes and falls back to cpu-main", async () => {
+    const worker = new FakeWorker();
+    const backend = new CpuWorkerSubstrateBackend(() => worker, { skipSelfTest: true, timeoutMs: 50 });
+    const fallback = createCpuMainSubstrateBackend(canvasFactory);
+
+    const first = backend.compute(input);
+    await Promise.resolve();
+    worker.crash("worker crashed");
+    await expect(first).rejects.toThrow();
+
+    const second = backend.compute(input);
+    await Promise.resolve();
+    worker.crash("worker crashed again");
+    await expect(second).rejects.toThrow();
+
+    expect(backend.available).toBe(false);
+    expect(worker.terminated).toBe(true);
+
+    const fallbackResult = await computeSubstrateWithFallback(backend, fallback, input);
+    expect(fallbackResult.result.backend).toBe("cpu-main");
+    expect(fallbackResult.fallbackCode).toBe("worker-crashed");
+  });
+
   it("rejects stale completion ids", () => {
     expect(isCurrentSubstrateRequest(7, 7)).toBe(true);
     expect(isCurrentSubstrateRequest(8, 7)).toBe(false);

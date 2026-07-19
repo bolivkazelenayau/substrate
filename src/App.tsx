@@ -328,9 +328,16 @@ return snapshot;
   useEffect(() => {
     if (sizeInteraction.phase !== "settling") return;
     if (state.fontSize !== sizeInteraction.committedSize) return;
+    // A substrate failure during settling must not leave the UI stuck in
+    // "Preparing export…" forever. Drop out of settling so the real failed
+    // readiness state becomes visible.
+    if (substrateBuild.error) {
+      completeSettlement();
+      return;
+    }
     if (!sizeExactReady) return;
     completeSettlement();
-  }, [completeSettlement, sizeExactReady, sizeInteraction, state.fontSize, baseExportReadiness.status]);
+  }, [completeSettlement, sizeExactReady, sizeInteraction, state.fontSize, substrateBuild.error]);
   const previousReadinessRef = useRef<string | null>(null);
   useEffect(() => {
     const marker = [
@@ -383,23 +390,14 @@ const displayedTextOverflowWarning = textOverflowWarning
     [state.substrateQuality, substrateBuild.data],
   );
   // Serialization + DOMParser only run when the runtime boundary's cached
-  // estimate geometry identity changes.
-  const estimateExportKey = [
-    state.exportMode,
-    state.precision,
-    state.overlayMode,
-    state.textOverlayOpacity,
-    state.edgeErosionAmount,
-    state.edgeErosionWidth,
-    state.interiorProtection,
-    state.diffuserComposition,
-    state.outlineWarpAmount,
-    state.outlineWarpScale,
-    state.outlineWarpSmoothing,
-    state.outlineWarpEdgeBias,
-    state.outlineWarpMaxDisplacement,
-    state.preserveCounters,
-  ].join("|");
+  // estimate geometry identity changes. Derive the key from the same readiness
+  // inputs so it never drifts from the real export gate.
+  const estimateExportKey = useMemo(() => rendererInputKey(
+    state,
+    activeTypographyOutputKey ?? "typography-pending",
+    renderer.usesSubstrate ? (substrateBuild.outputKey ?? "substrate-pending") : null,
+    estimateContext,
+  ), [state, activeTypographyOutputKey, renderer.usesSubstrate, substrateBuild.outputKey, estimateContext]);
   useEffect(() => {
     if (!state.debug.costEstimate) {
       setDiagnostics(null);
