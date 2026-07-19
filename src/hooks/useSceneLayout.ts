@@ -30,6 +30,7 @@ export function useSceneLayout(
 ): ResolvedSceneLayout {
   const sceneInputKey = sceneLayoutStageKey(project, textGeometry);
   return useMemo(() => {
+    // trace-only input key: never used for memoization or scene layout identity.
     const inputKey = interactionTraceEnabled ? sceneInputKey : undefined;
     const resolveTrace = traceStartSpan("scene.layout", {
       inputKey,

@@ -8,21 +8,12 @@ import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
 import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
 import { roundSceneNumber } from "./sceneLayout";
 
-const substrateIds = new WeakMap<object, number>();
-let nextSubstrateId = 1;
 const geometryCache = new Map<string, GeometryGroup>();
 const geometryTimings = new WeakMap<GeometryGroup, { durationMs: number; cached: boolean }>();
 const CACHE_LIMIT = 24;
 
-function substrateKey(context: RenderContext) {
-  const substrate = context.substrateData;
-  if (!substrate) return "none";
-  let id = substrateIds.get(substrate);
-  if (!id) {
-    id = nextSubstrateId++;
-    substrateIds.set(substrate, id);
-  }
-  return `${id}:${substrate.width}x${substrate.height}:${substrate.substrateType}`;
+function substrateIdentity(context: RenderContext) {
+  return context.substrateKey ?? "none";
 }
 
 // Compact-string cache key built from renderer-relevant scalar state plus substrate
@@ -96,7 +87,7 @@ export function rendererGeometryStateKey(state: ProjectState) {
 
 export function rendererGeometryCacheKey(state: ProjectState, context: RenderContext) {
   const renderer = getRenderer(state.renderer);
-  const substrate = renderer.usesSubstrate ? substrateKey(context) : "unused";
+  const substrate = renderer.usesSubstrate ? substrateIdentity(context) : "unused";
   const time = renderer.usesTime ? `${context.timeMs}:${context.frame}` : "0:0";
   // Use `|` between top-level fields and `~` within the emitter, plus separators
   // that ensure adjacent numeric fields cannot collide. Field order matters.
@@ -106,6 +97,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     `${state.artboard.width}x${state.artboard.height}`,
     `${roundSceneNumber(viewport?.x ?? 0)},${roundSceneNumber(viewport?.y ?? 0)},${roundSceneNumber(viewport?.width ?? state.artboard.width)}x${roundSceneNumber(viewport?.height ?? state.artboard.height)}`,
     substrate,
+    context.textGeometryKey ?? "none",
     state.text,
     state.font?.fileName ?? "native",
     state.fontSize,
@@ -137,6 +129,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
 
 export function generateRendererGeometry(state: ProjectState, context: RenderContext): GeometryGroup {
   const renderer = getRenderer(state.renderer);
+  // trace-only input key: never used for memoization, geometry, or output identity.
   const traceInputKey = interactionTraceEnabled ? rendererGeometryCacheKey(state, context) : undefined;
   const rendererTrace = traceStartSpan("renderer.build", {
     inputKey: traceInputKey,

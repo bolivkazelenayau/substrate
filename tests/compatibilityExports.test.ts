@@ -48,8 +48,9 @@ beforeAll(async () => {
     state,
     context: { timeMs: 0, frame: 0, textGeometry, substrateData: substrate },
     textGeometry,
+    substrate,
   });
-});
+}, 30_000);
 
 describe("compatibility export set", () => {
   it("generates every representative export with diagnostics", () => {

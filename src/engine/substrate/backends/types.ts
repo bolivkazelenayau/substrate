@@ -77,4 +77,5 @@ export interface SubstrateBackendStatus {
   coalescedRequestCount: number;
   droppedObsoleteRequestCount: number;
   skippedObsoleteRequest: boolean;
+  disposed: boolean;
 }

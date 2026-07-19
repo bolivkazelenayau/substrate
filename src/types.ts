@@ -163,7 +163,11 @@ export interface RenderContext {
   timeMs: number;
   frame: number;
   textGeometry?: TextGeometry | null;
+  /** Stable semantic identity for the text geometry consumed by renderers. */
+  textGeometryKey?: string | null;
   substrateData?: SubstrateData | null;
+  /** Stable semantic identity for the substrate output consumed by renderers. */
+  substrateKey?: string | null;
   glyphField?: CompositeWaveField | null;
   sampleGlyphField?: (x: number, y: number) => number;
   sampleGlyphFieldGradient?: (x: number, y: number) => GlyphFieldGradient;

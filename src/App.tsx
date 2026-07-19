@@ -240,10 +240,12 @@ return snapshot;
       pipelineRequirements.substrate ? substrateBuild.data : null,
       sceneLayout.effectiveArtboard,
       pipelineRequirements,
+      activeTypographyOutputKey,
+      pipelineRequirements.substrate ? substrateBuild.outputKey : null,
     ),
     // Static context rebuilds only when focused semantic inputs change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [staticContextInputKey, sceneLayout.effectiveArtboard, state, textGeometry, substrateBuild.data],
+    [staticContextInputKey, sceneLayout.effectiveArtboard, state, textGeometry, substrateBuild.data, activeTypographyOutputKey, substrateBuild.outputKey],
   );
   const effectiveArtboardViewport = useMemo(
     () => artboardViewport(sceneLayout.effectiveArtboard),
@@ -292,6 +294,10 @@ return snapshot;
       },
     });
   }, [activeRendererInputKey, geometry.id, previewSettings.backend, state.renderer, substrateBuild.outputKey]);
+  const rendererGeometryKey = activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
+    ? activeRendererInputKey
+    : null;
+  console.log("[EXPORT READINESS] rendererInputKey:", activeRendererInputKey, "rendererGeometryKey:", rendererGeometryKey, "substrate outputKey:", substrateBuild.outputKey, "substrate inputKey:", substrateBuild.inputKey, "activeTypographyOutputKey:", activeTypographyOutputKey);
   const baseExportReadiness = useMemo(() => resolveExportReadiness({
     font: fontResolution,
     typographyInputKey: activeTypographyInputKey,
@@ -302,13 +308,11 @@ return snapshot;
     rendererInputKey: activeRendererInputKey,
     // Renderer generation is synchronous and recreated from the same input in the
     // snapshot. Stale substrate is rejected before this stage can become current.
-    rendererGeometryKey: activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
-      ? activeRendererInputKey
-      : null,
+    rendererGeometryKey,
     sceneSafetyLimitHit: sceneLayout.safetyLimitHit,
     failureReason: substrateBuild.error,
     renderer: state.renderer,
-  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey]);
+  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey, rendererGeometryKey]);
   const sizeExactReady = baseExportReadiness.status === "ready" || baseExportReadiness.status === "scene-safety-limit";
   const exportReadiness = useMemo(() => {
     if (sizeIsInteracting(sizeInteraction)) {
@@ -321,11 +325,12 @@ return snapshot;
     return baseExportReadiness;
   }, [baseExportReadiness, sizeInteraction]);
   useEffect(() => {
+    console.log("[SIZE SETTLE EFFECT] phase:", sizeInteraction.phase, "fontSize:", state.fontSize, "committedSize:", sizeInteraction.phase === "settling" ? sizeInteraction.committedSize : null, "sizeExactReady:", sizeExactReady, "baseExportReadiness:", baseExportReadiness.status);
     if (sizeInteraction.phase !== "settling") return;
     if (state.fontSize !== sizeInteraction.committedSize) return;
     if (!sizeExactReady) return;
     completeSettlement();
-  }, [completeSettlement, sizeExactReady, sizeInteraction, state.fontSize]);
+  }, [completeSettlement, sizeExactReady, sizeInteraction, state.fontSize, baseExportReadiness.status]);
   const previousReadinessRef = useRef<string | null>(null);
   useEffect(() => {
     const marker = [

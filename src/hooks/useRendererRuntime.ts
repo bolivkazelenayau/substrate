@@ -1,9 +1,10 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { getRenderer } from "../engine/renderers";
 import { measure } from "../engine/performance";
-import { traceDuplicateLiveRendererPrevented, tracePipelineStage } from "../engine/pipelineTrace";
+import { tracePipelineStage } from "../engine/pipelineTrace";
 import {
   generateRendererGeometry,
+  rendererGeometryCacheKey,
   rendererGeometryStateKey,
   summarizeGeometry,
 } from "../engine/rendererRuntime";
@@ -22,18 +23,13 @@ export function useRendererRuntime(
 ) {
   const geometryKey = rendererGeometryStateKey(project);
   const renderer = getRenderer(project.renderer);
-  const liveRevisionKey = renderer.usesTime
-    ? `${geometryKey}|${liveContext.timeMs}:${liveContext.frame}`
-    : geometryKey;
-  const lastLiveRevisionRef = useRef<{ key: string; geometry: ReturnType<typeof generateRendererGeometry> } | null>(null);
+  // Live revision identity must include every geometry input the renderer consumes:
+  // project scalar state, viewport, substrate output identity, text/glyph geometry
+  // identity, and (for animated renderers) the presentation clock. A single semantic
+  // key is the authority; no mutable ref cache is consulted.
+  const liveRevisionKey = `${geometryKey}|${rendererGeometryCacheKey(project, liveContext)}`;
   const liveGeometry = useMemo(
     () => {
-      const cached = lastLiveRevisionRef.current;
-      if (cached?.key === liveRevisionKey) {
-        traceDuplicateLiveRendererPrevented(liveRevisionKey);
-        tracePipelineStage("renderer.live", "reused", { inputKey: liveRevisionKey });
-        return cached.geometry;
-      }
       const authoritativeContext = renderer.usesTime
         ? liveContext
         : { ...liveContext, timeMs: 0, frame: 0 };
@@ -41,10 +37,10 @@ export function useRendererRuntime(
       const timed = measure(() => generateRendererGeometry(project, authoritativeContext));
       recordPreviewGeometryBuild(timed.durationMs);
       liveTrace({ outputKey: timed.value.id, detail: { generationDurationMs: timed.durationMs, authority: "live" } });
-      lastLiveRevisionRef.current = { key: liveRevisionKey, geometry: timed.value };
       return timed.value;
     },
-    // Semantic renderer identity excludes presentation clock for static renderers.
+    // Semantic renderer identity includes context-dependent inputs for static renderers.
+    // `liveRevisionKey` is the single authority; no mutable ref cache is needed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [geometryKey, liveRevisionKey, project],
   );

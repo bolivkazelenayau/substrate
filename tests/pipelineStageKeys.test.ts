@@ -36,6 +36,14 @@ describe("pipeline stage keys", () => {
     expect(typographyStageKey(changed, "font:native")).not.toBe(typographyStageKey(baseState, "font:native"));
   });
 
+  it("changes typography key when fontSize changes and restores it on round trip", () => {
+    const key148 = typographyStageKey({ ...baseState, fontSize: 148 }, "font:fixture");
+    const key540 = typographyStageKey({ ...baseState, fontSize: 540 }, "font:fixture");
+    const keyBack148 = typographyStageKey({ ...baseState, fontSize: 148 }, "font:fixture");
+    expect(key540).not.toBe(key148);
+    expect(keyBack148).toBe(key148);
+  });
+
   it("excludes preview backend from substrate project slice", () => {
     expect(substrateProjectSliceKey(baseState)).toBe(substrateProjectSliceKey({ ...baseState, debug: { ...baseState.debug, frameTime: !baseState.debug.frameTime } }));
   });

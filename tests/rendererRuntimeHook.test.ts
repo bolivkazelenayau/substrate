@@ -122,4 +122,22 @@ describe("useRendererRuntime ownership", () => {
     expect(second.liveGeometry).not.toBe(first.liveGeometry);
     expect(second.liveGeometry).not.toEqual(first.liveGeometry);
   });
+
+  it("regenerates live geometry for static renderers when the effective viewport changes", () => {
+    const project = { ...baseState, renderer: "sdf-contours" as const, maxNodes: 80 };
+    const staticContext = createStaticRenderContext(project, null, null);
+    const viewport = staticContext.viewport!;
+    const first = render(project, staticContext, staticContext);
+    const expandedContext = {
+      ...staticContext,
+      viewport: {
+        ...viewport,
+        x: -200,
+        width: viewport.width + 400,
+      },
+    };
+    const second = render(project, expandedContext as RenderContext, staticContext);
+
+    expect(second.liveGeometry).not.toBe(first.liveGeometry);
+  });
 });

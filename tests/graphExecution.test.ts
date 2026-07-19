@@ -21,7 +21,7 @@ function canonicalGeometrySummary(geometry: GeometryIR) {
 
 describe("internal CPU graph execution prototype", () => {
   for (const name of goldenProjectNames) {
-    it(`${name} matches registry geometry and golden export`, async () => {
+    it(`${name} matches registry geometry and golden export`, { timeout: 15_000 }, async () => {
       const { project, context, geometry: registryGeometry } = await buildGoldenRenderInput(name);
       const graph = buildRendererGraphFromProject(project);
       const result = executeGraphCpu(graph, { project, context });

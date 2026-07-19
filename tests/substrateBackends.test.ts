@@ -164,6 +164,55 @@ describe("substrate compute backends", () => {
     expect(runs).not.toContain(2);
   });
 
+  it("completes every pending request as success, failure, superseded, or disposed", async () => {
+    const completions: Array<{ id: number; type: string; stale?: boolean; reason?: string }> = [];
+    const resolvers = new Map<number, (value: number) => void>();
+    const scheduler = new LatestOnlyScheduler<number, number>();
+    const make = (id: number) => ({
+      id,
+      input: id,
+      run: async (value: number) => new Promise<number>((resolve) => resolvers.set(value, resolve)),
+      complete: (_result: number, stale: boolean) => completions.push({ id, type: stale ? "superseded" : "success", stale }),
+      fail: () => completions.push({ id, type: "failure" }),
+      supersede: (reason: string) => completions.push({ id, type: "superseded", reason }),
+      dispose: (reason: string) => completions.push({ id, type: "disposed", reason }),
+    });
+
+    scheduler.schedule(make(1));
+    scheduler.schedule(make(2));
+    scheduler.schedule(make(3));
+    // Dispose while 1 is active and 3 is pending. 2 was already replaced by 3.
+    scheduler.dispose();
+    resolvers.get(1)?.(1);
+    await vi.waitFor(() => expect(completions).toHaveLength(3));
+    expect(completions).toContainEqual({ id: 1, type: "superseded", stale: true });
+    expect(completions).toContainEqual({ id: 2, type: "superseded", reason: "replaced-by-newer" });
+    expect(completions).toContainEqual({ id: 3, type: "disposed", reason: "scheduler-disposed" });
+  });
+
+  it("reset supersedes pending and makes active work stale", async () => {
+    const completions: Array<{ id: number; stale: boolean }> = [];
+    const resolvers = new Map<number, (value: number) => void>();
+    const scheduler = new LatestOnlyScheduler<number, number>();
+    const schedule = (id: number) => scheduler.schedule({
+      id,
+      input: id,
+      run: async (value) => new Promise<number>((resolve) => resolvers.set(value, resolve)),
+      complete: (_result, stale) => completions.push({ id, stale }),
+      fail: () => {},
+      supersede: () => {},
+      dispose: () => {},
+    });
+
+    schedule(1);
+    schedule(2);
+    scheduler.reset();
+    resolvers.get(1)?.(1);
+    await vi.waitFor(() => expect(completions).toContainEqual({ id: 1, stale: true }));
+    expect(scheduler.snapshot().pendingRequestCount).toBe(0);
+    expect(scheduler.snapshot().activeRequestId).toBeNull();
+  });
+
   it("keeps cpu-main fallback valid when invoked through the latest-only scheduler", async () => {
     const preferred: SubstrateComputeBackend = {
       id: "cpu-worker",
@@ -359,6 +408,7 @@ describe("substrate compute backends", () => {
       coalescedRequestCount: 2,
       droppedObsoleteRequestCount: 1,
       skippedObsoleteRequest: false,
+      disposed: false,
     });
     expect(items).toEqual([
       "CPU-MAIN",

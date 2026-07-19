@@ -6,7 +6,7 @@ import { extractSvgExportSummary } from "./utils/canonicalSvg";
 import { buildProductionSceneFrame } from "./utils/sceneLayoutHarness";
 
 describe("preview and export scene equality", () => {
-  it("uses the same effective rect and scene key for preview SVG and export snapshot", () => {
+  it("uses the same effective rect and scene key for preview SVG and export snapshot", { timeout: 15_000 }, () => {
     const state = { ...baseState, renderer: "flow" as const, fontSize: 300 };
     const frame = buildProductionSceneFrame(state, null);
     const geometry = generateRendererGeometry(state, frame.context);

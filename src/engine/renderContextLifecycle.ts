@@ -22,6 +22,8 @@ export function createStaticRenderContext(
   substrateData: RenderContext["substrateData"],
   effectiveArtboard?: ArtboardRect,
   requirements?: Pick<RendererRequirements, "staticField" | "glyphField" | "substrate">,
+  textGeometryKey?: string | null,
+  substrateKey?: string | null,
 ): RenderContext {
   const contextTrace = traceStartSpan("field.static-context", {
     inputKey: interactionTraceEnabled ? traceKey({ renderer: state.renderer, artboard: state.artboard, effective: effectiveArtboard, text: state.text }) : undefined,
@@ -34,7 +36,9 @@ export function createStaticRenderContext(
     timeMs: 0,
     frame: 0,
     textGeometry,
+    textGeometryKey: textGeometryKey ?? null,
     substrateData,
+    substrateKey: substrateKey ?? null,
     viewport,
   };
   const needsField = requirements?.staticField || requirements?.glyphField;

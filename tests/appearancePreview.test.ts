@@ -48,6 +48,7 @@ function previewMarkup(state: ProjectState, previewBackend: "svg-dom" | "canvas-
         coalescedRequestCount: 0,
         droppedObsoleteRequestCount: 0,
         skippedObsoleteRequest: false,
+        disposed: false,
       },
       previewDiagnostics: {
         estimatedFps: 30,

@@ -95,11 +95,11 @@ describe("manifest dependency and cache identity", () => {
     expect(rendererGeometryCacheKey(recolored, context())).toBe(rendererGeometryCacheKey(baseState, context()));
   });
 
-  it("represents substrate object identity for every substrate renderer", () => {
+  it("represents substrate semantic identity for every substrate renderer", () => {
     for (const renderer of rendererList.filter(({ id }) => rendererManifests[id].dependencies.includes("substrate"))) {
       const state = { ...baseState, renderer: renderer.id };
-      const first = rendererGeometryCacheKey(state, context({ substrateData: substrate() }));
-      const second = rendererGeometryCacheKey(state, context({ substrateData: substrate() }));
+      const first = rendererGeometryCacheKey(state, context({ substrateData: substrate(), substrateKey: "substrate:a" }));
+      const second = rendererGeometryCacheKey(state, context({ substrateData: substrate(), substrateKey: "substrate:b" }));
       expect(second).not.toBe(first);
     }
   });

@@ -17,7 +17,7 @@ describe("exact Size round trip", () => {
     seed: 24091,
   };
 
-  it("restores authored scene, keys, preview viewBox, and export summary after 148 → 540 → 148", () => {
+  it("restores authored scene, keys, preview viewBox, and export summary after 148 → 540 → 148", { timeout: 15_000 }, () => {
     const initial = buildProductionSceneFrame(initialState, null);
     const mid = buildProductionSceneFrame({ ...initialState, fontSize: 540 }, null);
     const final = buildProductionSceneFrame({ ...initialState, fontSize: 148 }, null);

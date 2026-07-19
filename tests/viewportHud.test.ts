@@ -39,6 +39,7 @@ function viewport(mode: DiagnosticsMode) {
       coalescedRequestCount: 0,
       droppedObsoleteRequestCount: 0,
       skippedObsoleteRequest: false,
+      disposed: false,
     },
     previewDiagnostics: {
       estimatedFps: 30,

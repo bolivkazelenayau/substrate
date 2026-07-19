@@ -5,6 +5,7 @@ import {
   createCpuWorkerSubstrateBackend,
   LatestOnlyScheduler,
   type LatestOnlySchedulerSnapshot,
+  type RequestCompletion,
   type SubstrateBackendStatus,
   type SubstrateBuildInput,
   type SubstrateData,
@@ -29,6 +30,7 @@ const initialSchedule: LatestOnlySchedulerSnapshot = {
   coalescedRequestCount: 0,
   droppedObsoleteRequestCount: 0,
   skippedObsoleteRequest: false,
+  disposed: false,
 };
 
 const initialStatus: SubstrateBackendStatus = {
@@ -50,10 +52,24 @@ const notRequiredStatus: SubstrateBackendStatus = {
   activeBackend: null,
 };
 
+function traceRequestCompletion(
+  completion: RequestCompletion,
+  requestId: number,
+  inputKey: string,
+  detail?: Record<string, unknown>,
+) {
+  traceEvent({
+    stage: `substrate.request.${completion}`,
+    phase: "instant",
+    inputKey,
+    detail: { requestId, ...detail },
+  });
+}
+
 export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string, enabled = true): SubstrateBackendState {
   const [workerBackend] = useState(() => createCpuWorkerSubstrateBackend());
   const latestRequest = useRef(0);
-  const lastEnqueuedInput = useRef<SubstrateBuildInput | null>(null);
+  const lastEnqueuedInputKey = useRef<string | null>(null);
   const disposeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
   const [backendState, setBackendState] = useState<SubstrateBackendState>({
@@ -77,29 +93,38 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
         detail: {
           latestRequestedId: schedule.latestRequestedId,
           skippedObsoleteRequest: schedule.skippedObsoleteRequest,
+          disposed: schedule.disposed,
         },
       });
-      setBackendState((current) => ({
-        ...current,
-        status: {
-          ...current.status,
-          ...schedule,
-          requestId: schedule.latestRequestedId,
-          phase: schedule.activeRequestId !== null || schedule.pendingRequestCount > 0
-            ? "building"
-            : current.status.phase,
-        },
-      }));
+      setBackendState((current) => {
+        console.log("[SUBSTRATE ONCHANGE] schedule:", JSON.stringify(schedule), "current phase:", current.status.phase);
+        return {
+          ...current,
+          status: {
+            ...current.status,
+            ...schedule,
+            requestId: schedule.latestRequestedId,
+            phase: schedule.activeRequestId !== null || schedule.pendingRequestCount > 0
+              ? "building"
+              : current.status.phase,
+          },
+        };
+      });
     },
   ));
 
   useEffect(() => {
+    console.log("[SUBSTRATE EFFECT] enabled:", enabled, "inputKey:", inputKey, "current phase:", backendState.status.phase);
     if (!enabled) {
-      // Invalidate in-flight worker completions when substrate is not required.
+      // Invalidate in-flight worker completions and clear any pending scheduler
+      // work when substrate is no longer required. An already-running compute may
+      // finish, but it must not become current because its request id is now behind.
       latestRequest.current += 1;
-      lastEnqueuedInput.current = null;
+      lastEnqueuedInputKey.current = null;
+      scheduler.reset();
       tracePipelineStage("substrate", "skipped", { reason: "capability-not-required" });
       tracePipelineStage("substrate", "invalidated", { reason: "capability-not-required" });
+      traceEvent({ stage: "substrate.scheduler.disabled", phase: "instant", inputKey });
       setBackendState({
         data: null,
         outputKey: SUBSTRATE_NOT_REQUIRED_KEY,
@@ -109,14 +134,29 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
       return;
     }
     tracePipelineStage("substrate", "required");
-    if (lastEnqueuedInput.current === input) return;
+    // Deduplication is semantic: the input object reference is never the authority.
+    if (lastEnqueuedInputKey.current === inputKey) {
+      traceEvent({
+        stage: "substrate.request.skipped",
+        phase: "instant",
+        inputKey,
+        detail: { reason: "semantic-key-duplicate", lastEnqueuedInputKey: lastEnqueuedInputKey.current },
+      });
+      return;
+    }
 
     const executeSchedule = () => {
-      lastEnqueuedInput.current = input;
+      lastEnqueuedInputKey.current = inputKey;
       const requestId = ++latestRequest.current;
       const requestTrace = traceStartSpan("substrate.request", {
         inputKey,
         detail: { requestId, source: "useSubstrateBackend" },
+      });
+      traceEvent({
+        stage: "substrate.request.queued",
+        phase: "instant",
+        inputKey,
+        detail: { requestId },
       });
       const schedule = scheduler.snapshot();
       setBackendState((current) => ({
@@ -142,6 +182,12 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
         id: requestId,
         input,
         run: async (nextInput) => {
+          traceEvent({
+            stage: "substrate.request.started",
+            phase: "instant",
+            inputKey,
+            detail: { requestId },
+          });
           const computeTrace = traceStartSpan("substrate.compute", { inputKey });
           try {
             const result = await computeSubstrateWithFallback(workerBackend, cpuMainSubstrateBackend, nextInput);
@@ -180,6 +226,13 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
               roundTripMs: result.timing.roundTripMs,
             },
           });
+          const completion: RequestCompletion = stale ? "superseded" : result.error ? "failure" : "success";
+          traceRequestCompletion(completion, requestId, inputKey, {
+            backend: result.backend,
+            stale,
+            fallbackCode,
+            hasError: Boolean(result.error),
+          });
           traceEvent({
             stage: stale ? "substrate.stale-result" : "substrate.result",
             phase: "instant",
@@ -211,6 +264,10 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
             inputKey,
             detail: { requestId, stale, error: error instanceof Error ? error.message : String(error) },
           });
+          traceRequestCompletion(stale ? "superseded" : "failure", requestId, inputKey, {
+            stale,
+            error: error instanceof Error ? error.message : String(error),
+          });
           if (!mounted.current || stale || latestRequest.current !== requestId) return;
           const latestSchedule = scheduler.snapshot();
           setBackendState((current) => ({
@@ -226,12 +283,21 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
             },
           }));
         },
+        supersede: (reason) => {
+          traceRequestCompletion("superseded", requestId, inputKey, { reason, stage: "pending" });
+        },
+        dispose: (reason) => {
+          traceRequestCompletion("disposed", requestId, inputKey, { reason });
+        },
       });
     };
 
     const timerId = setTimeout(executeSchedule, 50);
     return () => clearTimeout(timerId);
-  }, [enabled, input, inputKey, scheduler, workerBackend]);
+    // Semantic deduplication uses inputKey; the input object itself is captured
+    // in the schedule closure and must not be a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, inputKey, scheduler, workerBackend]);
 
   useEffect(() => {
     mounted.current = true;
@@ -243,9 +309,12 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
       mounted.current = false;
       // React Strict Mode immediately re-runs this effect in development. Delay disposal
       // one task so the rehearsal setup can retain the live state-held backend.
-      disposeTimer.current = setTimeout(() => workerBackend.dispose(), 0);
+      disposeTimer.current = setTimeout(() => {
+        scheduler.dispose();
+        workerBackend.dispose();
+      }, 0);
     };
-  }, [workerBackend]);
+  }, [scheduler, workerBackend]);
 
   return backendState;
 }
