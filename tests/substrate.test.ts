@@ -7,7 +7,7 @@ import { layoutGlyphs } from "../src/engine/glyphLayout";
 import { baseState } from "../src/engine/presets";
 import { getTextLayout } from "../src/engine/textLayout";
 import { buildSubstrate } from "../src/engine/substrate/buildSubstrate";
-import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyphs";
+import { rasterizeGlyphs, type RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyphs";
 import { sampleDistance, sampleMask } from "../src/engine/substrate/sampling";
 import { getDeferredSubstrateDebugImage } from "../src/engine/substrate/debugImage";
 
@@ -153,6 +153,42 @@ describe("raster mask, edge map, and signed distance substrate", () => {
     const baseline = buildNative(0);
     const shifted = buildNative(40);
     expect(centerOfMassY(shifted.data)).toBeGreaterThan(centerOfMassY(baseline.data));
+  });
+
+  it("draws native fallback at the resolved scene baseline and line advance", () => {
+    const fillText = vi.fn();
+    const factory: RasterSurfaceFactory = () => ({
+      context: {
+        setTransform: () => {},
+        fillStyle: "",
+        fillRect: () => {},
+        fill: () => {},
+        fillText,
+        getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+        font: "",
+      } as unknown as ReturnType<RasterSurfaceFactory>["context"],
+      createPath: () => ({}),
+    });
+    const input = {
+      sourceText: "TYPE\nTEST",
+      textGeometry: null,
+      fontSize: 100,
+      tracking: 0,
+      fontFamily: "Arial",
+      fontWeight: 700,
+      baselineY: 400,
+      textX: 600,
+      lineHeight: 1.2,
+      textAlign: "center",
+      kerningMode: "none",
+      resolution,
+      bounds: null,
+      domainBounds: { x: 0, y: 0, width: 1200, height: 720 },
+      viewport: { x: 0, y: 0, width: 1200, height: 720 },
+    };
+    rasterizeGlyphs(input, factory);
+    expect(fillText).toHaveBeenNthCalledWith(1, "TYPE", 600, 400);
+    expect(fillText).toHaveBeenNthCalledWith(2, "TEST", 600, 400 + 100 * 1.2);
   });
 
   it("defers and caches debug images across animation-only reads", async () => {

@@ -270,8 +270,8 @@ return snapshot;
   );
   const capturedExportContext = useMemo(() => state.exportFrameMode === "time-zero"
     ? { mode: "time-zero" as const, timeMs: 0, frame: 0 }
-    : { mode: "current" as const, timeMs: context.timeMs, frame: context.frame },
-  [context.frame, context.timeMs, state.exportFrameMode]);
+    : { mode: "current" as const, timeMs: activeClockContext.timeMs, frame: activeClockContext.frame },
+  [activeClockContext.frame, activeClockContext.timeMs, state.exportFrameMode]);
   const activeRendererInputKey = useMemo(
     () => activeTypographyOutputKey
       ? rendererInputKey(state, activeTypographyOutputKey, substrateBuild.outputKey, capturedExportContext)
@@ -297,7 +297,6 @@ return snapshot;
   const rendererGeometryKey = activeTypographyOutputKey && (!renderer.usesSubstrate || substrateBuild.outputKey === substrateBuild.inputKey)
     ? activeRendererInputKey
     : null;
-  console.log("[EXPORT READINESS] rendererInputKey:", activeRendererInputKey, "rendererGeometryKey:", rendererGeometryKey, "substrate outputKey:", substrateBuild.outputKey, "substrate inputKey:", substrateBuild.inputKey, "activeTypographyOutputKey:", activeTypographyOutputKey);
   const baseExportReadiness = useMemo(() => resolveExportReadiness({
     font: fontResolution,
     typographyInputKey: activeTypographyInputKey,
@@ -325,7 +324,6 @@ return snapshot;
     return baseExportReadiness;
   }, [baseExportReadiness, sizeInteraction]);
   useEffect(() => {
-    console.log("[SIZE SETTLE EFFECT] phase:", sizeInteraction.phase, "fontSize:", state.fontSize, "committedSize:", sizeInteraction.phase === "settling" ? sizeInteraction.committedSize : null, "sizeExactReady:", sizeExactReady, "baseExportReadiness:", baseExportReadiness.status);
     if (sizeInteraction.phase !== "settling") return;
     if (state.fontSize !== sizeInteraction.committedSize) return;
     if (!sizeExactReady) return;

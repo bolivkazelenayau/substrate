@@ -1,7 +1,5 @@
 import type { RasterMask, SubstrateBuildInput, SubstrateType } from "./types";
 import { DEFAULT_ARTBOARD } from "../artboard";
-import { getTextLayout } from "../textLayout";
-import { TEXT_LAYOUT } from "../constants";
 
 export interface RasterContext {
   fillStyle: string | CanvasGradient | CanvasPattern;
@@ -61,18 +59,10 @@ export function rasterizeGlyphs(input: SubstrateBuildInput, factory: RasterSurfa
     if (input.kerningMode === "none" && "fontKerning" in context) context.fontKerning = "none";
     context.textAlign = "center";
     context.textBaseline = "alphabetic";
-    const nativeState = {
-      text: input.sourceText,
-      fontSize: input.fontSize,
-      lineHeight: input.lineHeight ?? 1,
-      tracking: input.tracking,
-      textOffsetY: input.baselineY - TEXT_LAYOUT.baselineY,
-      textAlign: input.textAlign ?? "center",
-      artboard: viewport,
-      font: null,
-    } as Parameters<typeof getTextLayout>[0];
-    getTextLayout(nativeState, false).lines.forEach((line) => {
-      context.fillText(line.text, line.x, line.baselineY);
+    const lineAdvance = input.fontSize * (input.lineHeight ?? 1);
+    const lines = input.sourceText.replace(/\r\n?/g, "\n").split("\n");
+    lines.forEach((line, lineIndex) => {
+      context.fillText(line, input.textX, input.baselineY + lineIndex * lineAdvance);
     });
     substrateType = "native-text-fallback";
   }

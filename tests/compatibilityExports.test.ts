@@ -48,7 +48,6 @@ beforeAll(async () => {
     state,
     context: { timeMs: 0, frame: 0, textGeometry, substrateData: substrate },
     textGeometry,
-    substrate,
   });
 }, 30_000);
 

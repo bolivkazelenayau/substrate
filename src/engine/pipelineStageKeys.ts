@@ -26,6 +26,7 @@ export function typographyStageKey(state: ProjectState, fontResourceKey: string)
     opticalSpacingStrength: state.opticalSpacingStrength,
     textAlign: state.textAlign,
     textOffsetY: state.textOffsetY,
+    precision: state.precision,
     artboard: state.artboard,
   });
 }

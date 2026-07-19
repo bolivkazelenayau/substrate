@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { baseState } from "../src/engine/presets";
-import { rendererGeometryCacheKey } from "../src/engine/rendererRuntime";
+import { generateRendererGeometry, rendererGeometryCacheKey } from "../src/engine/rendererRuntime";
 import type { ProjectState, RenderContext } from "../src/types";
 
 const context = (overrides: Partial<RenderContext> = {}): RenderContext => ({
@@ -95,5 +95,17 @@ describe("renderer geometry cache identity", () => {
     const base = rendererGeometryCacheKey(state, context({ timeMs: 0, frame: 0 }));
     const later = rendererGeometryCacheKey(state, context({ timeMs: 500, frame: 12 }));
     expect(later).not.toBe(base);
+  });
+
+  it("export-like null text/substrate keys collapse distinct semantic identities", () => {
+    const state: ProjectState = { ...baseState, renderer: "sdf-contours" };
+    // Two different semantic identities collapse to the same cache key when the
+    // context carries null text/substrate keys — this is the stale-geometry path
+    // that captureExportSnapshot must avoid by passing real output keys.
+    const nullKeyA = generateRendererGeometry(state, context({ textGeometryKey: null, substrateKey: null }));
+    const nullKeyB = generateRendererGeometry(state, context({ textGeometryKey: null, substrateKey: null }));
+    expect(nullKeyB).toBe(nullKeyA);
+    const keyedB = generateRendererGeometry(state, context({ textGeometryKey: "typography:b", substrateKey: "substrate:b" }));
+    expect(keyedB).not.toBe(nullKeyA);
   });
 });

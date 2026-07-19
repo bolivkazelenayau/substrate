@@ -29,4 +29,6 @@ describe("preview and export scene equality", () => {
     expect(final.svgViewBox).toBe(initial.svgViewBox);
     expect(final.exportSceneKey).toBe(initial.exportSceneKey);
   });
+
+
 });

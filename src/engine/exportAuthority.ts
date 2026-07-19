@@ -85,6 +85,7 @@ export function typographyInputKey(state: ProjectState, fontResourceKey: ExportK
     opticalSpacingStrength: state.opticalSpacingStrength,
     textAlign: state.textAlign,
     textOffsetY: state.textOffsetY,
+    precision: state.precision,
     artboard: state.artboard,
   });
 }
@@ -200,6 +201,8 @@ export function captureExportSnapshot(args: {
       manifest.usesSubstrate ? args.substrateData : null,
       args.effectiveArtboard,
       resolveRendererRequirements(document.renderer),
+      args.typographyOutputKey,
+      manifest.usesSubstrate ? args.substrateOutputKey : null,
     ),
     timeMs: args.context.timeMs,
     frame: args.context.frame,

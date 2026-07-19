@@ -96,25 +96,20 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
           disposed: schedule.disposed,
         },
       });
-      setBackendState((current) => {
-        console.log("[SUBSTRATE ONCHANGE] schedule:", JSON.stringify(schedule), "current phase:", current.status.phase);
-        return {
-          ...current,
-          status: {
-            ...current.status,
-            ...schedule,
-            requestId: schedule.latestRequestedId,
-            phase: schedule.activeRequestId !== null || schedule.pendingRequestCount > 0
-              ? "building"
-              : current.status.phase,
-          },
-        };
-      });
+      setBackendState((current) => ({
+        ...current,
+        status: {
+          ...current.status,
+          ...schedule,
+          requestId: schedule.latestRequestedId,          phase: schedule.activeRequestId !== null || schedule.pendingRequestCount > 0
+            ? "building"
+            : current.status.phase,
+        },
+      }));
     },
   ));
 
   useEffect(() => {
-    console.log("[SUBSTRATE EFFECT] enabled:", enabled, "inputKey:", inputKey, "current phase:", backendState.status.phase);
     if (!enabled) {
       // Invalidate in-flight worker completions and clear any pending scheduler
       // work when substrate is no longer required. An already-running compute may

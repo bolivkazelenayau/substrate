@@ -36,6 +36,12 @@ describe("pipeline stage keys", () => {
     expect(typographyStageKey(changed, "font:native")).not.toBe(typographyStageKey(baseState, "font:native"));
   });
 
+  it("changes typography key when precision changes", () => {
+    const changed = { ...baseState, precision: baseState.precision === 1 ? 3 : 1 };
+    expect(typographyStageKey(changed, "font:native")).not.toBe(typographyStageKey(baseState, "font:native"));
+    expect(typographyInputKey(changed, "font:native")).not.toBe(typographyInputKey(baseState, "font:native"));
+  });
+
   it("changes typography key when fontSize changes and restores it on round trip", () => {
     const key148 = typographyStageKey({ ...baseState, fontSize: 148 }, "font:fixture");
     const key540 = typographyStageKey({ ...baseState, fontSize: 540 }, "font:fixture");
