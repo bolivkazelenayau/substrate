@@ -32,14 +32,24 @@ export const recommendedPreviewBackends: Partial<Record<PresetId, PreviewBackend
   "Edge Current": "canvas-2d",
 };
 
+/**
+ * Element count at which the SVG DOM preview becomes a paint bottleneck.
+ * Above it, the canvas-2d preference also applies to static renderers: the
+ * artwork is painted into a single bitmap instead of one DOM node per mark,
+ * which keeps zoom/pan and slider edits off the SVG repaint path. Diagnostics
+ * already flag `SVG DEBUG / SLOW` at this same threshold (Viewport).
+ */
+export const CANVAS_PREVIEW_ELEMENT_THRESHOLD = 500;
+
 export function selectPreviewBackend(
   renderer: RendererId,
-  _elementCount: number,
+  elementCount: number,
   preference: PreviewBackendPreference,
   canvasAvailable = true,
 ): PreviewBackend {
-  if (renderer !== "flow" || preference === "svg-dom" || !canvasAvailable) return "svg-dom";
-  return "canvas-2d";
+  if (preference === "svg-dom" || !canvasAvailable) return "svg-dom";
+  if (renderer === "flow") return "canvas-2d";
+  return elementCount >= CANVAS_PREVIEW_ELEMENT_THRESHOLD ? "canvas-2d" : "svg-dom";
 }
 
 export function shouldRunPreviewAnimation(

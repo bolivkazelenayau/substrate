@@ -108,27 +108,26 @@ export function snapshotNavigationCounters(): NavigationCounters {
 // Navigation compositing mode — runtime-only, dev-tunable.
 //
 // Controls whether `CanvasNavigation` keeps the preview subtree on the native
-// crisp repaint path (`"crisp"`, default) or promotes it to a compositor GPU
-// layer during active zoom/pan (`"composited"`). The crisp default re-rasters
-// the SVG/canvas subtree on every committed transform value, so the preview
-// stays sharp at every zoom step at the cost of a heavier paint. The
-// `"composited"` escape hatch restores the previous GPU layer promotion
-// (`translate3d`, `will-change: transform`, `backface-visibility: hidden`),
-// which was the source of transient gesture-time blur: the browser scales a
-// pre-rasterized layer texture while zooming before re-rasterizing sharply.
+// crisp repaint path (`"crisp"`) or promotes it to a compositor GPU layer
+// (`"composited"`, default since the P0 zoom fix). The crisp path re-rasters
+// the SVG/canvas subtree on every committed transform value — sharp at every
+// zoom step, but the full-scene repaint is the dominant zoom cost on heavy
+// (multi-thousand-node) SVG scenes. The composited default keeps the subtree
+// on a GPU layer (`translate3d` + `backface-visibility: hidden`), with
+// `will-change: transform` applied only during active interaction and removed
+// ~220 ms after the gesture settles, so the browser re-rasterizes sharply at
+// the final zoom. Trade-off: transient upscale blur during the gesture itself.
 //
 // NOT serialized into `ProjectState`, NOT a creative control, and NOT exposed
 // through any UI surface. Reachable only via the dev console global
-// `__SUBSTRATE_NAV_COMPOSITING__` (set in dev builds). Production builds are
-// permanently locked to `"crisp"`: the DEV-guarded getter/setter make the
-// branch a compile-time constant so the `translate3d`/`will-change` paths are
-// dead-code-eliminated from the production bundle.
+// `__SUBSTRATE_NAV_COMPOSITING__` (set in dev builds) as an escape hatch back
+// to `"crisp"`. The getter is intentionally build-agnostic: production ships
+// the composited hybrid path.
 export type NavigationCompositingMode = "crisp" | "composited";
 
-let compositingMode: NavigationCompositingMode = "crisp";
+let compositingMode: NavigationCompositingMode = "composited";
 
 export function getNavigationCompositingMode(): NavigationCompositingMode {
-  if (!DEV) return "crisp";
   return compositingMode;
 }
 

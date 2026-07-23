@@ -8,6 +8,7 @@ import {
   updateTimingAverage,
 } from "../src/engine/animationTiming";
 import {
+  CANVAS_PREVIEW_ELEMENT_THRESHOLD,
   DEFAULT_PREVIEW_FPS_CAP,
   previewBackends,
   recommendedPreviewBackends,
@@ -92,7 +93,19 @@ describe("animation preview", () => {
     expect(selectPreviewBackend("flow", 1564, "canvas-2d")).toBe("canvas-2d");
     expect(selectPreviewBackend("flow", 1564, "svg-dom")).toBe("svg-dom");
     expect(selectPreviewBackend("flow", 1564, "canvas-2d", false)).toBe("svg-dom");
-    expect(selectPreviewBackend("ripple", 1564, "canvas-2d")).toBe("svg-dom");
+  });
+
+  it("routes heavy static scenes to canvas-2d only above the element threshold", () => {
+    // Static renderers stay on SVG DOM for light scenes so vector editing stays crisp.
+    expect(selectPreviewBackend("ripple", 340, "canvas-2d")).toBe("svg-dom");
+    expect(selectPreviewBackend("sdf-halftone", CANVAS_PREVIEW_ELEMENT_THRESHOLD - 1, "canvas-2d")).toBe("svg-dom");
+    // Heavy scenes use the bitmap preview: zoom/pan and edits avoid per-frame SVG repaints.
+    expect(selectPreviewBackend("ripple", 1564, "canvas-2d")).toBe("canvas-2d");
+    expect(selectPreviewBackend("sdf-halftone", CANVAS_PREVIEW_ELEMENT_THRESHOLD, "canvas-2d")).toBe("canvas-2d");
+    expect(selectPreviewBackend("sdf-contours", 4000, "canvas-2d")).toBe("canvas-2d");
+    // The SVG Accuracy preference and canvas failure always win over the threshold.
+    expect(selectPreviewBackend("sdf-halftone", 4000, "svg-dom")).toBe("svg-dom");
+    expect(selectPreviewBackend("sdf-halftone", 4000, "canvas-2d", false)).toBe("svg-dom");
     expect(previewBackends["canvas-2d"]).toMatchObject({
       label: "Canvas Performance",
       detail: "preview only",

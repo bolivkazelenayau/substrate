@@ -25,6 +25,19 @@ async function selectRenderer(page: Page, label: string) {
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
 }
 
+async function openPreviewPanel(page: Page) {
+  const preview = page.locator("button.panel-heading-button").filter({ hasText: "Preview" });
+  if ((await preview.getAttribute("aria-expanded")) !== "true") await preview.click();
+}
+
+// Heavy scenes auto-route to the canvas bitmap preview (element threshold);
+// gates below read SVG `.marks` geometry bounds, so they pin the SVG backend.
+async function setPreviewBackend(page: Page, backend: "svg-dom" | "canvas-2d") {
+  await openPreviewPanel(page);
+  await page.getByLabel("Preview Mode").selectOption(backend);
+  await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
+}
+
 async function setSizeDirect(page: Page, value: number, settleTimeout = 30_000) {
   const control = size(page);
   await control.fill(String(value));
@@ -180,6 +193,7 @@ for (const rendererLabel of ["SDF Contours", "SDF Halftone", "SDF Streamlines", 
   test(`Gate: ${rendererLabel} output spans effective artboard after large parsed-font Size`, async ({ page }) => {
     await loadApp(page, "Split Field");
     await selectRenderer(page, rendererLabel);
+    await setPreviewBackend(page, "svg-dom");
     // SDF Contours builds are heavier; give them more time to settle in production builds.
     const isHeavy = rendererLabel === "SDF Contours";
     const directTimeout = isHeavy ? 120_000 : 30_000;

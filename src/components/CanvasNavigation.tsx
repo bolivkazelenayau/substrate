@@ -36,16 +36,15 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
   const [activeInteraction, setActiveInteraction] = useState(false);
   const [hudHost, setHudHost] = useState<HTMLDivElement | null>(null);
   // Read the runtime compositing mode once per mount. The mode is intentionally
-  // not reactive: switching it requires a re-mount and is a dev-only escape
-  // hatch (see `viewportNavigationInstrumentation.ts`). The default `"crisp"`
-  // keeps the SVG/canvas subtree on the native repaint path; `"composited"`
-  // promotes it to a GPU layer via `translate3d` + `will-change` + backface
-  // visibility, which trades sharpness during the gesture for lower paint
-  // cost. The `import.meta.env.DEV` short-circuit makes the composited branch
-  // a compile-time `false` in production builds, so the `translate3d` template
-  // and `will-change` class are dead-code-eliminated — production ships only
-  // the crisp 2D `translate(...) scale(...)` path.
-  const composited = import.meta.env.DEV && getNavigationCompositingMode() === "composited";
+  // not reactive: switching it requires a re-mount and is a dev-console escape
+  // hatch (see `viewportNavigationInstrumentation.ts`). The default
+  // `"composited"` promotes the SVG/canvas subtree to a GPU layer via
+  // `translate3d` + backface visibility, with `will-change: transform` gated on
+  // active interaction — gesture frames are compositor-cheap texture scaling,
+  // and removing the hint after the gesture settles re-rasterizes the scene
+  // sharply at the final zoom. `"crisp"` restores the old repaint-per-frame
+  // path (sharp in flight, expensive on heavy scenes).
+  const composited = getNavigationCompositingMode() === "composited";
   const frameRef = useRef<HTMLDivElement>(null);
   const hovered = useRef(false);
   const panPointerId = useRef<number | null>(null);
@@ -215,13 +214,14 @@ export function CanvasNavigation({ children }: CanvasNavigationProps) {
     traceEvent({ stage: "navigation.pointerup", phase: "instant", detail: { pointerId: event.pointerId } });
   };
 
-  // Crisp default: a 2D `translate(...) scale(...)` keeps the SVG subtree on
-  // the browser's native repaint path — every committed zoom value re-rasters
-  // the vector art sharply, with no pre-rasterized layer texture to upscale.
-  // `translate3d` (composited mode) promotes the subtree to a GPU layer; while
-  // that cuts paint cost, the compositor upscales the layer texture during the
-  // gesture and re-rasterizes only after the gesture ends, producing the
-  // observed transient blur on a vector/design surface.
+  // Composited default (P0 zoom fix): `translate3d` keeps the preview subtree
+  // on a GPU layer, so committed zoom values are compositor-only texture
+  // transforms — no per-frame re-raster of a multi-thousand-node SVG scene.
+  // The layer may upscale (soften) during the gesture; after the interaction
+  // idle timeout removes the `will-change` hint, the browser re-rasterizes the
+  // scene sharply at the settled zoom. `"crisp"` mode uses a plain 2D
+  // `translate(...) scale(...)`: sharp every frame, but pays a full repaint
+  // per committed zoom value.
   const transform = composited
     ? `translate3d(${viewport.panX}px, ${viewport.panY}px, 0) scale(${viewport.zoom})`
     : `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`;

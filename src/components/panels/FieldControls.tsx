@@ -1,4 +1,4 @@
-import { memo, useState, type ChangeEvent, type RefObject } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { applyPreset, baseState, getPresetDisplayLabel, presetIds } from "../../engine/presets";
 import { getRenderer, rendererList } from "../../engine/renderers";
 import type { SizeRangeHandlers } from "../../hooks/useSizeInteraction";
@@ -93,12 +93,100 @@ const rangeDefaults: Record<string, number> = {
 };
 
 export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter, sizeDisplayFontSize, sizeHandlers }: FieldControlsProps) {
-  const renderer = getRenderer(state.renderer);
-  const controlActivity = getControlActivity(state, parsedFontPathsAvailable);
-  const emitterConsumerActive = state.renderer === "glyph-diffuser"
-    || state.renderer === "wave-contours"
-    || (controlActivity.glyphModulation && state.glyphFieldMode !== "off");
-  const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
+  // Control commit coalescing (P0 perf). Slider/color drags fire `input` events
+  // faster than the frame rate; committing each one synchronously re-runs the
+  // whole document pipeline (geometry regen + SVG reconcile) several times per
+  // frame and the UI falls behind the pointer. Controls instead edit a local
+  // draft mirror (instant feedback) and the document commit is coalesced to at
+  // most once per animation frame, latest-wins — the same discipline the size
+  // interaction and canvas navigation already use. Commit-intent gestures
+  // (range release `change`, clicks, dblclick reset, Enter, blur) flush the
+  // pending patch synchronously via document-level listeners; the continuous
+  // `input` stream is the only coalesced path.
+  const [draft, setDraft] = useState(state);
+  const draftRef = useRef(state);
+  const forwardedRef = useRef(state);
+  const pendingRef = useRef<ProjectState | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  // Adopt external document changes (preset apply, import, font, size commit,
+  // seed randomize). A draft patch still pending at that moment is superseded
+  // by the newer document, matching previous last-writer-wins semantics.
+  useEffect(() => {
+    if (state === forwardedRef.current) return;
+    forwardedRef.current = state;
+    draftRef.current = state;
+    pendingRef.current = null;
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setDraft(state);
+  }, [state]);
+
+  const flushPending = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (pending && pending !== forwardedRef.current) {
+      forwardedRef.current = pending;
+      setState(pending);
+    }
+  }, [setState]);
+
+  const forward = useCallback((update: ProjectState | ((current: ProjectState) => ProjectState)) => {
+    const resolved = typeof update === "function" ? update(draftRef.current) : update;
+    if (resolved === draftRef.current) return;
+    draftRef.current = resolved;
+    pendingRef.current = resolved;
+    setDraft(resolved);
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        if (pending && pending !== forwardedRef.current) {
+          forwardedRef.current = pending;
+          setState(pending);
+        }
+      });
+    }
+  }, [setState]);
+
+  // Document bubble listeners fire AFTER React's root handlers, so the pending
+  // draft patch is already queued when they run.
+  useEffect(() => {
+    const flush = () => flushPending();
+    const flushOnEnter = (event: KeyboardEvent) => {
+      if (event.key === "Enter") flushPending();
+    };
+    document.addEventListener("change", flush);
+    document.addEventListener("click", flush);
+    document.addEventListener("dblclick", flush);
+    document.addEventListener("keydown", flushOnEnter);
+    document.addEventListener("focusout", flush);
+    return () => {
+      document.removeEventListener("change", flush);
+      document.removeEventListener("click", flush);
+      document.removeEventListener("dblclick", flush);
+      document.removeEventListener("keydown", flushOnEnter);
+      document.removeEventListener("focusout", flush);
+    };
+  }, [flushPending]);
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  const renderer = getRenderer(draft.renderer);
+  const controlActivity = getControlActivity(draft, parsedFontPathsAvailable);
+  const emitterConsumerActive = draft.renderer === "glyph-diffuser"
+    || draft.renderer === "wave-contours"
+    || (controlActivity.glyphModulation && draft.glyphFieldMode !== "off");
+  const patchField = (next: Partial<ProjectState>) => forward({ ...draftRef.current, ...next, preset: "Custom" });
   const defaultOpen = {
     advanced: false,
     emitters: false,
@@ -106,11 +194,11 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
     debug: false,
   };
 
-  const [lastRenderer, setLastRenderer] = useState(state.renderer);
+  const [lastRenderer, setLastRenderer] = useState(draft.renderer);
   const [userToggles, setUserToggles] = useState<Record<string, boolean>>({});
 
-  if (state.renderer !== lastRenderer) {
-    setLastRenderer(state.renderer);
+  if (draft.renderer !== lastRenderer) {
+    setLastRenderer(draft.renderer);
     setUserToggles({});
   }
 
@@ -122,8 +210,8 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   return (
     <aside className="controls" data-testid="controls-pane">
       <ArtworkTypographyPanels
-        state={state}
-        setState={setState}
+        state={draft}
+        setState={forward}
         fontFileRef={fontFileRef}
         onFontUpload={onFontUpload}
         onClearFont={onClearFont}
@@ -140,13 +228,13 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         </div>
         <label className="field">
           <span>Preset</span>
-          <select value={state.preset} onChange={(event) => setState(applyPreset(state, event.target.value as ProjectState["preset"]))}>
+          <select value={draft.preset} onChange={(event) => forward(applyPreset(draftRef.current, event.target.value as ProjectState["preset"]))}>
             {presetIds.map((name) => <option key={name} value={name}>{getPresetDisplayLabel(name)}</option>)}
           </select>
         </label>
         <div className="segmented" aria-label="Renderer">
           {rendererList.map((item) => (
-            <button key={item.id} className={state.renderer === item.id ? "active" : ""} onClick={() => patchField({ renderer: item.id })}>
+            <button key={item.id} className={draft.renderer === item.id ? "active" : ""} onClick={() => patchField({ renderer: item.id })}>
               {item.label}
             </button>
           ))}
@@ -161,7 +249,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
               <Range
                 key={control.id}
                 label={control.label}
-                value={state[control.id]}
+                value={draft[control.id]}
                 min={control.min}
                 max={control.max}
                 step={control.step}
@@ -171,21 +259,21 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
           ))}
         </div>
 
-        <EmitterControls state={state} setState={setState} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
+        <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
       </FieldPanel>
 
       <AdvancedFieldPanel
-        state={state}
-        setState={setState}
+        state={draft}
+        setState={forward}
         parsedFontPathsAvailable={parsedFontPathsAvailable}
         open={isOpen("advanced")}
         onToggle={() => toggleGroup("advanced")}
       />
 
       <OutputPanels
-        key={state.renderer}
-        state={state}
-        setState={setState}
+        key={draft.renderer}
+        state={draft}
+        setState={forward}
         previewSettings={previewSettings}
         onPreviewSettingsChange={onPreviewSettingsChange}
         diagnosticsMode={diagnosticsMode}

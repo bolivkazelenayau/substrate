@@ -16,6 +16,7 @@ import { useDeferredDebugImage } from "../hooks/useDeferredDebugImage";
 import { FLOW_PREVIEW_BUCKET_COUNT, type FlowPreviewUpdateResult } from "../engine/flowPreviewOptimization";
 import { FlowPreview } from "./FlowPreview";
 import { CanvasFlowPreview, type CanvasPreviewSample } from "./CanvasFlowPreview";
+import { CanvasStaticPreview } from "./CanvasStaticPreview";
 import type { PreviewBackend } from "../engine/previewBackend";
 import { formatFps, getFramePacingStatus } from "../engine/animationTiming";
 import { useWaveFieldDebugImage } from "../hooks/useWaveFieldDebugImage";
@@ -319,18 +320,31 @@ const gradientVectors = useMemo(() => {
         aria-hidden="true"
       />
       {previewBackend === "canvas-2d" && (
-        <CanvasFlowPreview
-          state={state}
-          textGeometry={textGeometry}
-          artboard={{ x: effectiveRect.x, y: effectiveRect.y, width: effectiveRect.width, height: effectiveRect.height }}
-          frameKey={geometry.id}
-          running={previewRunning}
-          fpsCap={previewSettings.fpsCap}
-          pauseWhenHidden={previewSettings.pauseWhenHidden}
-          onSample={onCanvasSample}
-          onFailure={onCanvasFailure}
-          sceneTransform={canvasSceneTransform}
-        />
+        state.renderer === "flow" ? (
+          <CanvasFlowPreview
+            state={state}
+            textGeometry={textGeometry}
+            artboard={{ x: effectiveRect.x, y: effectiveRect.y, width: effectiveRect.width, height: effectiveRect.height }}
+            frameKey={geometry.id}
+            running={previewRunning}
+            fpsCap={previewSettings.fpsCap}
+            pauseWhenHidden={previewSettings.pauseWhenHidden}
+            onSample={onCanvasSample}
+            onFailure={onCanvasFailure}
+            sceneTransform={canvasSceneTransform}
+          />
+        ) : (
+          <CanvasStaticPreview
+            state={state}
+            geometry={presentationGeometry}
+            textGeometry={textGeometry}
+            artboard={{ x: effectiveRect.x, y: effectiveRect.y, width: effectiveRect.width, height: effectiveRect.height }}
+            frameKey={geometry.id}
+            sceneTransform={canvasSceneTransform}
+            onSample={onCanvasSample}
+            onFailure={onCanvasFailure}
+          />
+        )
       )}
       <svg ref={svgRef} className="artboard" data-testid="artwork-svg" viewBox={`${effectiveRect.x} ${effectiveRect.y} ${effectiveRect.width} ${effectiveRect.height}`} aria-label={`Generative preview of ${state.text}`}>
         {previewBackend !== "canvas-2d" && !state.transparentBackground && (
@@ -364,20 +378,20 @@ const gradientVectors = useMemo(() => {
           )}
         </defs>
         <g id={SVG_IDS.artwork} mask={svgTraceConfig.mode !== "mask-disabled" && (renderer.clipPreviewToText?.(state) ?? true) ? `url(#${SVG_IDS.mask})` : undefined} className="marks" style={{ fill: state.primaryColor, stroke: state.primaryColor }} strokeWidth={renderer.strokeWidth?.(state) ?? LEGACY_PREVIEW_STROKE_WIDTH}>
-          {state.renderer === "flow" && previewBackend === "svg-dom"
-            ? <FlowPreview
-                geometry={presentationGeometry}
-                onUpdate={handleFlowPreviewUpdate}
-                bucketCount={svgTraceConfig.bucketCount}
-                traceMode={svgTraceConfig.mode}
-                state={state}
-                context={context}
-                running={previewRunning}
-                fpsCap={previewSettings.fpsCap}
-              />
-            : state.renderer !== "flow"
-              ? presentationGeometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)
-              : null}
+          {previewBackend === "canvas-2d"
+            ? null
+            : state.renderer === "flow"
+              ? <FlowPreview
+                  geometry={presentationGeometry}
+                  onUpdate={handleFlowPreviewUpdate}
+                  bucketCount={svgTraceConfig.bucketCount}
+                  traceMode={svgTraceConfig.mode}
+                  state={state}
+                  context={context}
+                  running={previewRunning}
+                  fpsCap={previewSettings.fpsCap}
+                />
+              : presentationGeometry.geometries.map((item, index) => <GeometryElement key={index} geometry={item} />)}
         </g>
         {showOverlay && <g className="diffuser-text-overlay" opacity={renderer.textOverlayOpacity?.(state) ?? 1}>
           {hasGlyphPaths

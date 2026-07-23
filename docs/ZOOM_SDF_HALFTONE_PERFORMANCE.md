@@ -1,6 +1,12 @@
 # Производительность: зум, инициализация SDF, halftone, маппинги
 
-Дата: 2026-07-20 · Анализ: чтение исходников `src/` (~40 файлов, все ссылки `file:line` проверены по рабочему дереву) · Код не изменялся.
+Дата: 2026-07-20 · Анализ: чтение исходников `src/` (~40 файлов, все ссылки `file:line` проверены по рабочему дереву).
+
+> **Статус P0 (2026-07-20): реализовано.**
+> - **P0-A (зум)**: production переведён на composited-гибрид — GPU-слой во время жеста (`translate3d` + `will-change` под `is-active-interaction`), crisp re-raster после 220 мс idle. `viewportNavigationInstrumentation.ts` (дефолт `"composited"`, getter без DEV-гейта), `CanvasNavigation.tsx`, `styles.css`. Escape-hatch: `__SUBSTRATE_NAV_COMPOSITING__.set("crisp")` в dev.
+> - **P0-B (частично)**: статические рендереры при ≥500 элементов (`CANVAS_PREVIEW_ELEMENT_THRESHOLD`, `previewBackend.ts`) автоматически уходят в bitmap-превью через новый `CanvasStaticPreview` (батчинг по opacity, клип как у flow). Предпочтение «SVG Accuracy» и canvas-failure по-прежнему возвращают SVG DOM.
+> - **P0 (контролы)**: коммиты контролов коалесцируются в rAF через draft-mirror в `FieldControls`; жесты-коммиты (change/click/dblclick/Enter/blur) флашат синхронно.
+> Остальные пункты P1+ (wave field → worker, градиент-растр SDF, `contain`, halftone-градиент) открыты.
 
 ---
 

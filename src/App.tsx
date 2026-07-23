@@ -230,8 +230,9 @@ return snapshot;
       sceneLayout.key,
       activeTypographyOutputKey,
       substrateBuild.outputKey,
+      emitterFieldKey,
     ),
-    [activeTypographyOutputKey, pipelineRequirements, sceneLayout.key, state.renderer, substrateBuild.outputKey],
+    [activeTypographyOutputKey, emitterFieldKey, pipelineRequirements, sceneLayout.key, state.renderer, substrateBuild.outputKey],
   );
   const staticRenderContext: RenderContext = useMemo(
     () => createStaticRenderContext(
