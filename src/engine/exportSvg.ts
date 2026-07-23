@@ -12,6 +12,7 @@ import { assertVectorOnlySvg } from "./svgValidation";
 import { DEFAULT_CONTOUR_STROKE_WIDTH, LEGACY_EXPORT_STROKE_WIDTH } from "./contourStroke";
 import type { ExportSnapshot } from "./exportAuthority";
 import { createStaticRenderContext } from "./renderContextLifecycle";
+import { resolveRendererRequirements } from "./rendererRequirements";
 import type { ArtboardRect } from "./sceneLayout";
 
 const escape = (value: string) =>
@@ -171,7 +172,13 @@ export function createTimedSvg(
 
 export function createTimedSvgFromSnapshot(snapshot: ExportSnapshot) {
   const context: RenderContext = {
-    ...createStaticRenderContext(snapshot.document, snapshot.typography.geometry, snapshot.substrate?.data ?? null, snapshot.effectiveArtboard),
+    ...createStaticRenderContext(
+      snapshot.document,
+      snapshot.typography.geometry,
+      snapshot.substrate?.data ?? null,
+      snapshot.effectiveArtboard,
+      resolveRendererRequirements(snapshot.document.renderer)
+    ),
     timeMs: snapshot.context.timeMs,
     frame: snapshot.context.frame,
   };
