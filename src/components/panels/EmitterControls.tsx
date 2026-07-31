@@ -10,6 +10,7 @@ interface EmitterControlsProps {
   setState: (state: ProjectState) => void;
   emitterGlyphs: GlyphEmitterMetadata[];
   consumerActive: boolean;
+  displayBehaviorSupported: boolean;
   open: boolean;
   onToggle: () => void;
 }
@@ -29,13 +30,23 @@ const defaults: Record<string, number> = {
   "Global base radius": baseState.emitter.radius,
   "Global self influence": baseState.emitter.selfInfluence,
   "Global neighbor influence": baseState.emitter.neighborInfluence,
+  "Micro distortion": baseState.emitterDisplay.distortionStrength,
+  "Response radius": baseState.emitterDisplay.distortionRadius,
+  "Noise scale": baseState.emitterDisplay.noiseScale,
+  "Grid size": baseState.emitterDisplay.gridSize,
+  "Grid amount": baseState.emitterDisplay.gridAmount,
+  "Interior suppression": baseState.emitterDisplay.interiorSuppression,
+  "Edge bias": baseState.emitterDisplay.edgeBias,
+  "Orbit amount": baseState.emitterDisplay.orbitAmount,
+  "Settle / repel": baseState.emitterDisplay.divergence,
 };
 
-export function EmitterControls({ state, setState, emitterGlyphs, consumerActive, open, onToggle }: EmitterControlsProps) {
+export function EmitterControls({ state, setState, emitterGlyphs, consumerActive, displayBehaviorSupported, open, onToggle }: EmitterControlsProps) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const eligibleGlyphs = emitterGlyphs.filter((glyph) => glyph.emitterEligible);
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const patchEmitter = (next: Partial<ProjectState["emitter"]>) => patchField({ emitter: { ...state.emitter, ...next } });
+  const patchDisplay = (next: Partial<ProjectState["emitterDisplay"]>) => patchField({ emitterDisplay: { ...state.emitterDisplay, ...next } });
   const patchRow = (id: string, next: Partial<ProjectState["emitters"][number]>) => patchField({ emitters: updateEmitterRow(state.emitters, id, next) });
   const invalidGlyph = (glyphId: string | null) => Boolean(glyphId && !glyphId.startsWith("auto-") && !eligibleGlyphs.some((glyph) => glyph.glyphId === glyphId));
   const title = `Emitters · ${state.emitterMode === "single" ? "single" : `${state.emitters.filter((row) => row.enabled).length}/${state.emitters.length}`}`;
@@ -85,9 +96,56 @@ export function EmitterControls({ state, setState, emitterGlyphs, consumerActive
               <button type="button" className="emitter-add" disabled={state.emitters.length >= MAX_EMITTER_ROWS || eligibleGlyphs.length === 0} onClick={() => patchField({ emitters: addEmitterRow(state.emitters) })}>Add emitter · {state.emitters.length}/{MAX_EMITTER_ROWS}</button>
               <GlobalEmitter state={state} patchField={patchField} patchEmitter={patchEmitter} />
             </>}
+        <DisplayBehaviorControls
+          state={state}
+          supported={displayBehaviorSupported}
+          patchDisplay={patchDisplay}
+        />
       </div>}
     </div>
   );
+}
+
+function DisplayBehaviorControls({
+  state,
+  supported,
+  patchDisplay,
+}: {
+  state: ProjectState;
+  supported: boolean;
+  patchDisplay: (next: Partial<ProjectState["emitterDisplay"]>) => void;
+}) {
+  const display = state.emitterDisplay;
+  const exterior = display.mode === "exclude" || display.mode === "orbit";
+  return <div className="control-group nested-group emitter-display-controls">
+    <div className="section-subheading">Display response</div>
+    <label className="field compact-field">
+      <span>Behavior</span>
+      <select value={display.mode} onChange={(event) => patchDisplay({ mode: event.target.value as ProjectState["emitterDisplay"]["mode"] })}>
+        <option value="field">Field / legacy placement</option>
+        <option value="distort">Display distortion</option>
+        <option value="exclude">No emit inside glyph</option>
+        <option value="orbit">Orbit / disperse</option>
+      </select>
+      <small>{supported
+        ? "Uses the authoritative glyph substrate; strongest near enabled emitter zones."
+        : "Available in Glyph Diffuser and SDF Halftone; this renderer keeps its existing output."}</small>
+    </label>
+    {display.mode !== "field" && <>
+      <Range label="Micro distortion" value={display.distortionStrength} min={0} max={100} onChange={(distortionStrength) => patchDisplay({ distortionStrength })} />
+      <Range label="Response radius" value={display.distortionRadius} min={8} max={720} step={4} onChange={(distortionRadius) => patchDisplay({ distortionRadius })} />
+      <Range label="Noise scale" value={display.noiseScale} min={2} max={160} step={2} onChange={(noiseScale) => patchDisplay({ noiseScale })} />
+      <Range label="Grid size" value={display.gridSize} min={0} max={96} onChange={(gridSize) => patchDisplay({ gridSize })} />
+      <Range label="Grid amount" value={display.gridAmount} min={0} max={100} onChange={(gridAmount) => patchDisplay({ gridAmount })} />
+      <Range label="Edge bias" value={display.edgeBias} min={0} max={100} onChange={(edgeBias) => patchDisplay({ edgeBias })} />
+      {exterior && <Range label="Interior suppression" value={display.interiorSuppression} min={0} max={100} onChange={(interiorSuppression) => patchDisplay({ interiorSuppression })} />}
+      {display.mode === "orbit" && <>
+        <Range label="Orbit amount" value={display.orbitAmount} min={0} max={100} onChange={(orbitAmount) => patchDisplay({ orbitAmount })} />
+        <Range label="Settle / repel" value={display.divergence} min={-100} max={100} onChange={(divergence) => patchDisplay({ divergence })} />
+      </>}
+      <small className="inactive-hint">Grid size 0 disables quantization. Negative settle/repel values pull toward the contour; positive values push outward.</small>
+    </>}
+  </div>;
 }
 
 function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: ProjectState; eligibleGlyphs: GlyphEmitterMetadata[]; patchEmitter: (next: Partial<ProjectState["emitter"]>) => void }) {

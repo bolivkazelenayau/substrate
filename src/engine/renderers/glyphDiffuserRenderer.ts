@@ -7,6 +7,7 @@ import { sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import type { ProjectState } from "../../types";
 import { SAFETY_BUDGETS } from "../safetyBudget";
+import { createEmitterDisplaySampler, emitterDisplayUsesExterior, type EmitterDisplaySample } from "../field/emitterDisplayResponse";
 
 function fallbackDiagnostics(warning: string): RendererDiagnostics {
   return {
@@ -55,7 +56,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
   usesTime: false,
   usesSubstrate: true,
   usesGlyphEmitterField: true,
-  clipPreviewToText: (state) => state.diffuserComposition === "clipped",
+  clipPreviewToText: (state) => state.diffuserComposition === "clipped" && !emitterDisplayUsesExterior(state),
   showTextOverlay: (state) => state.overlayMode !== "hidden" && (state.overlayMode === "warped-outline" || state.diffuserComposition === "behind-text" || state.diffuserComposition === "edge-eroded"),
   textOverlayOpacity: (state) => state.textOverlayOpacity,
   estimateCost: (state) => ({ marks: state.maxNodes, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} circles` }),
@@ -76,6 +77,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     if (!substrate || !field) {
       return { id: "glyph-diffuser", geometries: [], diagnostics: fallbackDiagnostics("Glyph Diffuser requires a non-empty substrate.") };
     }
+    const displayResponse = createEmitterDisplaySampler(state, context);
     const started = performance.now();
     const random = createSeededRandom(state.seed);
     const densityRatio = (state.density - 10) / 70;
@@ -141,6 +143,11 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     let fieldSamples = 0;
     let rejectedFarFieldCandidates = 0;
     let acceptedCrestDots = 0;
+    let displayResponseSamples = 0;
+    let displayDisplacementTotal = 0;
+    let displayInteriorRejections = 0;
+    let displayBreakupRejections = 0;
+    let displayQuantizedSamples = 0;
     const renderedMarkCountPerEmitter: Record<string, number> = state.emitterMode === "multiple"
       ? Object.fromEntries(state.emitters.filter((row) => row.enabled).map((row) => [row.id, 0]))
       : { [state.emitter.id]: 0 };
@@ -150,8 +157,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
 
     for (let row = 0; row < rows; row += candidateStride) {
       for (let column = 0; column < columns; column += candidateStride) {
-        const x = minX + (column + 0.5) * spacing + (random() * 2 - 1) * jitter;
-        const y = minY + (row + 0.5) * spacing + (random() * 2 - 1) * jitter;
+        let x = minX + (column + 0.5) * spacing + (random() * 2 - 1) * jitter;
+        let y = minY + (row + 0.5) * spacing + (random() * 2 - 1) * jitter;
         // Consume a fixed random budget per multi-emitter candidate. A row
         // changing acceptance must not perturb random values in another row's
         // standalone region.
@@ -174,17 +181,60 @@ export const glyphDiffuserRenderer: VectorRenderer = {
             normalizedDistance = candidateNormalized;
           }
         }
-        const mask = sampleMask(substrate, x, y);
-        const insideText = mask >= 0.5;
+        let mask = sampleMask(substrate, x, y);
+        let insideText = mask >= 0.5;
         const insideHalo = normalizedDistance <= 1;
-        const domainAccepted = state.diffuserDomain === "inside-text"
-          ? insideText
-          : state.diffuserDomain === "halo"
-            ? insideHalo
-            : insideText || insideHalo;
-        if (!domainAccepted || (state.diffuserComposition === "clipped" && !insideText)) {
+        const domainAccepted = displayResponse.exterior
+          ? insideHalo
+          : state.diffuserDomain === "inside-text"
+            ? insideText
+            : state.diffuserDomain === "halo"
+              ? insideHalo
+              : insideText || insideHalo;
+        if (!domainAccepted || (!displayResponse.exterior && state.diffuserComposition === "clipped" && !insideText)) {
           rejectedOutsideMask += 1;
           continue;
+        }
+
+        let displaySample: EmitterDisplaySample | null = null;
+        if (displayResponse.active) {
+          const displayProbe = displayResponse.probe(x, y);
+          if (displayResponse.exterior && (!displayProbe.affected || Math.abs(displayProbe.signedDistance) > displayResponse.shellRadius)) {
+            rejectedByInfluence += 1;
+            continue;
+          }
+          displaySample = displayResponse.sample(x, y, row * columns + column);
+          displayResponseSamples += 1;
+          if (!displaySample.keep) {
+            if (displaySample.interiorRejected) displayInteriorRejections += 1;
+            if (displaySample.breakupRejected) displayBreakupRejections += 1;
+            rejectedByInfluence += 1;
+            continue;
+          }
+          x = displaySample.point.x;
+          y = displaySample.point.y;
+          if (x < artboardLeft(artboard) || x > artboardRight(artboard) || y < artboardTop(artboard) || y > artboardBottom(artboard)) {
+            rejectedOutsideMask += 1;
+            continue;
+          }
+          displayDisplacementTotal += displaySample.displacement;
+          if (displaySample.quantized) displayQuantizedSamples += 1;
+          mask = sampleMask(substrate, x, y);
+          insideText = mask >= 0.5;
+
+          nearestDomain = sourceDomains[0];
+          distance = Math.hypot(x - nearestDomain.source.anchor.x, y - nearestDomain.source.anchor.y);
+          normalizedDistance = distance / Math.max(1, nearestDomain.radius);
+          for (let index = 1; index < sourceDomains.length; index += 1) {
+            const candidate = sourceDomains[index];
+            const candidateDistance = Math.hypot(x - candidate.source.anchor.x, y - candidate.source.anchor.y);
+            const candidateNormalized = candidateDistance / Math.max(1, candidate.radius);
+            if (candidateNormalized < normalizedDistance) {
+              nearestDomain = candidate;
+              distance = candidateDistance;
+              normalizedDistance = candidateNormalized;
+            }
+          }
         }
 
         const contribution = state.emitterMode === "single"
@@ -214,7 +264,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
           : 1;
         const edgeFeather = edgeT * edgeT * (3 - 2 * edgeT);
         const falloffShape = Math.pow(falloff, 1.45);
-        const acceptance = Math.min(0.98, (densityAcceptanceBase + ringSignal * 0.88) * falloffShape * grain * readability * reactive * edgeFeather);
+        let acceptance = Math.min(0.98, (densityAcceptanceBase + ringSignal * 0.88) * falloffShape * grain * readability * reactive * edgeFeather);
+        if (displaySample) acceptance = Math.min(0.98, acceptance * displaySample.opacityScale);
         const acceptanceRoll = multiple ? fixedAcceptanceRoll : random();
         if (acceptance <= 1e-6) {
           rejectedByInfluence += 1;
@@ -223,8 +274,12 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         }
         const radiusNoise = multiple ? fixedRadiusNoise : 0.82 + random() * 0.36;
         const reactiveRadius = state.diffuserComposition === "text-reactive" ? 0.72 + edge * 0.7 : 1;
-        const radius = Math.max(0.35, state.diffuserDotRadius * (0.42 + ringSignal * 0.78) * radiusNoise * reactiveRadius);
-        const opacity = Math.max(0, Math.min(0.94, (0.24 + falloff * 0.34 + ringSignal * 0.34) * edgeFeather));
+        let radius = Math.max(0.35, state.diffuserDotRadius * (0.42 + ringSignal * 0.78) * radiusNoise * reactiveRadius);
+        let opacity = Math.max(0, Math.min(0.94, (0.24 + falloff * 0.34 + ringSignal * 0.34) * edgeFeather));
+        if (displaySample) {
+          radius = Math.max(0.35, radius * displaySample.radiusScale);
+          opacity = Math.max(0, Math.min(0.94, opacity * displaySample.opacityScale));
+        }
         const coordinatePriority = Math.abs(Math.sin(
           x * 12.9898 + y * 78.233 + state.seed * 0.001,
         ));
@@ -324,6 +379,12 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         fieldMembership: "glyph-bounds-approximate",
         diffuserDomain: state.diffuserDomain,
         diffuserComposition: state.diffuserComposition,
+        emitterDisplayMode: state.emitterDisplay.mode,
+        emitterDisplaySamples: displayResponseSamples,
+        emitterDisplayAverageDisplacement: displayResponseSamples ? displayDisplacementTotal / displayResponseSamples : 0,
+        emitterDisplayInteriorRejections: displayInteriorRejections,
+        emitterDisplayBreakupRejections: displayBreakupRejections,
+        emitterDisplayQuantizedSamples: displayQuantizedSamples,
         rendererActiveFieldEmitterCount: field.sources.length,
         activeContributingEmitterCount: field.sources.length,
         zeroStrengthEmitterCount: zeroStrengthCount,

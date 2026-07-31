@@ -1,4 +1,5 @@
 import type { ProjectState, RendererId } from "../types";
+import { supportsEmitterDisplay } from "./field/emitterDisplayResponse";
 
 const GLYPH_MODULATION_RENDERERS = new Set<RendererId>(["sdf-halftone", "sdf-contours", "sdf-streamlines"]);
 
@@ -10,6 +11,7 @@ export interface ControlActivity {
   glyphDensityModulation: boolean;
   glyphRadiusModulation: boolean;
   glyphOpacityModulation: boolean;
+  emitterDisplay: boolean;
   diffuser: boolean;
   overlay: boolean;
   outlineActive: boolean;
@@ -54,6 +56,7 @@ export function getControlActivity(state: ProjectState, parsedFontPaths: boolean
     glyphDensityModulation: state.renderer === "sdf-halftone" || state.renderer === "sdf-streamlines",
     glyphRadiusModulation: state.renderer === "sdf-halftone",
     glyphOpacityModulation: state.renderer === "sdf-halftone",
+    emitterDisplay: supportsEmitterDisplay(state.renderer),
     diffuser,
     overlay,
     outlineActive,

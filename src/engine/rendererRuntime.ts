@@ -5,6 +5,7 @@ import type { GlyphEmitter, ProjectState, RenderContext } from "../types";
 import { measure } from "./performance";
 import { glyphModulationCacheKey } from "./controlOwnership";
 import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
+import { emitterDisplayGeometryKey, supportsEmitterDisplay } from "./field/emitterDisplayResponse";
 import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
 import { roundSceneNumber } from "./sceneLayout";
 
@@ -112,6 +113,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     state.seed,
     state.substrateQuality,
     emitterGeometryKey(state, context.textGeometry),
+    supportsEmitterDisplay(state.renderer) ? emitterDisplayGeometryKey(state) : "emitter-display:unused",
     state.waveContourMode,
     state.waveDotSpacing,
     state.waveDotRadius,

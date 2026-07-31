@@ -340,4 +340,38 @@ describe("project schema", () => {
     expect(project.waveDotSpacing).toBe(40);
     expect(project.waveDotRadius).toBe(0.1);
   });
+
+  it("defaults, clamps, and round-trips additive emitter display settings", () => {
+    expect(validateProject({ version: 8 }).project.emitterDisplay).toEqual(baseState.emitterDisplay);
+    const project = validateProject({
+      ...baseState,
+      emitterDisplay: {
+        ...baseState.emitterDisplay,
+        mode: "orbit",
+        distortionStrength: 999,
+        distortionRadius: -10,
+        noiseScale: 999,
+        gridSize: -5,
+        gridAmount: 120,
+        interiorSuppression: -20,
+        edgeBias: 120,
+        orbitAmount: 64,
+        divergence: -140,
+      },
+    }).project;
+    expect(project.emitterDisplay).toEqual({
+      mode: "orbit",
+      distortionStrength: 100,
+      distortionRadius: 8,
+      noiseScale: 160,
+      gridSize: 0,
+      gridAmount: 100,
+      interiorSuppression: 0,
+      edgeBias: 100,
+      orbitAmount: 64,
+      divergence: -100,
+    });
+    expect(validateProject(JSON.parse(JSON.stringify(project))).project.emitterDisplay)
+      .toEqual(project.emitterDisplay);
+  });
 });

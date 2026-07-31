@@ -9,6 +9,7 @@ export type PreviewFpsCap = 24 | 30 | 60;
 export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | "custom";
 export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
+export type EmitterDisplayMode = "field" | "distort" | "exclude" | "orbit";
 export type WaveContourMode = "continuous" | "dotted";
 export type EmitterMode = "single" | "multiple";
 export type FieldBlendMode = "add" | "max";
@@ -45,6 +46,19 @@ export interface GlyphEmitterInstance {
   phaseOffset: number;
   radiusMultiplier: number;
   label: string;
+}
+
+export interface EmitterDisplaySettings {
+  mode: EmitterDisplayMode;
+  distortionStrength: number;
+  distortionRadius: number;
+  noiseScale: number;
+  gridSize: number;
+  gridAmount: number;
+  interiorSuppression: number;
+  edgeBias: number;
+  orbitAmount: number;
+  divergence: number;
 }
 export type PreviewBackendPreference = "canvas-2d" | "svg-dom";
 export type PreviewQuality = "full" | "balanced" | "performance";
@@ -125,6 +139,7 @@ export interface ProjectState {
   emitter: GlyphEmitter;
   emitterMode: EmitterMode;
   emitters: GlyphEmitterInstance[];
+  emitterDisplay: EmitterDisplaySettings;
   fieldBlendMode: FieldBlendMode;
   waveContourMode: WaveContourMode;
   contourStrokeWidth: number;

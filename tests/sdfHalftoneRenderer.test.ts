@@ -161,6 +161,49 @@ describe("SDF Halftone renderer", () => {
     expect(group.diagnostics?.maxNodesClipped).toBe(true);
   });
 
+  it("supports deterministic glyph exclusion and orbit shells outside the mask", () => {
+    const renderer = getRenderer("sdf-halftone");
+    const exclusionState: ProjectState = {
+      ...state,
+      density: 76,
+      maxNodes: 1200,
+      emitter: { ...state.emitter, enabled: true, radius: 520 },
+      emitterDisplay: {
+        ...state.emitterDisplay,
+        mode: "exclude",
+        distortionStrength: 52,
+        distortionRadius: 220,
+        interiorSuppression: 100,
+      },
+    };
+    const excluded = renderer.generateGeometry(exclusionState, context);
+    expect(excluded.geometries.length).toBeGreaterThan(0);
+    expect(excluded.geometries.every((geometry) => geometry.type === "circle"
+      && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
+    expect(excluded.diagnostics).toMatchObject({
+      emitterDisplayMode: "exclude",
+      emitterDisplaySamples: expect.any(Number),
+    });
+    expect(excluded.diagnostics?.emitterDisplayInteriorRejections).toBeGreaterThan(0);
+    expect(renderer.clipPreviewToText?.(exclusionState)).toBe(false);
+    const exclusionSvg = createSvg(exclusionState, context, context.textGeometry, excluded);
+    const exclusionDocument = new DOMParser().parseFromString(exclusionSvg, "image/svg+xml");
+    expect(exclusionDocument.querySelector("#generated-artwork")?.hasAttribute("mask")).toBe(false);
+    expect(JSON.parse(exclusionDocument.querySelector("metadata")!.textContent!).project)
+      .toMatchObject({ version: 8, emitterDisplay: { mode: "exclude", interiorSuppression: 100 } });
+
+    const orbitState: ProjectState = {
+      ...exclusionState,
+      emitterDisplay: { ...exclusionState.emitterDisplay, mode: "orbit", orbitAmount: 88, divergence: 28 },
+    };
+    const orbit = renderer.generateGeometry(orbitState, context);
+    expect(orbit.geometries.length).toBeGreaterThan(0);
+    expect(renderer.generateGeometry(orbitState, context).geometries).toEqual(orbit.geometries);
+    expect(orbit.geometries).not.toEqual(excluded.geometries);
+    expect(orbit.geometries.every((geometry) => geometry.type === "circle"
+      && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
+  });
+
   it("returns a clear empty fallback without substrate data", () => {
     const group = getRenderer("sdf-halftone").generateGeometry(state, { timeMs: 0, frame: 0 });
     expect(group.geometries).toEqual([]);

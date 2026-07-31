@@ -160,6 +160,40 @@ describe("Glyph Diffuser renderer", () => {
     });
   });
 
+  it("keeps exclusion and orbit marks outside glyph interiors", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const exclusionState: ProjectState = {
+      ...state,
+      density: 76,
+      maxNodes: 1800,
+      emitterDisplay: {
+        ...state.emitterDisplay,
+        mode: "exclude",
+        distortionStrength: 54,
+        distortionRadius: 220,
+        interiorSuppression: 100,
+      },
+    };
+    const excluded = renderer.generateGeometry(exclusionState, context);
+    expect(excluded.geometries.length).toBeGreaterThan(0);
+    expect(excluded.geometries.every((geometry) => geometry.type === "circle"
+      && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
+    expect(excluded.diagnostics).toMatchObject({ emitterDisplayMode: "exclude" });
+    expect(excluded.diagnostics?.emitterDisplayInteriorRejections).toBeGreaterThan(0);
+
+    const orbitState: ProjectState = {
+      ...exclusionState,
+      emitterDisplay: { ...exclusionState.emitterDisplay, mode: "orbit", orbitAmount: 90, divergence: 30 },
+    };
+    const orbit = renderer.generateGeometry(orbitState, context);
+    expect(orbit.geometries.length).toBeGreaterThan(0);
+    expect(renderer.generateGeometry(orbitState, context).geometries).toEqual(orbit.geometries);
+    expect(orbit.geometries).not.toEqual(excluded.geometries);
+    expect(orbit.geometries.every((geometry) => geometry.type === "circle"
+      && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
+    expect(renderer.clipPreviewToText?.(orbitState)).toBe(false);
+  });
+
   it("preserves single-mode geometry and reacts deterministically to multiple emitters", () => {
     const renderer = getRenderer("glyph-diffuser");
     const legacy = renderer.generateGeometry(state, context);

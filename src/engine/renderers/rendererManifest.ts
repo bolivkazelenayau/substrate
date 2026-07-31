@@ -9,6 +9,7 @@ export type RendererDependencyKey =
   | "seed"
   | "field"
   | "emitters"
+  | "emitterDisplay"
   | "appearance"
   | "diffuser"
   | "contours"
@@ -110,7 +111,7 @@ export const rendererManifests = {
     category: "sdf",
     usesTime: false,
     usesSubstrate: true,
-    dependencies: ["substrate", "seed", "field", "halftone", "glyphModulation"],
+    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "halftone", "glyphModulation"],
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "wave-contours": manifest({
@@ -128,7 +129,7 @@ export const rendererManifests = {
     category: "diffusion",
     usesTime: false,
     usesSubstrate: true,
-    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "diffuser"],
+    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "diffuser"],
     supportedControls: ["density", "amplitude", "frequency", "turbulence", "edgeInfluence", "maxNodes"],
   }),
 } satisfies Record<RendererId, RendererManifest>;

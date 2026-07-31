@@ -94,6 +94,18 @@ export const baseState: ProjectState = {
   },
   emitterMode: "single",
   emitters: [{ id: "emitter-1", glyphId: null, enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Emitter 1" }],
+  emitterDisplay: {
+    mode: "field",
+    distortionStrength: 58,
+    distortionRadius: 180,
+    noiseScale: 48,
+    gridSize: 24,
+    gridAmount: 68,
+    interiorSuppression: 100,
+    edgeBias: 78,
+    orbitAmount: 72,
+    divergence: 18,
+  },
   fieldBlendMode: "add",
   waveContourMode: "continuous",
   contourStrokeWidth: 1.4,
@@ -422,5 +434,8 @@ export function getPresetDisplayLabel(preset: PresetId) {
 
 export function applyPreset(state: ProjectState, preset: PresetId): ProjectState {
   if (preset === "Custom") return { ...state, preset };
-  return { ...state, ...presets[preset], preset };
+  // Legacy presets predate emitter display response. Reset that independent
+  // capability so selecting an existing preset still restores its historical
+  // output instead of inheriting a previously configured exclusion/orbit pass.
+  return { ...state, emitterDisplay: baseState.emitterDisplay, ...presets[preset], preset };
 }

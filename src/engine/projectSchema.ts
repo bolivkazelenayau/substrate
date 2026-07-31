@@ -132,6 +132,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
 
   const debugSource = isRecord(source.debug) ? source.debug : {};
   const emitterSource = isRecord(source.emitter) ? source.emitter : {};
+  const emitterDisplaySource = isRecord(source.emitterDisplay) ? source.emitterDisplay : {};
   const fontSource = isRecord(source.font) ? source.font : null;
   const font: FontMetadata | null = fontSource
     && typeof fontSource.family === "string"
@@ -203,6 +204,18 @@ export function validateProject(input: unknown): ProjectValidationResult {
     },
     emitterMode: enumValue(source.emitterMode, ["single", "multiple"], baseState.emitterMode),
     emitters: validateEmitterInstances(source.emitters),
+    emitterDisplay: {
+      mode: enumValue(emitterDisplaySource.mode, ["field", "distort", "exclude", "orbit"], baseState.emitterDisplay.mode),
+      distortionStrength: clamp(emitterDisplaySource.distortionStrength, baseState.emitterDisplay.distortionStrength, 0, 100),
+      distortionRadius: clamp(emitterDisplaySource.distortionRadius, baseState.emitterDisplay.distortionRadius, 8, 720),
+      noiseScale: clamp(emitterDisplaySource.noiseScale, baseState.emitterDisplay.noiseScale, 2, 160),
+      gridSize: clamp(emitterDisplaySource.gridSize, baseState.emitterDisplay.gridSize, 0, 96),
+      gridAmount: clamp(emitterDisplaySource.gridAmount, baseState.emitterDisplay.gridAmount, 0, 100),
+      interiorSuppression: clamp(emitterDisplaySource.interiorSuppression, baseState.emitterDisplay.interiorSuppression, 0, 100),
+      edgeBias: clamp(emitterDisplaySource.edgeBias, baseState.emitterDisplay.edgeBias, 0, 100),
+      orbitAmount: clamp(emitterDisplaySource.orbitAmount, baseState.emitterDisplay.orbitAmount, 0, 100),
+      divergence: clamp(emitterDisplaySource.divergence, baseState.emitterDisplay.divergence, -100, 100),
+    },
     fieldBlendMode: enumValue(source.fieldBlendMode, ["add", "max"], baseState.fieldBlendMode),
     waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
     contourStrokeWidth: clamp(source.contourStrokeWidth, baseState.contourStrokeWidth, CONTOUR_STROKE_WIDTH_LIMITS.min, CONTOUR_STROKE_WIDTH_LIMITS.max),

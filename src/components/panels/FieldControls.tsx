@@ -185,6 +185,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   const controlActivity = getControlActivity(draft, parsedFontPathsAvailable);
   const emitterConsumerActive = draft.renderer === "glyph-diffuser"
     || draft.renderer === "wave-contours"
+    || controlActivity.emitterDisplay
     || (controlActivity.glyphModulation && draft.glyphFieldMode !== "off");
   const patchField = (next: Partial<ProjectState>) => forward({ ...draftRef.current, ...next, preset: "Custom" });
   const defaultOpen = {
@@ -259,7 +260,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
           ))}
         </div>
 
-        <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
+        <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} displayBehaviorSupported={controlActivity.emitterDisplay} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
       </FieldPanel>
 
       <AdvancedFieldPanel

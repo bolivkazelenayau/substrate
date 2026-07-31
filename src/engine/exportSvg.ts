@@ -14,6 +14,7 @@ import type { ExportSnapshot } from "./exportAuthority";
 import { createStaticRenderContext } from "./renderContextLifecycle";
 import { resolveRendererRequirements } from "./rendererRequirements";
 import type { ArtboardRect } from "./sceneLayout";
+import { baseState } from "./presets";
 
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -77,9 +78,11 @@ export function createSvg(
   const hasWarpedOutline = state.overlayMode === "warped-outline" && warpedOutline.paths.length > 0;
   const finalOutline = getFinalOutlineGeometry(textGeometry, warpedOutline, hasWarpedOutline);
   const timestamp = new Date().toISOString();
-  const metadataProject = isAuthoredDefault
+  const legacyEmitterDisplay = Object.entries(baseState.emitterDisplay)
+    .every(([name, value]) => state.emitterDisplay[name as keyof ProjectState["emitterDisplay"]] === value);
+  const metadataProject = isAuthoredDefault && legacyEmitterDisplay
     ? (() => {
-        const { artboard: _artboard, version: _version, contourStrokeWidth, lineHeight, ...legacyProject } = state;
+        const { artboard: _artboard, version: _version, contourStrokeWidth, lineHeight, emitterDisplay: _emitterDisplay, ...legacyProject } = state;
         const typographyProject = lineHeight === 1 ? legacyProject : { ...legacyProject, lineHeight };
         if (contourStrokeWidth !== DEFAULT_CONTOUR_STROKE_WIDTH) {
           return { version: 7, ...typographyProject, contourStrokeWidth };

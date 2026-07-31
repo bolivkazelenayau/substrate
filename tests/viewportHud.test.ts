@@ -132,7 +132,7 @@ describe("viewport space separation", () => {
     const hud = container.querySelector<HTMLElement>(".viewport-hud-layer")!;
     const initialHudStyle = hud.getAttribute("style");
     act(() => container.querySelector<HTMLButtonElement>("button[aria-label='Zoom in']")!.click());
-    expect(transform.style.transform).toBe("translate(0px, 0px) scale(1.25)");
+    expect(transform.style.transform).toBe("translate3d(0px, 0px, 0) scale(1.25)");
     expect(hud.getAttribute("style")).toBe(initialHudStyle);
     expect(container.querySelector("[aria-label='Canvas zoom']")?.textContent).toBe("125%");
   });

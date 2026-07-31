@@ -96,7 +96,7 @@ export function staticRenderContextStageKey(
   sceneKey: string,
   typographyOutputKey: string | null,
   substrateOutputKey: string | null,
-  emitterKey: string,
+  emitterKey = "emitter:unspecified",
 ): string {
   return key("static-context-input", {
     renderer,

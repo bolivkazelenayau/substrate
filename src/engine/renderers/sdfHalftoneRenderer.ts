@@ -6,6 +6,7 @@ import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { SAFETY_BUDGETS } from "../safetyBudget";
+import { createEmitterDisplaySampler, emitterDisplayUsesExterior, type EmitterDisplaySample } from "../field/emitterDisplayResponse";
 
 interface OccupiedDot {
   x: number;
@@ -39,6 +40,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
   svgElementType: "circle",
   usesTime: false,
   usesSubstrate: true,
+  clipPreviewToText: (state) => !emitterDisplayUsesExterior(state),
   estimateCost(state) {
     const artboard = projectArtboard(state);
     const density = Math.max(10, Math.min(80, state.density));
@@ -58,6 +60,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
       };
     }
     const glyph = getGlyphFieldSampler(state, context);
+    const displayResponse = createEmitterDisplaySampler(state, context);
 
     const random = createSeededRandom(state.seed);
     const density = Math.max(10, Math.min(80, state.density));
@@ -69,10 +72,11 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const jitter = spacing * 0.42 * Math.max(0, Math.min(1, state.turbulence / 100));
     const edgeBand = Math.max(spacing, substrate.diagnostics.maxDistance * (0.72 - influence * 0.52));
     const bounds = substrate.bounds;
-    const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - spacing);
-    const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + spacing);
-    const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - spacing);
-    const maxY = Math.min(artboardBottom(artboard), (bounds ? bounds.y + bounds.height : artboardBottom(artboard)) + spacing);
+    const samplingPadding = displayResponse.exterior ? displayResponse.shellRadius : spacing;
+    const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - samplingPadding);
+    const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + samplingPadding);
+    const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - samplingPadding);
+    const maxY = Math.min(artboardBottom(artboard), (bounds ? bounds.y + bounds.height : artboardBottom(artboard)) + samplingPadding);
     const columns = Math.max(1, Math.ceil((maxX - minX) / spacing));
     const rows = Math.max(1, Math.ceil((maxY - minY) / spacing));
     const requestedDots = columns * rows;
@@ -104,6 +108,11 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     let ringStrengthTotal = 0;
     let ringSamples = 0;
     let acceptedCrestDots = 0;
+    let displayResponseSamples = 0;
+    let displayDisplacementTotal = 0;
+    let displayInteriorRejections = 0;
+    let displayBreakupRejections = 0;
+    let displayQuantizedSamples = 0;
 
     outer:
     for (let row = 0; row < rows; row += candidateStride) {
@@ -119,20 +128,58 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         let y = centerY + (random() * 2 - 1) * jitter;
         let mask = sampleMask(substrate, x, y);
         let distance = sampleDistance(substrate, x, y);
+        let displaySample: EmitterDisplaySample | null = null;
 
-        if (mask < 0.55 || distance <= 0) {
-          x = centerX;
-          y = centerY;
+        if (displayResponse.exterior) {
+          const displayProbe = displayResponse.probe(x, y);
+          if (!displayProbe.affected || Math.abs(displayProbe.signedDistance) > displayResponse.shellRadius) {
+            rejectedOutsideMask += 1;
+            continue;
+          }
+          displaySample = displayResponse.sample(x, y, row * columns + column);
+          displayResponseSamples += 1;
+          if (!displaySample.keep) {
+            if (displaySample.interiorRejected) displayInteriorRejections += 1;
+            if (displaySample.breakupRejected) displayBreakupRejections += 1;
+            rejectedByInfluence += 1;
+            continue;
+          }
+          x = displaySample.point.x;
+          y = displaySample.point.y;
           mask = sampleMask(substrate, x, y);
           distance = sampleDistance(substrate, x, y);
-        }
-        if (mask < 0.55 || distance <= 0) {
-          rejectedOutsideMask += 1;
-          continue;
+          displayDisplacementTotal += displaySample.displacement;
+          if (displaySample.quantized) displayQuantizedSamples += 1;
+        } else {
+          if (mask < 0.55 || distance <= 0) {
+            x = centerX;
+            y = centerY;
+            mask = sampleMask(substrate, x, y);
+            distance = sampleDistance(substrate, x, y);
+          }
+          if (mask < 0.55 || distance <= 0) {
+            rejectedOutsideMask += 1;
+            continue;
+          }
+          if (displayResponse.active) {
+            displaySample = displayResponse.sample(x, y, row * columns + column);
+            displayResponseSamples += 1;
+            if (!displaySample.keep) {
+              if (displaySample.breakupRejected) displayBreakupRejections += 1;
+              rejectedByInfluence += 1;
+              continue;
+            }
+            x = displaySample.point.x;
+            y = displaySample.point.y;
+            mask = sampleMask(substrate, x, y);
+            distance = sampleDistance(substrate, x, y);
+            displayDisplacementTotal += displaySample.displacement;
+            if (displaySample.quantized) displayQuantizedSamples += 1;
+          }
         }
 
         const fieldValue = glyph.enabled ? glyph.value(x, y) : 0;
-        if (glyph.displacementEnabled) {
+        if (glyph.displacementEnabled && !displayResponse.exterior) {
           const fieldGradient = glyph.gradient(x, y);
           if (fieldGradient.finite && fieldGradient.magnitude > 1e-6) {
             const displacement = state.glyphFieldDisplacement * glyph.strength * (0.3 + Math.abs(fieldValue) * 0.7);
@@ -151,7 +198,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
 
         const edge = sampleEdge(substrate, x, y);
         const gradient = sampleDistanceGradient(substrate, x, y);
-        const edgeProximity = Math.exp(-distance / edgeBand);
+        const responseDistance = displayResponse.exterior ? Math.abs(distance) : distance;
+        const edgeProximity = Math.exp(-responseDistance / edgeBand);
         const edgeSignal = Math.min(1, edgeProximity * 0.82 + edge * 0.38);
         const fieldDensity = glyph.densityEnabled ? Math.abs(fieldValue) * state.glyphFieldDensity / 100 * glyph.strength : 0;
         const bandPosition = Math.max(0, Math.min(1, (Math.abs(fieldValue) - (1 - state.bandWidth)) / Math.max(0.001, state.bandWidth)));
@@ -161,7 +209,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           ringSamples += 1;
         }
         const structuredDensity = glyph.densityEnabled ? 0.42 + ringStrength * 0.98 + fieldDensity * 0.52 : 1;
-        const acceptance = Math.min(1, (1 - influence * 0.78 + influence * 0.78 * edgeSignal) * structuredDensity);
+        let acceptance = Math.min(1, (1 - influence * 0.78 + influence * 0.78 * edgeSignal) * structuredDensity);
+        if (displaySample) acceptance = Math.min(1, acceptance * displaySample.opacityScale);
         if (random() > acceptance) {
           rejectedByInfluence += 1;
           continue;
@@ -169,12 +218,13 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         if (glyph.enabled && fieldDensity > 0.01) fieldInfluencedAcceptanceCount += 1;
         if (ringStrength >= 0.5) acceptedCrestDots += 1;
 
-        const interiorRatio = Math.max(0, Math.min(1, distance / Math.max(maxRadius * 2.4, spacing * 0.7)));
+        const interiorRatio = Math.max(0, Math.min(1, responseDistance / Math.max(maxRadius * 2.4, spacing * 0.7)));
         const edgeWeightedRatio = (1 - influence * 0.42) * interiorRatio + influence * 0.42 * edgeSignal;
         const radiusNoise = 1 + (random() * 2 - 1) * Math.min(0.18, state.turbulence / 700);
         const gradientSafety = Number.isFinite(gradient.magnitude) ? 1 : 0.85;
         const radiusModulation = glyph.radiusEnabled ? 1 + fieldValue * state.glyphFieldRadius / 100 * glyph.strength * 0.75 : 1;
-        const radius = Math.max(minRadius, Math.min(maxRadius * 1.35, (minRadius + (maxRadius - minRadius) * edgeWeightedRatio) * radiusNoise * gradientSafety * radiusModulation));
+        let radius = Math.max(minRadius, Math.min(maxRadius * 1.35, (minRadius + (maxRadius - minRadius) * edgeWeightedRatio) * radiusNoise * gradientSafety * radiusModulation));
+        if (displaySample) radius = Math.max(minRadius, Math.min(maxRadius * 1.35, radius * displaySample.radiusScale));
 
         const cellX = Math.floor(worldToLocal(artboard, { x, y }).x / occupancyCellSize);
         const cellY = Math.floor(worldToLocal(artboard, { x, y }).y / occupancyCellSize);
@@ -195,13 +245,14 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           continue;
         }
 
-        const opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
+        let opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
+        if (displaySample) opacity = Math.max(0.18, Math.min(0.98, opacity * displaySample.opacityScale));
         geometries.push({ type: "circle", center: { x, y }, radius, opacity });
         const occupiedKey = (cellY + occupancyKeyOffset) * occupancyKeySpan + (cellX + occupancyKeyOffset);
         const occupied = occupancy.get(occupiedKey) ?? [];
         occupied.push({ x, y, radius });
         occupancy.set(occupiedKey, occupied);
-        sampledDistanceTotal += distance;
+        sampledDistanceTotal += responseDistance;
         radiusTotal += radius;
         actualMinRadius = Math.min(actualMinRadius, radius);
         actualMaxRadius = Math.max(actualMaxRadius, radius);
@@ -238,6 +289,12 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         fieldInfluencedAcceptanceCount,
         averageRingStrength: ringSamples ? ringStrengthTotal / ringSamples : 0,
         acceptedCrestDots,
+        emitterDisplayMode: state.emitterDisplay.mode,
+        emitterDisplaySamples: displayResponseSamples,
+        emitterDisplayAverageDisplacement: displayResponseSamples ? displayDisplacementTotal / displayResponseSamples : 0,
+        emitterDisplayInteriorRejections: displayInteriorRejections,
+        emitterDisplayBreakupRejections: displayBreakupRejections,
+        emitterDisplayQuantizedSamples: displayQuantizedSamples,
         warning: clipped ? `Dot output clipped at the ${state.maxNodes} node budget.` : undefined,
       },
     };

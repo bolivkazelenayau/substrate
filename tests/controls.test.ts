@@ -290,6 +290,32 @@ describe("Safe Typography controls", () => {
     expect(advanced?.textContent).not.toContain("Emitter Settings");
   });
 
+  it("exposes art-directable display, exclusion, and orbit behavior controls", () => {
+    renderControls({
+      ...baseState,
+      renderer: "sdf-halftone",
+      emitter: { ...baseState.emitter, enabled: true },
+    });
+    openDisclosure("Emitters");
+
+    const behavior = field("Behavior", "select") as HTMLSelectElement;
+    expect([...behavior.options].map((option) => option.value)).toEqual([
+      "field", "distort", "exclude", "orbit",
+    ]);
+    change(behavior, "orbit");
+    expect(getUpdated()?.emitterDisplay.mode).toBe("orbit");
+    expect(container.textContent).toContain("Interior suppression");
+    expect(container.textContent).toContain("Orbit amount");
+    expect(container.textContent).toContain("Settle / repel");
+
+    updated = null;
+    change(field("Grid amount", "input"), "92");
+    expect(getUpdated()?.emitterDisplay.gridAmount).toBe(92);
+    updated = null;
+    change(field("Interior suppression", "input"), "84");
+    expect(getUpdated()?.emitterDisplay.interiorSuppression).toBe(84);
+  });
+
   it("resets numeric controls through their normal update path without touching siblings", () => {
     renderControls({
       ...baseState,

@@ -73,6 +73,14 @@ describe("presets", () => {
     expect(presets[preset]).toHaveProperty("emitterMode", "single");
   });
 
+  it("existing presets reset the additive display response to legacy placement", () => {
+    const configured = {
+      ...baseState,
+      emitterDisplay: { ...baseState.emitterDisplay, mode: "orbit" as const, gridAmount: 100 },
+    };
+    expect(applyPreset(configured, "Signal Dust").emitterDisplay).toEqual(baseState.emitterDisplay);
+  });
+
   it("Sonic Interference creates multiple enabled sources when text permits", () => {
     const state = { ...applyPreset(baseState, "Sonic Interference"), text: "SONIC" };
     expect(resolveGlyphEmitterSources(state, null).sources.length).toBeGreaterThan(1);

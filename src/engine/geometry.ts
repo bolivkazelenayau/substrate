@@ -87,6 +87,12 @@ export interface RendererDiagnostics {
   averageRingStrength?: number;
   averageFalloff?: number;
   acceptedCrestDots?: number;
+  emitterDisplayMode?: string;
+  emitterDisplaySamples?: number;
+  emitterDisplayAverageDisplacement?: number;
+  emitterDisplayInteriorRejections?: number;
+  emitterDisplayBreakupRejections?: number;
+  emitterDisplayQuantizedSamples?: number;
   diffuserComposition?: string;
   rendererActiveFieldEmitterCount?: number;
   activeContributingEmitterCount?: number;

@@ -83,6 +83,20 @@ describe("renderer geometry cache identity", () => {
     expect(rendererGeometryCacheKey(traced, context())).toBe(base);
   });
 
+  it("tracks emitter display response only for renderers that consume it", () => {
+    const changedDisplay = {
+      ...baseState.emitterDisplay,
+      mode: "orbit" as const,
+      orbitAmount: baseState.emitterDisplay.orbitAmount + 1,
+    };
+    const supported = { ...baseState, renderer: "sdf-halftone" as const };
+    const unsupported = { ...baseState, renderer: "dots" as const };
+    expect(rendererGeometryCacheKey({ ...supported, emitterDisplay: changedDisplay }, context()))
+      .not.toBe(rendererGeometryCacheKey(supported, context()));
+    expect(rendererGeometryCacheKey({ ...unsupported, emitterDisplay: changedDisplay }, context()))
+      .toBe(rendererGeometryCacheKey(unsupported, context()));
+  });
+
   it("does not change for static renderers when time advances", () => {
     const state: ProjectState = { ...baseState, renderer: "sdf-contours" };
     const base = rendererGeometryCacheKey(state, context({ timeMs: 0, frame: 0 }));
