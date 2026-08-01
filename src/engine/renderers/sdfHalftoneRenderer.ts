@@ -1,12 +1,19 @@
-import type { CircleMark, RendererDiagnostics } from "../geometry";
+import type { CircleMark, GeometryGroup, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
 import { contextArtboard, projectArtboard } from "../artboard";
 import { artboardBottom, artboardLeft, artboardRight, artboardTop, worldToLocal } from "../sceneLayout";
-import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask } from "../substrate";
+import { sampleDistance, sampleDistanceGradient, sampleEdge, sampleMask, type SubstrateData } from "../substrate";
 import type { VectorRenderer } from "./types";
 import { getGlyphFieldSampler } from "../field/glyphFieldModulation";
 import { SAFETY_BUDGETS } from "../safetyBudget";
 import { createEmitterDisplaySampler, emitterDisplayUsesExterior, type EmitterDisplaySample } from "../field/emitterDisplayResponse";
+import type { ArtboardRect } from "../sceneLayout";
+import type { ProjectState, RenderContext } from "../../types";
+import {
+  createDisplayDislocationSampler,
+  isDisplayDislocationActive,
+  type DisplayDislocationSampler,
+} from "../displayDislocation";
 
 interface OccupiedDot {
   x: number;
@@ -33,6 +40,215 @@ function fallbackDiagnostics(warning: string): RendererDiagnostics {
   };
 }
 
+function smoothstep(value: number) {
+  const amount = Math.max(0, Math.min(1, value));
+  return amount * amount * (3 - 2 * amount);
+}
+
+/**
+ * A DPR-independent world grid. The legacy path classifies at the lattice
+ * point and may apply mark-space emitter display afterward. Display
+ * Dislocation instead keeps the target lattice fixed and inverse-maps each
+ * target through one coherent region translation before membership sampling.
+ */
+function generateRegularDotGrid(
+  state: ProjectState,
+  context: RenderContext,
+  substrate: SubstrateData,
+  artboard: ArtboardRect,
+  displayResponse: ReturnType<typeof createEmitterDisplaySampler>,
+  displayDislocation: DisplayDislocationSampler,
+): GeometryGroup {
+  const buildStarted = displayDislocation.active ? performance.now() : 0;
+  const spacing = Math.max(3, state.dotGrid.spacing);
+  const configuredRadius = Math.max(0.1, Math.min(spacing * 0.48, state.dotGrid.radius));
+  const threshold = Math.max(0, Math.min(1, state.dotGrid.threshold));
+  const softness = Math.max(0, Math.min(1, state.dotGrid.edgeSoftness));
+  const bounds = substrate.bounds ?? artboard;
+  const baseMinX = Math.max(artboardLeft(artboard), bounds.x);
+  const baseMaxX = Math.min(artboardRight(artboard), bounds.x + bounds.width);
+  const baseMinY = Math.max(artboardTop(artboard), bounds.y);
+  const baseMaxY = Math.min(artboardBottom(artboard), bounds.y + bounds.height);
+  const samplingPadding = displayDislocation.active ? displayDislocation.maxDisplacement : 0;
+  const minX = Math.max(artboardLeft(artboard), bounds.x - samplingPadding);
+  const maxX = Math.min(artboardRight(artboard), bounds.x + bounds.width + samplingPadding);
+  const minY = Math.max(artboardTop(artboard), bounds.y - samplingPadding);
+  const maxY = Math.min(artboardBottom(artboard), bounds.y + bounds.height + samplingPadding);
+  // Integer lattice coordinates keep the origin fixed at world (0, 0), even
+  // when effective scene expansion introduces a negative artboard origin.
+  const firstColumn = Math.ceil(minX / spacing);
+  const lastColumn = Math.floor(maxX / spacing);
+  const firstRow = Math.ceil(minY / spacing);
+  const lastRow = Math.floor(maxY / spacing);
+  const columns = Math.max(0, lastColumn - firstColumn + 1);
+  const rows = Math.max(0, lastRow - firstRow + 1);
+  const requestedDots = columns * rows;
+  // Expansion must not coarsen the unchanged outer lattice. Derive the
+  // deterministic safety stride from the pre-dislocation domain.
+  const baseColumns = Math.max(0, Math.floor(baseMaxX / spacing) - Math.ceil(baseMinX / spacing) + 1);
+  const baseRows = Math.max(0, Math.floor(baseMaxY / spacing) - Math.ceil(baseMinY / spacing) + 1);
+  const strideCandidateCount = displayDislocation.active ? baseColumns * baseRows : requestedDots;
+  const candidateStride = strideCandidateCount > SAFETY_BUDGETS.candidateAttempts
+    ? Math.ceil(Math.sqrt(strideCandidateCount / SAFETY_BUDGETS.candidateAttempts))
+    : 1;
+  const geometries: CircleMark[] = [];
+  let rejectedOutsideMask = 0;
+  let rejectedByInfluence = 0;
+  let sampledDistanceTotal = 0;
+  let radiusTotal = 0;
+  let minRadius = Number.POSITIVE_INFINITY;
+  let maxRadius = 0;
+  let displaySamples = 0;
+  let displayDisplacement = 0;
+  let displayInteriorRejections = 0;
+  let displayBreakupRejections = 0;
+  let displayQuantizedSamples = 0;
+  let dislocationAffectedCandidates = 0;
+  let dislocationAcceptedCandidates = 0;
+  let dislocationGapRejections = 0;
+  let dislocationInverseSamples = 0;
+  let dislocationMaxDisplacement = 0;
+  const dislocatedRegions = new Set<string>();
+  let clipped = false;
+
+  outer:
+  for (let row = firstRow; row <= lastRow; row += candidateStride) {
+    for (let column = firstColumn; column <= lastColumn; column += candidateStride) {
+      if (geometries.length >= state.maxNodes) {
+        clipped = true;
+        break outer;
+      }
+      const targetX = column * spacing;
+      const targetY = row * spacing;
+      let sourceX = targetX;
+      let sourceY = targetY;
+      let dislocationAffected = false;
+      if (displayDislocation.active) {
+        const dislocation = displayDislocation.sample(targetX, targetY);
+        dislocationInverseSamples += 1;
+        if (dislocation.affected) {
+          dislocationAffected = true;
+          dislocationAffectedCandidates += 1;
+          dislocationMaxDisplacement = Math.max(dislocationMaxDisplacement, dislocation.displacement);
+          if (dislocation.regionId) dislocatedRegions.add(dislocation.regionId);
+          if (dislocation.gapRejected) {
+            dislocationGapRejections += 1;
+            rejectedByInfluence += 1;
+            continue;
+          }
+          sourceX = dislocation.source.x;
+          sourceY = dislocation.source.y;
+        }
+      }
+      const mask = sampleMask(substrate, sourceX, sourceY);
+      const distance = sampleDistance(substrate, sourceX, sourceY);
+      if (mask < threshold || distance <= 0) {
+        rejectedOutsideMask += 1;
+        continue;
+      }
+      let x = targetX;
+      let y = targetY;
+      let opacityScale = 1;
+      let radiusScale = 1;
+      if (!displayDislocation.active && displayResponse.active) {
+        const display = displayResponse.sample(sourceX, sourceY, (row - firstRow) * Math.max(1, columns) + (column - firstColumn));
+        displaySamples += 1;
+        if (!display.keep) {
+          if (display.interiorRejected) displayInteriorRejections += 1;
+          if (display.breakupRejected) displayBreakupRejections += 1;
+          rejectedByInfluence += 1;
+          continue;
+        }
+        x = display.point.x;
+        y = display.point.y;
+        opacityScale = display.opacityScale;
+        radiusScale = display.radiusScale;
+        displayDisplacement += display.displacement;
+        if (display.quantized) displayQuantizedSamples += 1;
+      }
+      const edgeFactor = softness <= 0
+        ? 1
+        : Math.max(0.18, smoothstep((mask - threshold) / Math.max(0.001, softness) + 0.35));
+      const radius = Math.max(0.1, configuredRadius * (1 - softness * 0.5 + softness * 0.5 * edgeFactor) * radiusScale);
+      const opacity = Math.max(0.12, Math.min(1, edgeFactor * opacityScale));
+      geometries.push({ type: "circle", center: { x, y }, radius, opacity });
+      sampledDistanceTotal += distance;
+      radiusTotal += radius;
+      minRadius = Math.min(minRadius, radius);
+      maxRadius = Math.max(maxRadius, radius);
+      if (dislocationAffected) dislocationAcceptedCandidates += 1;
+    }
+  }
+
+  const attemptedCandidates = Math.ceil(rows / candidateStride) * Math.ceil(columns / candidateStride);
+  const displacement = context.textGeometry?.displacement;
+  const artboardClipped = displayDislocation.active && (
+    bounds.x - samplingPadding < artboardLeft(artboard)
+    || bounds.x + bounds.width + samplingPadding > artboardRight(artboard)
+    || bounds.y - samplingPadding < artboardTop(artboard)
+    || bounds.y + bounds.height + samplingPadding > artboardBottom(artboard)
+  );
+  const dislocationClippingState = artboardClipped
+    ? clipped ? "artboard-and-node-budget" : "artboard"
+    : clipped ? "node-budget" : "none";
+  const warning = displayDislocation.active
+    ? [
+        clipped ? `Dot-grid output clipped at the ${state.maxNodes} node budget.` : null,
+        artboardClipped ? "Display Dislocation sampling padding reached the effective artboard." : null,
+      ].filter(Boolean).join(" ") || undefined
+    : clipped ? `Dot-grid output clipped at the ${state.maxNodes} node budget.` : undefined;
+  return {
+    id: "sdf-halftone",
+    geometries,
+    diagnostics: {
+      acceptedCandidates: geometries.length,
+      rejectedCandidates: rejectedOutsideMask + rejectedByInfluence,
+      averageSampledDistance: geometries.length ? sampledDistanceTotal / geometries.length : 0,
+      substrateAvailable: true,
+      fallback: false,
+      requestedDots,
+      attemptedCandidates,
+      candidateBudgetReached: candidateStride > 1,
+      acceptedDots: geometries.length,
+      acceptedGridPoints: geometries.length,
+      rejectedOutsideMask,
+      rejectedBySpacing: 0,
+      rejectedByInfluence,
+      averageRadius: geometries.length ? radiusTotal / geometries.length : 0,
+      minRadius: geometries.length ? minRadius : 0,
+      maxRadius,
+      maxNodesClipped: clipped,
+      dotGridRegular: true,
+      dotGridSpacing: spacing * candidateStride,
+      dotGridOriginX: 0,
+      dotGridOriginY: 0,
+      glyphDisplacementKey: displacement?.geometryKey ?? context.textGeometryKey ?? "base",
+      glyphDisplacementFragmentCount: displacement?.fragmentCount ?? 0,
+      emitterDisplayMode: state.emitterDisplay.mode,
+      emitterDisplaySamples: displaySamples,
+      emitterDisplayAverageDisplacement: displaySamples ? displayDisplacement / displaySamples : 0,
+      emitterDisplayInteriorRejections: displayInteriorRejections,
+      emitterDisplayBreakupRejections: displayBreakupRejections,
+      emitterDisplayQuantizedSamples: displayQuantizedSamples,
+      ...(displayDislocation.active ? {
+        displayDislocationMode: state.displayDislocation.mode,
+        displayDislocationCandidateCount: attemptedCandidates,
+        displayDislocationAffectedCandidates: dislocationAffectedCandidates,
+        displayDislocationAcceptedCandidates: dislocationAcceptedCandidates,
+        displayDislocationRegionCount: dislocatedRegions.size,
+        displayDislocationGapRejections: dislocationGapRejections,
+        displayDislocationInverseSamples: dislocationInverseSamples,
+        displayDislocationMaxDisplacement: dislocationMaxDisplacement,
+        displayDislocationBuildTimeMs: Math.max(0, performance.now() - buildStarted),
+        displayDislocationClippingState: dislocationClippingState,
+        displayDislocationSourceCount: displayDislocation.sourceCount,
+        displayDislocationSourceDomain: "original-glyph" as const,
+      } : {}),
+      warning,
+    },
+  };
+}
+
 export const sdfHalftoneRenderer: VectorRenderer = {
   id: "sdf-halftone",
   label: "SDF Halftone",
@@ -40,7 +256,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
   svgElementType: "circle",
   usesTime: false,
   usesSubstrate: true,
-  clipPreviewToText: (state) => !emitterDisplayUsesExterior(state),
+  clipPreviewToText: (state) => !isDisplayDislocationActive(state) && !emitterDisplayUsesExterior(state),
   estimateCost(state) {
     const artboard = projectArtboard(state);
     const density = Math.max(10, Math.min(80, state.density));
@@ -61,6 +277,10 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     }
     const glyph = getGlyphFieldSampler(state, context);
     const displayResponse = createEmitterDisplaySampler(state, context);
+    const displayDislocation = createDisplayDislocationSampler(state, context);
+    if (state.dotGrid.enabled) {
+      return generateRegularDotGrid(state, context, substrate, artboard, displayResponse, displayDislocation);
+    }
 
     const random = createSeededRandom(state.seed);
     const density = Math.max(10, Math.min(80, state.density));

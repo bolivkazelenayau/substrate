@@ -6,6 +6,8 @@ import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
 
 type UnknownRecord = Record<string, unknown>;
 
+export const CURRENT_PROJECT_VERSION = 10 as const;
+
 const rendererIds: RendererId[] = ["flow", "ripple", "dots", "sdf-flow", "sdf-streamlines", "sdf-contours", "sdf-halftone", "wave-contours", "glyph-diffuser"];
 const exportModes: ExportMode[] = ["artwork", "editable"];
 const exportFrameModes: ExportFrameMode[] = ["current", "time-zero"];
@@ -28,10 +30,20 @@ export interface ProjectValidationResult {
   warnings: string[];
 }
 
+function projectVersion(input: UnknownRecord): number {
+  if (input.version === undefined) return 1;
+  if (typeof input.version !== "number" || !Number.isInteger(input.version) || input.version < 1) {
+    throw new Error("Project schema version must be a positive integer.");
+  }
+  if (input.version > CURRENT_PROJECT_VERSION) {
+    throw new Error(`Project version ${input.version} is newer than this app supports.`);
+  }
+  return input.version;
+}
+
 export function migrateProject(input: unknown): UnknownRecord {
   if (!isRecord(input)) throw new Error("Project must be a JSON object.");
-  const version = typeof input.version === "number" ? input.version : 1;
-  if (version > 8) throw new Error(`Project version ${version} is newer than this app supports.`);
+  const version = projectVersion(input);
   let migrated: UnknownRecord = { ...input };
   if (version <= 3) {
     migrated = {
@@ -40,7 +52,7 @@ export function migrateProject(input: unknown): UnknownRecord {
       exportFrameMode: migrated.exportFrameMode ?? "current",
       debug: { ...defaultDebugSettings, ...(isRecord(migrated.debug) ? migrated.debug : {}) },
       font: version <= 2 ? null : migrated.font,
-      emitter: baseState.emitter,
+      emitter: { ...baseState.emitter },
       waveContourMode: "continuous",
       waveDotSpacing: 11,
       waveDotRadius: 1.8,
@@ -88,7 +100,23 @@ export function migrateProject(input: unknown): UnknownRecord {
     migrated = {
       ...migrated,
       version: 8,
-      artboard: DEFAULT_ARTBOARD,
+      artboard: migrated.artboard ?? { ...DEFAULT_ARTBOARD },
+    };
+  }
+  if (version <= 8) {
+    migrated = {
+      ...migrated,
+      version: 9,
+      emitterDisplay: migrated.emitterDisplay ?? { ...baseState.emitterDisplay },
+      glyphDisplacement: migrated.glyphDisplacement ?? { ...baseState.glyphDisplacement },
+      dotGrid: migrated.dotGrid ?? { ...baseState.dotGrid },
+    };
+  }
+  if (version <= 9) {
+    migrated = {
+      ...migrated,
+      version: 10,
+      displayDislocation: migrated.displayDislocation ?? { ...baseState.displayDislocation },
     };
   }
   return migrated;
@@ -133,6 +161,9 @@ export function validateProject(input: unknown): ProjectValidationResult {
   const debugSource = isRecord(source.debug) ? source.debug : {};
   const emitterSource = isRecord(source.emitter) ? source.emitter : {};
   const emitterDisplaySource = isRecord(source.emitterDisplay) ? source.emitterDisplay : {};
+  const glyphDisplacementSource = isRecord(source.glyphDisplacement) ? source.glyphDisplacement : {};
+  const dotGridSource = isRecord(source.dotGrid) ? source.dotGrid : {};
+  const displayDislocationSource = isRecord(source.displayDislocation) ? source.displayDislocation : {};
   const fontSource = isRecord(source.font) ? source.font : null;
   const font: FontMetadata | null = fontSource
     && typeof fontSource.family === "string"
@@ -151,7 +182,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 8,
+    version: 10,
     artboard: {
       width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
       height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
@@ -216,6 +247,73 @@ export function validateProject(input: unknown): ProjectValidationResult {
       orbitAmount: clamp(emitterDisplaySource.orbitAmount, baseState.emitterDisplay.orbitAmount, 0, 100),
       divergence: clamp(emitterDisplaySource.divergence, baseState.emitterDisplay.divergence, -100, 100),
     },
+    glyphDisplacement: {
+      enabled: typeof glyphDisplacementSource.enabled === "boolean" ? glyphDisplacementSource.enabled : baseState.glyphDisplacement.enabled,
+      mode: enumValue(glyphDisplacementSource.mode, ["warp", "horizontal-slices", "vertical-slices", "grid", "radial-sectors"], baseState.glyphDisplacement.mode),
+      strength: clamp(glyphDisplacementSource.strength, baseState.glyphDisplacement.strength, 0, 320),
+      responseRadius: clamp(glyphDisplacementSource.responseRadius, baseState.glyphDisplacement.responseRadius, 8, SIZE_HARD_LIMITS.emitterRadius),
+      falloff: enumValue(glyphDisplacementSource.falloff, ["smoothstep", "gaussian", "linear"], baseState.glyphDisplacement.falloff),
+      fragmentSize: clamp(glyphDisplacementSource.fragmentSize, baseState.glyphDisplacement.fragmentSize, 4, 320),
+      gap: clamp(glyphDisplacementSource.gap, baseState.glyphDisplacement.gap, 0, 120),
+      quantizationSteps: clamp(glyphDisplacementSource.quantizationSteps, baseState.glyphDisplacement.quantizationSteps, 1, 32, true),
+      direction: clamp(glyphDisplacementSource.direction, baseState.glyphDisplacement.direction, -360, 360),
+      radialTangential: clamp(glyphDisplacementSource.radialTangential, baseState.glyphDisplacement.radialTangential, -100, 100),
+      jitter: clamp(glyphDisplacementSource.jitter, baseState.glyphDisplacement.jitter, 0, 100),
+      fragmentRotation: clamp(glyphDisplacementSource.fragmentRotation, baseState.glyphDisplacement.fragmentRotation, 0, 12),
+      seedInfluence: clamp(glyphDisplacementSource.seedInfluence, baseState.glyphDisplacement.seedInfluence, 0, 100),
+    },
+    dotGrid: {
+      enabled: typeof dotGridSource.enabled === "boolean" ? dotGridSource.enabled : baseState.dotGrid.enabled,
+      spacing: clamp(dotGridSource.spacing, baseState.dotGrid.spacing, 3, 80),
+      radius: clamp(dotGridSource.radius, baseState.dotGrid.radius, 0.1, SIZE_HARD_LIMITS.dotRadius),
+      threshold: clamp(dotGridSource.threshold, baseState.dotGrid.threshold, 0, 1),
+      edgeSoftness: clamp(dotGridSource.edgeSoftness, baseState.dotGrid.edgeSoftness, 0, 1),
+    },
+    displayDislocation: {
+      enabled: typeof displayDislocationSource.enabled === "boolean"
+        ? displayDislocationSource.enabled
+        : baseState.displayDislocation.enabled,
+      mode: enumValue(
+        displayDislocationSource.mode,
+        ["horizontal-bands", "vertical-bands", "blocks"],
+        baseState.displayDislocation.mode,
+      ),
+      responseRadius: clamp(
+        displayDislocationSource.responseRadius,
+        baseState.displayDislocation.responseRadius,
+        8,
+        SIZE_HARD_LIMITS.emitterRadius,
+      ),
+      falloff: enumValue(
+        displayDislocationSource.falloff,
+        ["smoothstep", "gaussian", "linear"],
+        baseState.displayDislocation.falloff,
+      ),
+      displacementAmount: clamp(
+        displayDislocationSource.displacementAmount,
+        baseState.displayDislocation.displacementAmount,
+        0,
+        160,
+      ),
+      regionSize: clamp(displayDislocationSource.regionSize, baseState.displayDislocation.regionSize, 4, 320),
+      gap: clamp(displayDislocationSource.gap, baseState.displayDislocation.gap, 0, 120),
+      quantizationSteps: clamp(
+        displayDislocationSource.quantizationSteps,
+        baseState.displayDislocation.quantizationSteps,
+        1,
+        32,
+        true,
+      ),
+      direction: clamp(displayDislocationSource.direction, baseState.displayDislocation.direction, -360, 360),
+      alternatingOffset: clamp(
+        displayDislocationSource.alternatingOffset,
+        baseState.displayDislocation.alternatingOffset,
+        0,
+        100,
+      ),
+      radialBias: clamp(displayDislocationSource.radialBias, baseState.displayDislocation.radialBias, 0, 100),
+      seed: clamp(displayDislocationSource.seed, baseState.displayDislocation.seed, 0, 999999, true),
+    },
     fieldBlendMode: enumValue(source.fieldBlendMode, ["add", "max"], baseState.fieldBlendMode),
     waveContourMode: enumValue(source.waveContourMode, ["continuous", "dotted"], baseState.waveContourMode),
     contourStrokeWidth: clamp(source.contourStrokeWidth, baseState.contourStrokeWidth, CONTOUR_STROKE_WIDTH_LIMITS.min, CONTOUR_STROKE_WIDTH_LIMITS.max),
@@ -263,7 +361,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     font,
   };
 
-  if (originalVersion < 8) warnings.push("Project was migrated to schema version 8.");
+  if (originalVersion < CURRENT_PROJECT_VERSION) warnings.push(`Project was migrated to schema version ${CURRENT_PROJECT_VERSION}.`);
   if (typeof source.text === "string" && source.text.length > 280) warnings.push("Text was truncated to 280 characters.");
   return { project, warnings };
 }

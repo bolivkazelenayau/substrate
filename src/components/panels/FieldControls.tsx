@@ -11,6 +11,7 @@ import { OutputPanels } from "./OutputPanels";
 import { ArtworkTypographyPanels } from "./ArtworkTypographyPanels";
 import { AdvancedFieldPanel } from "./AdvancedFieldPanel";
 import { EmitterControls } from "./EmitterControls";
+import { GlyphDisplacementControls } from "./GlyphDisplacementControls";
 
 export interface FieldControlsProps {
   state: ProjectState;
@@ -262,6 +263,12 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
 
         <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} displayBehaviorSupported={controlActivity.emitterDisplay} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
       </FieldPanel>
+
+      <GlyphDisplacementControls
+        state={draft}
+        setState={forward}
+        parsedFontPathsAvailable={parsedFontPathsAvailable}
+      />
 
       <AdvancedFieldPanel
         state={draft}

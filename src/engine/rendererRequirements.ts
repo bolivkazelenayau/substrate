@@ -36,7 +36,7 @@ function manifestUsesGlyphField(manifest: RendererManifest): boolean {
 
 function manifestUsesTypographyGeometry(manifest: RendererManifest): boolean {
   const deps = new Set(manifest.dependencies);
-  return deps.has("typography") || deps.has("textGeometry") || deps.has("text");
+  return deps.has("typography") || deps.has("textGeometry") || deps.has("text") || deps.has("glyphDisplacement");
 }
 
 export function rendererCapabilitiesFromManifest(manifest: RendererManifest): RendererCapabilities {

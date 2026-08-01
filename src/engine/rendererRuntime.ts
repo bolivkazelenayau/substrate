@@ -6,6 +6,7 @@ import { measure } from "./performance";
 import { glyphModulationCacheKey } from "./controlOwnership";
 import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
 import { emitterDisplayGeometryKey, supportsEmitterDisplay } from "./field/emitterDisplayResponse";
+import { displayDislocationGeometryKey, isDisplayDislocationActive } from "./displayDislocation";
 import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
 import { roundSceneNumber } from "./sceneLayout";
 
@@ -81,9 +82,26 @@ export function rendererGeometryStateKey(state: ProjectState) {
     // Font bytes/metadata are represented by the typography output key at the
     // authoritative boundary. They are not a renderer-local identity.
     font: _font,
+    // Schema revisions do not alter normalized renderer geometry. Pin the
+    // historical value in the serialized identity so v9 fragmentation keys
+    // remain stable after the additive v10 migration.
+    version: _version,
+    // The active typography key is the sole glyph-domain identity. Keeping the
+    // authored controls here would duplicate invalidation and would rebuild
+    // renderers when parsed-outline displacement is unavailable.
+    glyphDisplacement: _glyphDisplacement,
+    // Dot-grid controls are owned only by SDF Halftone below.
+    dotGrid: _dotGrid,
+    // Renderer-local and represented only when the new effect is active.
+    displayDislocation: _displayDislocation,
     ...geometryState
   } = state;
-  return JSON.stringify(geometryState);
+  return JSON.stringify({
+    version: 9,
+    ...geometryState,
+    dotGrid: state.renderer === "sdf-halftone" ? state.dotGrid : undefined,
+    displayDislocation: isDisplayDislocationActive(state) ? state.displayDislocation : undefined,
+  });
 }
 
 export function rendererGeometryCacheKey(state: ProjectState, context: RenderContext) {
@@ -93,7 +111,7 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
   // Use `|` between top-level fields and `~` within the emitter, plus separators
   // that ensure adjacent numeric fields cannot collide. Field order matters.
   const viewport = context.viewport;
-  return [
+  const parts = [
     state.renderer,
     `${state.artboard.width}x${state.artboard.height}`,
     `${roundSceneNumber(viewport?.x ?? 0)},${roundSceneNumber(viewport?.y ?? 0)},${roundSceneNumber(viewport?.width ?? state.artboard.width)}x${roundSceneNumber(viewport?.height ?? state.artboard.height)}`,
@@ -112,6 +130,9 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     state.maxNodes,
     state.seed,
     state.substrateQuality,
+    state.renderer === "sdf-halftone"
+      ? `${state.dotGrid.enabled ? 1 : 0}~${state.dotGrid.spacing}~${state.dotGrid.radius}~${state.dotGrid.threshold}~${state.dotGrid.edgeSoftness}`
+      : "dot-grid:unused",
     emitterGeometryKey(state, context.textGeometry),
     supportsEmitterDisplay(state.renderer) ? emitterDisplayGeometryKey(state) : "emitter-display:unused",
     state.waveContourMode,
@@ -126,7 +147,9 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     state.diffuserHaloPadding,
     glyphModulationCacheKey(state),
     time,
-  ].join("|");
+  ];
+  if (isDisplayDislocationActive(state)) parts.push(displayDislocationGeometryKey(state));
+  return parts.join("|");
 }
 
 export function generateRendererGeometry(state: ProjectState, context: RenderContext): GeometryGroup {

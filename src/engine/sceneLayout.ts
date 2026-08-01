@@ -278,7 +278,7 @@ export function resolveSceneLayout(
   const expandedX = effectiveWidth > authored.width;
   const expandedY = effectiveHeight > authored.height;
 
-  const typographyKey = [
+  const typographyKeyParts = [
     "typography-placement",
     roundSceneNumber(canonicalOrigin.x),
     roundSceneNumber(canonicalOrigin.y),
@@ -293,7 +293,12 @@ export function resolveSceneLayout(
     roundSceneNumber(inkBounds.y),
     roundSceneNumber(inkBounds.width),
     roundSceneNumber(inkBounds.height),
-  ].join(":");
+  ];
+  // Preserve the byte-for-byte legacy scene identity when displacement is a
+  // no-op. Active domains add their semantic authority so two different
+  // fragment arrangements with equal bounds cannot alias downstream scenes.
+  if (textGeometry?.displacement) typographyKeyParts.push(`domain:${textGeometry.displacement.geometryKey}`);
+  const typographyKey = typographyKeyParts.join(":");
 
   const sceneKey = [
     "scene-layout",

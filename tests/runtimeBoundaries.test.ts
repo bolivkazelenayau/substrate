@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { baseState } from "../src/engine/presets";
-import { migrateAndRepairProject, parseImportedProjectJson, validateProjectV8Shape } from "../src/engine/projectImport";
+import {
+  migrateAndRepairProject,
+  parseImportedProjectJson,
+  validateProjectV8Shape,
+  validateProjectV10Shape,
+} from "../src/engine/projectImport";
 import { serializeProjectDocument } from "../src/hooks/useProjectDocument";
 import { createDefaultPreviewSettings } from "../src/hooks/usePreviewSettings";
 import { createDefaultDiagnosticsMode } from "../src/hooks/useDiagnosticsState";
@@ -24,18 +29,36 @@ describe("runtime and document boundaries", () => {
 
   it("defaults new runtime sessions to quiet diagnostics without changing persisted debug", () => {
     expect(createDefaultDiagnosticsMode()).toBe("off");
-    expect(baseState.version).toBe(8);
+    expect(baseState.version).toBe(10);
     expect(baseState).toHaveProperty("debug");
   });
 
   it("validates imported unknown JSON before preserving migration and repair", () => {
     expect(() => parseImportedProjectJson([])).toThrow();
-    const result = migrateAndRepairProject({ version: 6, text: "BOUNDARY", density: 999 });
+    const result = migrateAndRepairProject({
+      version: 6,
+      text: "BOUNDARY",
+      renderer: "flow",
+      seed: 24091,
+      density: 999,
+    });
 
-    expect(result.project.version).toBe(8);
+    expect(result.project.version).toBe(10);
     expect(result.project.text).toBe("BOUNDARY");
     expect(result.project.density).toBe(80);
-    expect(validateProjectV8Shape(result.project).version).toBe(8);
+    expect(validateProjectV10Shape(result.project).version).toBe(10);
+  });
+
+  it("validates a historical v8 shape against v8 before migration", () => {
+    const legacy = {
+      version: 8,
+      artboard: { width: 1200, height: 720 },
+      text: "LEGACY",
+      renderer: "sdf-halftone",
+      seed: 44071,
+    };
+
+    expect(validateProjectV8Shape(legacy).version).toBe(8);
   });
 
   it("keeps SVG export isolated from preview, WebGPU, diagnostics, and experiments", () => {

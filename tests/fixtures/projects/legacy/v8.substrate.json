@@ -1,0 +1,44 @@
+{
+  "version": 8,
+  "artboard": {
+    "width": 1480,
+    "height": 820
+  },
+  "text": "LEGACY EIGHT",
+  "renderer": "glyph-diffuser",
+  "preset": "Sonic Diffuser",
+  "seed": 80808,
+  "fontSize": 208,
+  "lineHeight": 1.1,
+  "tracking": -2,
+  "textAlign": "left",
+  "textOffsetY": -96,
+  "density": 54,
+  "amplitude": 26,
+  "frequency": 20,
+  "turbulence": 48,
+  "edgeInfluence": 72,
+  "emitterMode": "multiple",
+  "fieldBlendMode": "add",
+  "emitters": [
+    {
+      "id": "legacy-a",
+      "glyphId": "auto-first",
+      "enabled": true,
+      "weight": 1,
+      "phaseOffset": 0,
+      "radiusMultiplier": 1,
+      "label": "Legacy A"
+    },
+    {
+      "id": "legacy-b",
+      "glyphId": "auto-last",
+      "enabled": true,
+      "weight": 0.9,
+      "phaseOffset": 0.5,
+      "radiusMultiplier": 1.2,
+      "label": "Legacy B"
+    }
+  ],
+  "font": null
+}

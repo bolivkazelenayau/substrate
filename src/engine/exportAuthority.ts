@@ -37,7 +37,13 @@ export interface ExportSnapshot {
   /** Stable identity for the typographic placement inside the scene. */
   typographyPlacementKey: ExportKey;
   font: { status: "exact" | "native-approximate"; resourceKey: ExportKey };
-  typography: { inputKey: ExportKey; outputKey: ExportKey; geometry: TextGeometry | null };
+  typography: {
+    inputKey: ExportKey;
+    sourceOutputKey: ExportKey;
+    displacementKey: ExportKey;
+    outputKey: ExportKey;
+    geometry: TextGeometry | null;
+  };
   substrate?: { inputKey: ExportKey; outputKey: ExportKey; data: SubstrateData };
   renderer: { id: ProjectState["renderer"]; inputKey: ExportKey; geometryKey: ExportKey; geometry: GeometryGroup };
   context: { mode: ProjectState["exportFrameMode"]; timeMs: number; frame: number };
@@ -135,6 +141,8 @@ export interface ResolveExportReadinessInput {
   font: FontResolution;
   typographyInputKey: ExportKey;
   typographyOutputKey: ExportKey | null;
+  /** Active expected authority; defaults to the legacy base typography output. */
+  expectedTypographyOutputKey?: ExportKey | null;
   substrateInputKey: ExportKey;
   substrateOutputKey: ExportKey | null;
   substrateData: SubstrateData | null;
@@ -150,8 +158,9 @@ export function resolveExportReadiness(input: ResolveExportReadinessInput): Expo
   if (input.failureReason) return { status: "failed", reason: "Export preparation failed.", technicalReason: input.failureReason };
   if (input.font.status === "missing") return { status: "font-missing", reason: "Upload the project font before exporting.", technicalReason: "The project requests an exact font resource that is not resolved." };
   if (!input.typographyOutputKey) return { status: "typography-pending", reason: "Preparing export… typography is updating.", technicalReason: "Typography geometry is unavailable." };
-  if (input.typographyOutputKey !== key("typography-output", input.typographyInputKey)) {
-    return { status: "revision-mismatch", reason: "Preparing export… typography changed.", technicalReason: "Typography output does not match the active input.", expectedKey: input.typographyInputKey, actualKey: input.typographyOutputKey };
+  const expectedTypographyOutput = input.expectedTypographyOutputKey ?? key("typography-output", input.typographyInputKey);
+  if (input.typographyOutputKey !== expectedTypographyOutput) {
+    return { status: "revision-mismatch", reason: "Preparing export… typography changed.", technicalReason: "Typography output does not match the active input.", expectedKey: expectedTypographyOutput, actualKey: input.typographyOutputKey };
   }
   if (getRendererManifest(input.renderer).usesSubstrate) {
     if (!input.substrateData || !input.substrateOutputKey) return { status: "substrate-pending", reason: "Preparing export… substrate is rebuilding.", technicalReason: "This renderer requires a completed substrate result." };
@@ -174,6 +183,8 @@ export function captureExportSnapshot(args: {
   font: FontResolution;
   typographyInputKey: ExportKey;
   typographyOutputKey: ExportKey;
+  typographySourceOutputKey?: ExportKey;
+  typographyDisplacementKey?: ExportKey;
   typographyGeometry: TextGeometry | null;
   substrateInputKey: ExportKey;
   substrateOutputKey: ExportKey | null;
@@ -217,7 +228,13 @@ export function captureExportSnapshot(args: {
     sceneLayoutKey: args.sceneLayoutKey,
     typographyPlacementKey: args.typographyPlacementKey,
     font: { status: args.font.status, resourceKey: args.font.resourceKey },
-    typography: { inputKey: args.typographyInputKey, outputKey: args.typographyOutputKey, geometry: args.typographyGeometry },
+    typography: {
+      inputKey: args.typographyInputKey,
+      sourceOutputKey: args.typographySourceOutputKey ?? args.typographyOutputKey,
+      displacementKey: args.typographyDisplacementKey ?? "glyph-displacement:disabled",
+      outputKey: args.typographyOutputKey,
+      geometry: args.typographyGeometry,
+    },
     substrate: manifest.usesSubstrate && args.substrateData && args.substrateOutputKey
       ? { inputKey: args.substrateInputKey, outputKey: args.substrateOutputKey, data: args.substrateData }
       : undefined,

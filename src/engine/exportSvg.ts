@@ -1,5 +1,5 @@
 import { APP_NAME, APP_VERSION, SVG_IDS } from "./constants";
-import type { GeometryGroup, VectorGeometry } from "./geometry";
+import { vectorGeometryBounds, type GeometryGroup, type VectorGeometry } from "./geometry";
 import { getRenderer } from "./renderers";
 import { getTextLayout } from "./textLayout";
 import type { TextGeometry } from "./glyphGeometry";
@@ -63,6 +63,7 @@ export function createSvg(
   generatedGeometry?: GeometryGroup,
   capturedContext?: { timeMs: number; frame: number },
   effectiveArtboardOverride?: ArtboardRect,
+  authority?: { typographyKey: string; sceneKey: string; rendererKey: string },
 ): string {
   const authoredWidth = state.artboard.width;
   const authoredHeight = state.artboard.height;
@@ -80,16 +81,41 @@ export function createSvg(
   const timestamp = new Date().toISOString();
   const legacyEmitterDisplay = Object.entries(baseState.emitterDisplay)
     .every(([name, value]) => state.emitterDisplay[name as keyof ProjectState["emitterDisplay"]] === value);
-  const metadataProject = isAuthoredDefault && legacyEmitterDisplay
+  const legacyGlyphDisplacement = Object.entries(baseState.glyphDisplacement)
+    .every(([name, value]) => state.glyphDisplacement[name as keyof ProjectState["glyphDisplacement"]] === value);
+  const legacyDotGrid = Object.entries(baseState.dotGrid)
+    .every(([name, value]) => state.dotGrid[name as keyof ProjectState["dotGrid"]] === value);
+  const legacyDisplayDislocation = Object.entries(baseState.displayDislocation)
+    .every(([name, value]) => state.displayDislocation[name as keyof ProjectState["displayDislocation"]] === value);
+  // A disabled/default v10 Display Dislocation state is metadata-compatible
+  // with the exact v9 document. This keeps existing fragmentation SVGs byte-
+  // stable (after timestamp normalization) while active v10 projects persist
+  // and export the new settings in full.
+  const compatibilityMetadataState = legacyDisplayDislocation
     ? (() => {
-        const { artboard: _artboard, version: _version, contourStrokeWidth, lineHeight, emitterDisplay: _emitterDisplay, ...legacyProject } = state;
+        const { displayDislocation: _displayDislocation, ...v10Project } = state;
+        return { ...v10Project, version: 9 as const };
+      })()
+    : state;
+  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation
+    ? (() => {
+        const {
+          artboard: _artboard,
+          version: _version,
+          contourStrokeWidth,
+          lineHeight,
+          emitterDisplay: _emitterDisplay,
+          glyphDisplacement: _glyphDisplacement,
+          dotGrid: _dotGrid,
+          ...legacyProject
+        } = compatibilityMetadataState;
         const typographyProject = lineHeight === 1 ? legacyProject : { ...legacyProject, lineHeight };
         if (contourStrokeWidth !== DEFAULT_CONTOUR_STROKE_WIDTH) {
           return { version: 7, ...typographyProject, contourStrokeWidth };
         }
         return { version: 7, ...typographyProject };
       })()
-    : state;
+    : compatibilityMetadataState;
   const metadata = {
     appName: APP_NAME,
     appVersion: APP_VERSION,
@@ -105,6 +131,14 @@ export function createSvg(
     authoredArtboard: { width: authoredWidth, height: authoredHeight },
     effectiveArtboard: { x: rectX, y: rectY, width, height },
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
+    glyphDisplacement: textGeometry?.displacement ?? undefined,
+    glyphDomainAuthority: textGeometry?.displacement ? {
+      typographyKey: authority?.typographyKey ?? textGeometry.displacement.geometryKey,
+      sceneKey: authority?.sceneKey,
+      rendererKey: authority?.rendererKey,
+      rendererElementCount: geometry.geometries.length,
+      rendererOutputBounds: vectorGeometryBounds(geometry),
+    } : undefined,
     exportContext: capturedContext,
   };
 
@@ -114,7 +148,9 @@ export function createSvg(
   const background = state.transparentBackground
     ? ""
     : `<g id="${SVG_IDS.background}"><rect ${rectArgs} fill="${state.backgroundColor}"/></g>`;
-  const editable = `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
+  const editable = textGeometry?.displacement
+    ? `<g id="${SVG_IDS.artwork}" fill="${state.primaryColor}" fill-rule="nonzero">${serializeGlyphPaths(textGeometry)}</g>`
+    : `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines
     ? `<g fill="white">${serializeGlyphPaths(textGeometry)}</g>`
     : serializeText(state, "white", undefined, false);
@@ -168,8 +204,9 @@ export function createTimedSvg(
   generatedGeometry?: GeometryGroup,
   exportContext?: { timeMs: number; frame: number },
   effectiveArtboardOverride?: ArtboardRect,
+  authority?: { typographyKey: string; sceneKey: string; rendererKey: string },
 ) {
-  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry, exportContext, effectiveArtboardOverride));
+  const result = measure(() => createSvg(state, context, textGeometry, generatedGeometry, exportContext, effectiveArtboardOverride, authority));
   return { svg: result.value, serializationTimeMs: result.durationMs };
 }
 
@@ -180,12 +217,26 @@ export function createTimedSvgFromSnapshot(snapshot: ExportSnapshot) {
       snapshot.typography.geometry,
       snapshot.substrate?.data ?? null,
       snapshot.effectiveArtboard,
-      resolveRendererRequirements(snapshot.document.renderer)
+      resolveRendererRequirements(snapshot.document.renderer),
+      snapshot.typography.outputKey,
+      snapshot.substrate?.outputKey ?? null,
     ),
     timeMs: snapshot.context.timeMs,
     frame: snapshot.context.frame,
   };
-  return createTimedSvg(snapshot.document, context, snapshot.typography.geometry, snapshot.renderer.geometry, snapshot.context, snapshot.effectiveArtboard);
+  return createTimedSvg(
+    snapshot.document,
+    context,
+    snapshot.typography.geometry,
+    snapshot.renderer.geometry,
+    snapshot.context,
+    snapshot.effectiveArtboard,
+    {
+      typographyKey: snapshot.typography.outputKey,
+      sceneKey: snapshot.sceneLayoutKey,
+      rendererKey: snapshot.renderer.geometryKey,
+    },
+  );
 }
 
 export function validateSvgExport(svg: string, expectPathMask: boolean) {

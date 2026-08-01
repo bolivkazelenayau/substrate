@@ -1,0 +1,21 @@
+{
+  "version": 7,
+  "text": "DENSE LEGACY SDF",
+  "renderer": "sdf-halftone",
+  "preset": "Halftone Press",
+  "seed": 70707,
+  "fontSize": 196,
+  "tracking": -4,
+  "density": 80,
+  "amplitude": 38,
+  "frequency": 28,
+  "turbulence": 82,
+  "edgeInfluence": 91,
+  "maxNodes": 5000,
+  "substrateQuality": "high",
+  "primaryColor": "#22ccaa",
+  "outlineColor": "#119977",
+  "backgroundColor": "#101820",
+  "transparentBackground": false,
+  "font": null
+}

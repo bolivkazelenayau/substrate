@@ -56,11 +56,7 @@ export function getGlyphById(glyphs: GlyphEmitterMetadata[], glyphId: string | n
 
 export function resolveEmitterGlyph(glyphs: GlyphEmitterMetadata[], glyphId: string | null) {
   const eligible = glyphs.filter((glyph) => glyph.emitterEligible);
-  if (glyphId === "auto-o-middle") {
-    return eligible.find((glyph) => /[Oo0]/.test(glyph.character))
-      ?? eligible[Math.floor((eligible.length - 1) / 2)]
-      ?? null;
-  }
+  if (glyphId?.startsWith("auto-")) return resolveAutomaticGlyph(eligible, glyphId).glyph;
   return getGlyphById(eligible, glyphId) ?? eligible[0] ?? null;
 }
 

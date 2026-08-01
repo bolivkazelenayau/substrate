@@ -70,6 +70,16 @@ describe("renderer manifests", () => {
       });
     }
   });
+
+  it("centrally classifies glyph-domain displacement support for every renderer", () => {
+    for (const renderer of rendererList) {
+      expect(["supported", "base-only", "unsupported"]).toContain(rendererManifests[renderer.id].glyphDomainDisplacement);
+    }
+    expect(rendererManifests["sdf-halftone"].glyphDomainDisplacement).toBe("supported");
+    expect(rendererManifests["sdf-contours"].glyphDomainDisplacement).toBe("supported");
+    expect(rendererManifests["wave-contours"].glyphDomainDisplacement).toBe("supported");
+    expect(rendererManifests["glyph-diffuser"].glyphDomainDisplacement).toBe("supported");
+  });
 });
 
 describe("manifest dependency and cache identity", () => {
@@ -117,5 +127,47 @@ describe("manifest dependency and cache identity", () => {
       const baseline = { ...baseState, renderer: rendererId };
       expect(rendererGeometryCacheKey(changed, context())).not.toBe(rendererGeometryCacheKey(baseline, context()));
     }
+  });
+
+  it("lets the active typography key carry displacement identity without broad renderer-state churn", () => {
+    const displacedSettings: ProjectState = {
+      ...baseState,
+      glyphDisplacement: { ...baseState.glyphDisplacement, enabled: true, strength: 96 },
+    };
+    expect(rendererGeometryStateKey(displacedSettings)).toBe(rendererGeometryStateKey(baseState));
+    const before = rendererGeometryCacheKey(baseState, context({ textGeometryKey: "typography:base" }));
+    const after = rendererGeometryCacheKey(displacedSettings, context({ textGeometryKey: "typography:displaced" }));
+    expect(after).not.toBe(before);
+  });
+
+  it("scopes dot-grid state to SDF Halftone geometry", () => {
+    const changed = { ...baseState, dotGrid: { ...baseState.dotGrid, enabled: true, spacing: 17 } };
+    expect(rendererGeometryStateKey({ ...changed, renderer: "sdf-halftone" }))
+      .not.toBe(rendererGeometryStateKey({ ...baseState, renderer: "sdf-halftone" }));
+    expect(rendererGeometryStateKey({ ...changed, renderer: "sdf-contours" }))
+      .toBe(rendererGeometryStateKey({ ...baseState, renderer: "sdf-contours" }));
+  });
+
+  it("scopes enabled Display Dislocation state to SDF Halftone's regular grid", () => {
+    const halftone = {
+      ...baseState,
+      renderer: "sdf-halftone" as const,
+      emitter: { ...baseState.emitter, enabled: true },
+      dotGrid: { ...baseState.dotGrid, enabled: true },
+    };
+    const enabled = {
+      ...halftone,
+      displayDislocation: { ...baseState.displayDislocation, enabled: true },
+    };
+    const configuredButDisabled = {
+      ...halftone,
+      displayDislocation: { ...baseState.displayDislocation, enabled: false, seed: 99999 },
+    };
+    expect(rendererGeometryStateKey(enabled)).not.toBe(rendererGeometryStateKey(halftone));
+    expect(rendererGeometryCacheKey(enabled, context())).not.toBe(rendererGeometryCacheKey(halftone, context()));
+    expect(rendererGeometryStateKey(configuredButDisabled)).toBe(rendererGeometryStateKey(halftone));
+    expect(rendererGeometryCacheKey(configuredButDisabled, context())).toBe(rendererGeometryCacheKey(halftone, context()));
+    expect(rendererGeometryStateKey({ ...enabled, renderer: "sdf-contours" }))
+      .toBe(rendererGeometryStateKey({ ...halftone, renderer: "sdf-contours" }));
   });
 });

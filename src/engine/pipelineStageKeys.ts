@@ -42,6 +42,7 @@ export function sceneLayoutStageKey(state: ProjectState, textGeometry: TextGeome
     tracking: state.tracking,
     textAlign: state.textAlign,
     textGeometryBounds: textGeometry?.bounds ?? null,
+    textGeometryAuthorityKey: textGeometry?.displacement?.geometryKey,
   });
 }
 

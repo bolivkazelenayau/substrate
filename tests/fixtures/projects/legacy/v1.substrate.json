@@ -1,0 +1,15 @@
+{
+  "text": "LEGACY ONE",
+  "renderer": "dots",
+  "preset": "Signal Dust",
+  "seed": 10101,
+  "fontSize": 132,
+  "tracking": -2,
+  "density": 31,
+  "amplitude": 18,
+  "frequency": 14,
+  "turbulence": 26,
+  "edgeInfluence": 61,
+  "exportMode": "artwork",
+  "font": null
+}

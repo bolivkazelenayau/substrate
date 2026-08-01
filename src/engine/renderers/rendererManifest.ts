@@ -10,6 +10,8 @@ export type RendererDependencyKey =
   | "field"
   | "emitters"
   | "emitterDisplay"
+  | "glyphDisplacement"
+  | "displayDislocation"
   | "appearance"
   | "diffuser"
   | "contours"
@@ -35,6 +37,8 @@ export type RendererManifest = {
   usesSubstrate: boolean;
   dependencies: readonly RendererDependencyKey[];
   supportedControls: readonly FieldControlId[];
+  /** Centralized renderer audit for the active glyph-domain authority. */
+  glyphDomainDisplacement: "supported" | "base-only" | "unsupported";
   graphNode?: {
     category: "renderer";
     outputKind: "geometry";
@@ -58,6 +62,7 @@ export const rendererManifests = {
     usesTime: true,
     usesSubstrate: false,
     dependencies: ["typography", "time", "seed"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "frequency", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   ripple: manifest({
@@ -67,6 +72,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: false,
     dependencies: ["typography", "seed"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   dots: manifest({
@@ -76,6 +82,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: false,
     dependencies: ["typography", "seed"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "edgeInfluence", "maxNodes"],
   }),
   "sdf-flow": manifest({
@@ -85,6 +92,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: true,
     dependencies: ["typography", "substrate", "seed"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-streamlines": manifest({
@@ -94,6 +102,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: true,
     dependencies: ["typography", "substrate", "seed", "field", "glyphModulation"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-contours": manifest({
@@ -103,6 +112,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: true,
     dependencies: ["substrate", "seed", "field", "contours", "glyphModulation"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-halftone": manifest({
@@ -111,7 +121,8 @@ export const rendererManifests = {
     category: "sdf",
     usesTime: false,
     usesSubstrate: true,
-    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "halftone", "glyphModulation"],
+    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "displayDislocation", "halftone", "glyphModulation"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "wave-contours": manifest({
@@ -121,6 +132,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: true,
     dependencies: ["substrate", "field", "emitters", "contours"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "frequency", "edgeInfluence", "maxNodes"],
   }),
   "glyph-diffuser": manifest({
@@ -130,6 +142,7 @@ export const rendererManifests = {
     usesTime: false,
     usesSubstrate: true,
     dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "diffuser"],
+    glyphDomainDisplacement: "supported",
     supportedControls: ["density", "amplitude", "frequency", "turbulence", "edgeInfluence", "maxNodes"],
   }),
 } satisfies Record<RendererId, RendererManifest>;

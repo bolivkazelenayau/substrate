@@ -7,7 +7,7 @@ const expectedPresetIds: PresetId[] = [
   "Edge Current", "Sonic Ripple", "Signal Dust", "SDF Current", "Contour Thread",
   "Topographic Type", "Halftone Press", "Glyph Ripple", "Dotted Diffuser",
   "Sonic Halftone", "Sonic Contours", "Sonic Stream", "Sonic Diffuser",
-  "Sonic Warp", "Sonic Interference", "Counter Resonance", "Split Field", "Custom",
+  "Sonic Warp", "Sonic Interference", "Counter Resonance", "Split Field", "Fragment Matrix", "Display Dislocation", "Custom",
 ];
 
 const multiEmitterPresetIds = ["Sonic Interference", "Counter Resonance", "Split Field"] as const;
@@ -34,7 +34,7 @@ describe("presets", () => {
     const builtInMetadata = builtInIds.map((preset) => presetMetadata[preset]);
     const studyCodes = builtInMetadata.map((metadata) => metadata.studyCode);
 
-    expect(studyCodes).toHaveLength(17);
+    expect(studyCodes).toHaveLength(19);
     expect(new Set(studyCodes).size).toBe(studyCodes.length);
     studyCodes.forEach((studyCode) => expect(studyCode).toMatch(/^[A-Z]+ \/ \d{2}$/));
     builtInMetadata.forEach((metadata, index) => {
@@ -79,6 +79,20 @@ describe("presets", () => {
       emitterDisplay: { ...baseState.emitterDisplay, mode: "orbit" as const, gridAmount: 100 },
     };
     expect(applyPreset(configured, "Signal Dust").emitterDisplay).toEqual(baseState.emitterDisplay);
+  });
+
+  it("keeps Display Dislocation opt-in and isolated from legacy presets", () => {
+    const display = applyPreset(baseState, "Display Dislocation");
+    expect(display).toMatchObject({
+      renderer: "sdf-halftone",
+      glyphDisplacement: { enabled: false },
+      dotGrid: { enabled: true },
+      displayDislocation: { enabled: true, mode: "horizontal-bands" },
+      overlayMode: "hidden",
+    });
+    const fragmentation = applyPreset(display, "Fragment Matrix");
+    expect(fragmentation.displayDislocation).toEqual(baseState.displayDislocation);
+    expect(fragmentation.glyphDisplacement.enabled).toBe(true);
   });
 
   it("Sonic Interference creates multiple enabled sources when text permits", () => {

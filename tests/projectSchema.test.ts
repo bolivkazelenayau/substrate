@@ -38,6 +38,50 @@ describe("project schema", () => {
     expect(validateProject({ ...baseState, contourStrokeWidth: 1.15 }).project.contourStrokeWidth).toBe(1.15);
   });
 
+  it("migrates and validates the separate Display Dislocation document state", () => {
+    const legacyV9 = {
+      ...baseState,
+      version: 9,
+    } as Record<string, unknown>;
+    delete legacyV9.displayDislocation;
+    const migrated = validateProject(legacyV9);
+    expect(migrated.project.version).toBe(10);
+    expect(migrated.project.displayDislocation).toEqual(baseState.displayDislocation);
+    expect(migrated.project.displayDislocation.enabled).toBe(false);
+
+    const restored = validateProject({
+      ...baseState,
+      displayDislocation: {
+        ...baseState.displayDislocation,
+        enabled: true,
+        mode: "blocks",
+        responseRadius: 510,
+        displacementAmount: 88,
+        regionSize: 55,
+        gap: 13,
+        quantizationSteps: 11,
+        direction: -45,
+        alternatingOffset: 35,
+        radialBias: 42,
+        seed: 88001,
+      },
+    }).project;
+    expect(restored.displayDislocation).toEqual({
+      ...baseState.displayDislocation,
+      enabled: true,
+      mode: "blocks",
+      responseRadius: 510,
+      displacementAmount: 88,
+      regionSize: 55,
+      gap: 13,
+      quantizationSteps: 11,
+      direction: -45,
+      alternatingOffset: 35,
+      radialBias: 42,
+      seed: 88001,
+    });
+  });
+
   it("ignores runtime preview backend and quality fields on import", () => {
     const { project } = validateProject({
       ...baseState,
@@ -50,15 +94,15 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
-  it("migrates version 1 projects to version 8", () => {
+  it("migrates version 1 projects to version 10", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(8);
+    expect(result.project.version).toBe(10);
     expect(result.project.artboard).toEqual({ width: 1200, height: 720 });
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 8.");
+    expect(result.warnings).toContain("Project was migrated to schema version 10.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -67,7 +111,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(8);
+    expect(result.project.version).toBe(10);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -175,14 +219,14 @@ describe("project schema", () => {
   it("migrates v6 projects to persisted artwork appearance defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 6 });
     expect(project).toMatchObject({
-      version: 8,
+      version: 10,
       artboard: { width: 1200, height: 720 },
       primaryColor: "#e8ff45",
       outlineColor: "#e8ff45",
       backgroundColor: "#11110f",
       transparentBackground: false,
     });
-    expect(warnings).toContain("Project was migrated to schema version 8.");
+    expect(warnings).toContain("Project was migrated to schema version 10.");
   });
 
   it("preserves valid appearance colors and rejects invalid color strings", () => {
@@ -204,7 +248,7 @@ describe("project schema", () => {
   it("migrates version 5 typography fields to layout-preserving defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 5 });
     expect(project).toMatchObject({
-      version: 8,
+      version: 10,
       artboard: { width: 1200, height: 720 },
       kerningMode: "font",
       kerningStrength: 1,
@@ -213,7 +257,7 @@ describe("project schema", () => {
       textAlign: "center",
       textOffsetY: 0,
     });
-    expect(warnings).toContain("Project was migrated to schema version 8.");
+    expect(warnings).toContain("Project was migrated to schema version 10.");
   });
 
   it("validates and clamps typography controls", () => {

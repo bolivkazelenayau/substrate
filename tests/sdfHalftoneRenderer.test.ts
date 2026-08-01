@@ -12,7 +12,10 @@ import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyp
 import { sampleMask } from "../src/engine/substrate/sampling";
 import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
+import { createDisplayDislocationSampler } from "../src/engine/displayDislocation";
 import type { ProjectState, RenderContext } from "../src/types";
+import { canonicalizeSvgForGolden } from "./utils/canonicalSvg";
+import type { CircleMark } from "../src/engine/geometry";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
@@ -190,7 +193,7 @@ describe("SDF Halftone renderer", () => {
     const exclusionDocument = new DOMParser().parseFromString(exclusionSvg, "image/svg+xml");
     expect(exclusionDocument.querySelector("#generated-artwork")?.hasAttribute("mask")).toBe(false);
     expect(JSON.parse(exclusionDocument.querySelector("metadata")!.textContent!).project)
-      .toMatchObject({ version: 8, emitterDisplay: { mode: "exclude", interiorSuppression: 100 } });
+      .toMatchObject({ version: 9, emitterDisplay: { mode: "exclude", interiorSuppression: 100 } });
 
     const orbitState: ProjectState = {
       ...exclusionState,
@@ -202,6 +205,127 @@ describe("SDF Halftone renderer", () => {
     expect(orbit.geometries).not.toEqual(excluded.geometries);
     expect(orbit.geometries.every((geometry) => geometry.type === "circle"
       && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
+  });
+
+  it("returns the exact legacy regular Halftone geometry when Display Dislocation is disabled", () => {
+    const legacyRegular: ProjectState = {
+      ...state,
+      maxNodes: 5000,
+      emitter: { ...state.emitter, enabled: true, sourceMode: "custom", customX: 600, customY: 360 },
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      dotGrid: { ...state.dotGrid, enabled: true, spacing: 10, radius: 1.9 },
+      displayDislocation: { ...state.displayDislocation, enabled: false },
+    };
+    const configuredButDisabled: ProjectState = {
+      ...legacyRegular,
+      displayDislocation: {
+        ...legacyRegular.displayDislocation,
+        enabled: false,
+        mode: "blocks",
+        responseRadius: 700,
+        displacementAmount: 155,
+        regionSize: 17,
+        gap: 15,
+        seed: 999999,
+      },
+    };
+    const renderer = getRenderer("sdf-halftone");
+    expect(renderer.generateGeometry(configuredButDisabled, context))
+      .toEqual(renderer.generateGeometry(legacyRegular, context));
+  });
+
+  it("pull-samples the original mask into coherent local regions on the fixed vector lattice", () => {
+    const displayState: ProjectState = {
+      ...state,
+      maxNodes: 5000,
+      emitter: {
+        ...state.emitter,
+        enabled: true,
+        sourceMode: "custom",
+        customX: 600,
+        customY: 360,
+      },
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      glyphDisplacement: { ...state.glyphDisplacement, enabled: false },
+      dotGrid: {
+        ...state.dotGrid,
+        enabled: true,
+        spacing: 10,
+        radius: 1.9,
+        threshold: 0.5,
+        edgeSoftness: 0,
+      },
+      displayDislocation: {
+        ...state.displayDislocation,
+        enabled: true,
+        mode: "horizontal-bands",
+        responseRadius: 110,
+        displacementAmount: 64,
+        regionSize: 40,
+        gap: 8,
+        quantizationSteps: 8,
+        direction: 0,
+        alternatingOffset: 100,
+        radialBias: 0,
+        seed: 27183,
+      },
+    };
+    const renderer = getRenderer("sdf-halftone");
+    const baseline = renderer.generateGeometry({
+      ...displayState,
+      displayDislocation: { ...displayState.displayDislocation, enabled: false },
+    }, context);
+    const dislocated = renderer.generateGeometry(displayState, context);
+    const sampler = createDisplayDislocationSampler(displayState, context);
+    const circles = dislocated.geometries.filter((geometry) => geometry.type === "circle");
+
+    expect(dislocated.geometries).not.toEqual(baseline.geometries);
+    expect(circles).toHaveLength(dislocated.geometries.length);
+    expect(circles.every((circle) => (
+      Math.abs(circle.center.x / displayState.dotGrid.spacing - Math.round(circle.center.x / displayState.dotGrid.spacing)) < 1e-9
+      && Math.abs(circle.center.y / displayState.dotGrid.spacing - Math.round(circle.center.y / displayState.dotGrid.spacing)) < 1e-9
+    ))).toBe(true);
+    expect(circles.every((circle) => {
+      const inverse = sampler.sample(circle.center.x, circle.center.y);
+      return !inverse.gapRejected
+        && sampleMask(context.substrateData!, inverse.source.x, inverse.source.y) >= displayState.dotGrid.threshold;
+    })).toBe(true);
+    expect(circles.some((circle) => {
+      const inverse = sampler.sample(circle.center.x, circle.center.y);
+      return inverse.affected
+        && sampleMask(context.substrateData!, circle.center.x, circle.center.y) < displayState.dotGrid.threshold
+        && sampleMask(context.substrateData!, inverse.source.x, inverse.source.y) >= displayState.dotGrid.threshold;
+    })).toBe(true);
+
+    const baselineOutside = baseline.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle"
+      && Math.hypot(geometry.center.x - 600, geometry.center.y - 360) > displayState.displayDislocation.responseRadius);
+    const activeByCenter = new Map(circles.map((circle) => [`${circle.center.x},${circle.center.y}`, circle]));
+    expect(baselineOutside.length).toBeGreaterThan(0);
+    for (const circle of baselineOutside) {
+      expect(activeByCenter.get(`${circle.center.x},${circle.center.y}`)).toEqual(circle);
+    }
+
+    expect(dislocated.diagnostics).toMatchObject({
+      dotGridRegular: true,
+      dotGridSpacing: 10,
+      displayDislocationMode: "horizontal-bands",
+      displayDislocationSourceDomain: "original-glyph",
+      displayDislocationClippingState: "none",
+    });
+    expect(dislocated.diagnostics?.displayDislocationRegionCount).toBeGreaterThanOrEqual(2);
+    expect(dislocated.diagnostics?.displayDislocationGapRejections).toBeGreaterThan(0);
+    expect(dislocated.diagnostics?.displayDislocationAffectedCandidates).toBeGreaterThan(0);
+    expect(dislocated.diagnostics?.displayDislocationAcceptedCandidates).toBeGreaterThan(0);
+    expect(dislocated.diagnostics?.displayDislocationBuildTimeMs).toBeGreaterThanOrEqual(0);
+    expect(renderer.clipPreviewToText?.(displayState)).toBe(false);
+
+    const suppliedGeometrySvg = createSvg(displayState, context, context.textGeometry, dislocated);
+    const regeneratedSvg = createSvg(displayState, context, context.textGeometry);
+    expect(canonicalizeSvgForGolden(regeneratedSvg)).toBe(canonicalizeSvgForGolden(suppliedGeometrySvg));
+    const document = new DOMParser().parseFromString(suppliedGeometrySvg, "image/svg+xml");
+    expect(document.querySelectorAll("#generated-artwork circle")).toHaveLength(dislocated.geometries.length);
+    expect(document.querySelectorAll("#generated-artwork path")).toHaveLength(0);
+    expect(document.querySelector("#generated-artwork")?.hasAttribute("mask")).toBe(false);
   });
 
   it("returns a clear empty fallback without substrate data", () => {

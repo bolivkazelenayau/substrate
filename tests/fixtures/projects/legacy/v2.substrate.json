@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "text": "LEGACY TWO",
+  "renderer": "ripple",
+  "preset": "Sonic Ripple",
+  "seed": 20202,
+  "fontSize": 144,
+  "tracking": 1,
+  "density": 38,
+  "debug": {
+    "emitter": true,
+    "markCount": false
+  },
+  "font": null
+}

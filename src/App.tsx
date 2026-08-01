@@ -27,9 +27,11 @@ import { PREVIEW_ONLY_EXPORT_WARNING, presetExportKinds } from "./engine/presetE
 import { recordPreviewAppRender } from "./engine/previewRuntimeDiagnostics";
 import { DEFAULT_SVG_TRACE_CONFIG, traceConfigForPreviewQuality, type SvgTraceConfig } from "./engine/previewTraceConfig";
 import { useProjectDocument, serializeProjectDocument } from "./hooks/useProjectDocument";
+import { parseProjectDocumentText } from "./engine/projectImport";
 import { usePreviewSettings } from "./hooks/usePreviewSettings";
 import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
 import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
+import { useDisplacedTypographyGeometry } from "./hooks/useDisplacedTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
 import { useRendererRuntime } from "./hooks/useRendererRuntime";
@@ -48,6 +50,8 @@ import {
 } from "./engine/exportAuthority";
 import { APP_VERSION } from "./engine/constants";
 import { resolveRendererRequirements } from "./engine/rendererRequirements";
+import { GLYPH_DISPLACEMENT_PARSED_FONT_WARNING } from "./engine/glyphDisplacement";
+import { isDisplayDislocationActive } from "./engine/displayDislocation";
 import { staticRenderContextStageKey } from "./engine/pipelineStageKeys";
 import { tracePipelineRequirements } from "./engine/pipelineTrace";
 
@@ -126,8 +130,27 @@ export default function App() {
     () => typographyInputKey(state, fontResolution.resourceKey ?? "font:missing"),
     [state, fontResolution.resourceKey],
   );
-  const textGeometryBuild = useTypographyGeometry(state, fontResolution.loadedFont);
-  const textGeometry = textGeometryBuild.value;
+  const sourceTextGeometryBuild = useTypographyGeometry(state, fontResolution.loadedFont);
+  const sourceTextGeometry = sourceTextGeometryBuild.value;
+  const sourceTypographyOutputKey = useMemo(
+    () => typographyOutputKey(activeTypographyInputKey, fontResolution, sourceTextGeometry),
+    [activeTypographyInputKey, fontResolution, sourceTextGeometry],
+  );
+  const displayDislocationActive = isDisplayDislocationActive(state);
+  // Display Dislocation samples the original glyph mask. Keep authored
+  // fragmentation settings intact, but do not build or consume polygon clips
+  // while the renderer-local display effect is the active authority.
+  const glyphDomainState = useMemo(() => (
+    displayDislocationActive && state.glyphDisplacement.enabled
+      ? { ...state, glyphDisplacement: { ...state.glyphDisplacement, enabled: false } }
+      : state
+  ), [displayDislocationActive, state]);
+  const displacedTypography = useDisplacedTypographyGeometry(
+    glyphDomainState,
+    sourceTextGeometry,
+    sourceTypographyOutputKey ?? `typography-pending:${activeTypographyInputKey}`,
+  );
+  const textGeometry = displacedTypography.geometry;
   // The single production scene authority. Pure: no document writes back.
   // Determines canonical typography placement (authored center + user offset)
   // and the symmetric effective artboard rect (origin-aware). Replaces the
@@ -139,10 +162,7 @@ export default function App() {
       ? null
       : resolveSizeDraftSceneLayout(state, sizeDraftFontSize, textGeometry)
   ), [sizeDraftFontSize, state, textGeometry]);
-  const activeTypographyOutputKey = useMemo(
-    () => typographyOutputKey(activeTypographyInputKey, fontResolution, textGeometry),
-    [activeTypographyInputKey, fontResolution, textGeometry],
-  );
+  const activeTypographyOutputKey = sourceTypographyOutputKey ? displacedTypography.geometryKey : null;
   const emitterGlyphs = useMemo(() => getGlyphEmitterMetadata(state, textGeometry), [state, textGeometry]);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -304,6 +324,7 @@ return snapshot;
     font: fontResolution,
     typographyInputKey: activeTypographyInputKey,
     typographyOutputKey: activeTypographyOutputKey,
+    expectedTypographyOutputKey: activeTypographyOutputKey,
     substrateInputKey: substrateBuild.inputKey,
     substrateOutputKey: substrateBuild.outputKey,
     substrateData: substrateBuild.data,
@@ -314,7 +335,7 @@ return snapshot;
     sceneSafetyLimitHit: sceneLayout.safetyLimitHit,
     failureReason: substrateBuild.error,
     renderer: state.renderer,
-  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, renderer.usesSubstrate, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey, rendererGeometryKey]);
+  }), [activeRendererInputKey, activeTypographyInputKey, activeTypographyOutputKey, fontResolution, sceneLayout.safetyLimitHit, state.renderer, substrateBuild.data, substrateBuild.error, substrateBuild.inputKey, substrateBuild.outputKey, rendererGeometryKey]);
   const sizeExactReady = baseExportReadiness.status === "ready" || baseExportReadiness.status === "scene-safety-limit";
   const exportReadiness = useMemo(() => {
     if (sizeIsInteracting(sizeInteraction)) {
@@ -383,7 +404,13 @@ const displayedTextOverflowWarning = textOverflowWarning
     }),
     ...(displayedTextOverflowWarning ? [displayedTextOverflowWarning] : []),
     ...(!textGeometry?.hasOutlines ? [NATIVE_TEXT_BOUNDS_WARNING] : []),
-  ], [displayedTextOverflowWarning, geometrySummary, textGeometry]);
+    ...(state.glyphDisplacement.enabled && displacedTypography.diagnostics.inactiveReason === "native-fallback"
+      ? [GLYPH_DISPLACEMENT_PARSED_FONT_WARNING]
+      : []),
+    ...(displacedTypography.diagnostics.clippingStatus !== "complete"
+      ? [`Glyph displacement safety budget: ${displacedTypography.diagnostics.clippingStatus}.`]
+      : []),
+  ], [displayedTextOverflowWarning, displacedTypography.diagnostics.clippingStatus, displacedTypography.diagnostics.inactiveReason, geometrySummary, state.glyphDisplacement.enabled, textGeometry]);
   const performanceWarnings = useMemo(
     () => substrateBuild.data
       ? getSubstratePerformanceWarnings(substrateBuild.data.diagnostics.buildTimeMs, state.substrateQuality)
@@ -452,6 +479,8 @@ snapshot = captureExportSnapshot({
         font: fontResolution,
         typographyInputKey: activeTypographyInputKey,
         typographyOutputKey: activeTypographyOutputKey!,
+        typographySourceOutputKey: sourceTypographyOutputKey ?? activeTypographyOutputKey!,
+        typographyDisplacementKey: displacedTypography.displacementKey,
         typographyGeometry: textGeometry,
         substrateInputKey: substrateBuild.inputKey,
         substrateOutputKey: substrateBuild.outputKey,
@@ -520,7 +549,7 @@ snapshot = captureExportSnapshot({
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const { project, warnings } = importUnknown(JSON.parse(await file.text()));
+      const { project, warnings } = importUnknown(parseProjectDocumentText(await file.text()));
       setLoadedFont(null);
       reset();
       const fontWarning = project.font ? `Re-upload ${project.font.fileName} to restore glyph outlines.` : "";
@@ -600,11 +629,13 @@ snapshot = captureExportSnapshot({
               context={renderContext}
               geometry={geometry}
               textGeometry={textGeometry}
+              displacedTypography={displacedTypography}
+              rendererSemanticKey={activeRendererInputKey}
               sceneLayout={sceneLayout}
               exportDiagnostics={diagnostics}
               exportWarnings={exportWarnings}
               performanceWarnings={performanceWarnings}
-              glyphLayoutTimeMs={textGeometryBuild.durationMs}
+              glyphLayoutTimeMs={sourceTextGeometryBuild.durationMs + displacedTypography.diagnostics.buildDurationMs}
               substrateError={substrateBuild.error}
               substrateBackendStatus={substrateBuild.status}
               previewDiagnostics={previewDiagnostics}
@@ -629,7 +660,7 @@ snapshot = captureExportSnapshot({
             <span className="seed">SEED <strong>{String(state.seed).padStart(6, "0")}</strong></span>
             <span className="status"><i /> {previewDiagnostics.clockState.replace("-", " ").toUpperCase()}</span>
           </div>
-          {message && <p className="error" role="status">{message}</p>}
+          {message && <p className="error" role="status" data-testid="project-message">{message}</p>}
         </section>
       </div>
       {import.meta.env.DEV && (

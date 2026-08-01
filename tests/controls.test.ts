@@ -2,7 +2,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Controls } from "../src/components/Controls";
-import { baseState, presets } from "../src/engine/presets";
+import { applyPreset, baseState, presets } from "../src/engine/presets";
 import type { SizeRangeHandlers } from "../src/hooks/useSizeInteraction";
 import type { ProjectState } from "../src/types";
 import { getTextBounds } from "../src/engine/textLayout";
@@ -88,7 +88,7 @@ describe("Safe Typography controls", () => {
     container.remove();
   });
 
-  const renderControls = (state: ProjectState = baseState) => {
+  const renderControls = (state: ProjectState = baseState, parsedFontPathsAvailable = false) => {
     let current = state;
     const setState: ProjectSetter = (next) => {
       current = typeof next === "function" ? next(current) : next;
@@ -104,7 +104,7 @@ describe("Safe Typography controls", () => {
         onFontUpload: () => undefined,
         onClearFont: () => undefined,
         fontLoaded: false,
-        parsedFontPathsAvailable: false,
+        parsedFontPathsAvailable,
         previewSettings,
         onPreviewSettingsChange: () => undefined,
         emitterGlyphs: [],
@@ -414,6 +414,56 @@ describe("Safe Typography controls", () => {
     expect(mode.parentElement?.textContent).toContain("Recommended for Edge Current");
     expect(mode.parentElement?.textContent).toContain("Preview only — does not affect SVG export");
     expect(mode.parentElement?.textContent).toContain("Canvas: faster / SVG: crisper");
+  });
+
+  it("states the parsed-font boundary honestly and exposes art-direction displacement controls", () => {
+    renderControls();
+    const enabled = container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]');
+    expect(enabled?.disabled).toBe(true);
+    expect(container.textContent).toContain("Native fallback stays undisplaced");
+
+    renderControls(applyPreset(baseState, "Fragment Matrix"), true);
+    const exactEnabled = container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]');
+    expect(exactEnabled?.disabled).toBe(false);
+    expect(container.textContent).toContain("shared by mask, SDF, preview, and export");
+    const mode = field("Mode", "select") as HTMLSelectElement;
+    expect(mode.value).toBe("grid");
+    change(mode, "horizontal-slices");
+    expect(getUpdated()?.glyphDisplacement.mode).toBe("horizontal-slices");
+    expect(container.querySelector("legend")?.textContent).toContain("Glyph fragmentation parameters");
+  });
+
+  it("keeps regular dot-grid and static Canvas Performance controls available for SDF Halftone", () => {
+    renderControls(applyPreset(baseState, "Fragment Matrix"), true);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="dot-grid-enabled"]')?.checked).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="dot-grid-spacing"]')?.disabled).toBe(false);
+    openDisclosure("Preview");
+    const mode = field("Preview Mode", "select") as HTMLSelectElement;
+    expect(mode.querySelector<HTMLOptionElement>('option[value="canvas-2d"]')?.disabled).toBe(false);
+  });
+
+  it("exposes Display Dislocation as a separate renderer-local control group", () => {
+    const preset = applyPreset(baseState, "Display Dislocation");
+    renderControls(preset, false);
+
+    expect(container.textContent).toContain("Glyph Fragmentation");
+    expect(container.textContent).toContain("Display Dislocation");
+    expect(container.textContent).toContain("Inverse-domain sampling keeps the world lattice fixed");
+    expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-enabled"]')?.checked).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]')?.checked).toBe(false);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-amount"]')?.disabled).toBe(false);
+
+    const mode = container.querySelector<HTMLSelectElement>('[data-testid="display-dislocation-mode"]')!;
+    expect(mode.value).toBe("horizontal-bands");
+    change(mode, "blocks");
+    expect(getUpdated()?.displayDislocation.mode).toBe("blocks");
+    expect(getUpdated()?.glyphDisplacement).toEqual(preset.glyphDisplacement);
+  });
+
+  it("keeps Display Dislocation unavailable until SDF Halftone regular-grid support is active", () => {
+    renderControls(baseState);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-enabled"]')?.disabled).toBe(true);
+    expect(container.textContent).toContain("Available with SDF Halftone");
   });
 
   it("uses one sequential number for each normal-path section", () => {

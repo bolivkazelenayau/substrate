@@ -61,6 +61,16 @@ export interface TextGeometry {
   advanceWidth: number;
   sourceText: string;
   hasOutlines: boolean;
+  /** Present only when this geometry is the active derived glyph domain. */
+  displacement?: {
+    sourceTypographyKey: string;
+    displacementKey: string;
+    geometryKey: string;
+    mode: "warp" | "horizontal-slices" | "vertical-slices" | "grid" | "radial-sectors";
+    fragmentCount: number;
+    fragmentBounds: GlyphBounds[];
+    clippingStatus: "complete" | "budget-limited" | "triangulation-fallback";
+  };
 }
 
 export interface GlyphOutline {

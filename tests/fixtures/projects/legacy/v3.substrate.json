@@ -1,0 +1,18 @@
+{
+  "version": 3,
+  "text": "LEGACY THREE",
+  "renderer": "flow",
+  "preset": "Edge Current",
+  "seed": 30303,
+  "fontSize": 156,
+  "tracking": -1,
+  "density": 42,
+  "font": {
+    "family": "Archive Sans",
+    "fullName": "Archive Sans Regular",
+    "fileName": "ArchiveSans-Regular.ttf",
+    "unitsPerEm": 1000,
+    "ascender": 780,
+    "descender": -220
+  }
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { SVG_IDS } from "../engine/constants";
-import type { GeometryGroup, VectorGeometry } from "../engine/geometry";
+import { vectorGeometryBounds, type GeometryGroup, type VectorGeometry } from "../engine/geometry";
 import { getRenderer } from "../engine/renderers";
 import { getTextLayout, layoutUsesMultiLineTspans, textAttributes } from "../engine/textLayout";
 import type { TextGeometry } from "../engine/glyphGeometry";
@@ -35,6 +35,8 @@ import { resolveSizePresentation } from "../engine/sizePresentation";
 import { resolveSizeSceneTransform } from "../engine/sizeSceneTransform";
 import { artboardBottom, artboardLeft, artboardRight, artboardTop, type ResolvedSceneLayout } from "../engine/sceneLayout";
 import type { SizeInteractionState } from "../hooks/useSizeInteraction";
+import type { DisplacedTypographyGeometry } from "../engine/glyphDisplacement";
+import { emitterDisplayGeometryKey } from "../engine/field/emitterDisplayResponse";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 import { traceEvent } from "../dev/interactionTrace";
@@ -42,6 +44,8 @@ import { resolvePreviewStageScale } from "../engine/previewStageScale";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
+  displacedTypography?: DisplacedTypographyGeometry;
+  rendererSemanticKey?: string;
   sceneLayout: ResolvedSceneLayout;
   exportDiagnostics: SvgDiagnostics | null; exportWarnings: string[]; performanceWarnings: string[];
   glyphLayoutTimeMs: number; substrateError: string | null; substrateBackendStatus: SubstrateBackendStatus;
@@ -55,7 +59,7 @@ interface ViewportProps {
   sizeExactReady: boolean;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, displacedTypography, rendererSemanticKey, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
@@ -73,6 +77,54 @@ export function Viewport({ state, context, geometry, textGeometry, sceneLayout, 
     [authoredArtboard, effectiveRect],
   );
   const geometrySummary = useMemo(() => summarizeGeometry(geometry), [geometry]);
+  const rendererOutputBounds = useMemo(() => vectorGeometryBounds(geometry), [geometry]);
+  const displayDislocationActive = Boolean(geometry.diagnostics?.displayDislocationMode);
+  const resolvedDisplacedTypography: DisplacedTypographyGeometry = displacedTypography ?? {
+    sourceTypographyKey: context.textGeometryKey ?? "none",
+    displacementKey: "glyph-displacement:disabled",
+    geometryKey: context.textGeometryKey ?? "none",
+    geometry: textGeometry,
+    layoutBounds: textGeometry?.layoutBounds ?? textGeometry?.bounds ?? null,
+    inkBounds: textGeometry?.bounds ?? null,
+    fragmentBounds: [],
+    fragments: [],
+    active: false,
+    exact: Boolean(textGeometry?.hasOutlines),
+    diagnostics: {
+      sourceContourPoints: 0,
+      fragmentCount: 0,
+      clippingOperations: 0,
+      buildDurationMs: 0,
+      peakTemporaryArrays: 0,
+      clippingStatus: "complete",
+      effectiveRegionSize: 0,
+      anchorCount: 0,
+      inactiveReason: "disabled",
+    },
+  };
+  const displacementMetrics = useMemo(() => {
+    const fragments = resolvedDisplacedTypography.fragments;
+    const distinctTransforms = new Set(fragments.map(({ transform }) => [
+      transform.a, transform.b, transform.c, transform.d, transform.e, transform.f,
+    ].map((value) => value.toFixed(4)).join(","))).size;
+    const ordered = [...fragments].sort((a, b) => a.responseWeight - b.responseWeight);
+    const sampled = ordered.length <= 64 ? ordered : [...ordered.slice(0, 32), ...ordered.slice(-32)];
+    return {
+      distinctTransforms,
+      minResponse: ordered[0]?.responseWeight ?? 0,
+      maxResponse: ordered[ordered.length - 1]?.responseWeight ?? 0,
+      sample: sampled.map(({ id, translation, responseWeight, sourceBounds, bounds }) => {
+        return {
+          id,
+          dx: translation.x,
+          dy: translation.y,
+          responseWeight,
+          sourceBounds,
+          bounds,
+        };
+      }),
+    };
+  }, [resolvedDisplacedTypography.fragments]);
   const sizePresentation = useMemo(
     () => resolveSizePresentation(sizeInteraction, sizeExactReady),
     [sizeExactReady, sizeInteraction],
@@ -300,6 +352,40 @@ const gradientVectors = useMemo(() => {
       data-artboard-effective-height={effectiveRect.height}
       data-scene-layout-key={sceneLayout.key}
       data-text-geometry-key={context.textGeometryKey ?? "none"}
+      data-renderer-key={rendererSemanticKey ?? geometry.id}
+      data-renderer-output-bounds={JSON.stringify(rendererOutputBounds)}
+      data-glyph-source-key={resolvedDisplacedTypography.sourceTypographyKey}
+      data-glyph-displacement-key={resolvedDisplacedTypography.active ? resolvedDisplacedTypography.displacementKey : "disabled"}
+      data-glyph-domain-key={resolvedDisplacedTypography.geometryKey}
+      data-glyph-displacement-mode={resolvedDisplacedTypography.active ? state.glyphDisplacement.mode : "disabled"}
+      data-glyph-fragment-count={resolvedDisplacedTypography.fragments.length}
+      data-glyph-distinct-transform-count={displacementMetrics.distinctTransforms}
+      data-glyph-min-response={displacementMetrics.minResponse}
+      data-glyph-max-response={displacementMetrics.maxResponse}
+      data-glyph-fragment-sample={JSON.stringify(displacementMetrics.sample)}
+      data-glyph-ink-bounds={JSON.stringify(resolvedDisplacedTypography.inkBounds)}
+      data-glyph-source-contour-points={resolvedDisplacedTypography.diagnostics.sourceContourPoints}
+      data-glyph-clipping-operations={resolvedDisplacedTypography.diagnostics.clippingOperations}
+      data-glyph-peak-temporary-arrays={resolvedDisplacedTypography.diagnostics.peakTemporaryArrays}
+      data-glyph-build-ms={resolvedDisplacedTypography.diagnostics.buildDurationMs}
+      data-glyph-clipping-status={resolvedDisplacedTypography.diagnostics.clippingStatus}
+      data-dot-grid-regular={geometry.diagnostics?.dotGridRegular ? "true" : "false"}
+      data-dot-grid-spacing={geometry.diagnostics?.dotGridSpacing ?? "none"}
+      data-dot-grid-origin={`${geometry.diagnostics?.dotGridOriginX ?? "none"},${geometry.diagnostics?.dotGridOriginY ?? "none"}`}
+      data-display-dislocation-active={geometry.diagnostics?.displayDislocationMode ? "true" : "false"}
+      data-display-dislocation-mode={geometry.diagnostics?.displayDislocationMode ?? "disabled"}
+      data-display-dislocation-candidates={geometry.diagnostics?.displayDislocationCandidateCount ?? 0}
+      data-display-dislocation-affected={geometry.diagnostics?.displayDislocationAffectedCandidates ?? 0}
+      data-display-dislocation-accepted={geometry.diagnostics?.displayDislocationAcceptedCandidates ?? 0}
+      data-display-dislocation-regions={geometry.diagnostics?.displayDislocationRegionCount ?? 0}
+      data-display-dislocation-gap-rejections={geometry.diagnostics?.displayDislocationGapRejections ?? 0}
+      data-display-dislocation-max-offset={geometry.diagnostics?.displayDislocationMaxDisplacement ?? 0}
+      data-display-dislocation-build-ms={geometry.diagnostics?.displayDislocationBuildTimeMs ?? 0}
+      data-display-dislocation-clipping={geometry.diagnostics?.displayDislocationClippingState ?? "none"}
+      data-emitter-display-mode={state.emitterDisplay.mode}
+      data-emitter-display-key={emitterDisplayGeometryKey(state)}
+      data-emitter-display-samples={geometry.diagnostics?.emitterDisplaySamples ?? 0}
+      data-emitter-display-average-displacement={geometry.diagnostics?.emitterDisplayAverageDisplacement ?? 0}
       data-substrate-key={context.substrateKey ?? "none"}
       data-substrate-phase={substrateBackendStatus.phase}
       data-renderer-element-count={geometry.geometries.length}
@@ -400,9 +486,9 @@ const gradientVectors = useMemo(() => {
               </g>
             : <text style={{ fill: state.overlayMode === "outline" ? "none" : overlayFill, stroke: state.overlayMode === "outline" ? state.outlineColor : "none" }} strokeWidth={state.overlayMode === "outline" ? outlineStrokeWidth : undefined} mask={erodeOverlay && state.overlayMode !== "outline" ? "url(#diffuser-overlay-mask)" : undefined} {...textAttributes(layout)}>{nativeTextContent}</text>}
         </g>}
-        {hasGlyphPaths
+        {!displayDislocationActive && (hasGlyphPaths
           ? <g className="ghost-text glyph-ghost">{textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} />)}</g>
-          : <text className="ghost-text" {...textAttributes(layout)}>{nativeTextContent}</text>}
+          : <text className="ghost-text" {...textAttributes(layout)}>{nativeTextContent}</text>)}
         {debugImage.url && <image className="debug-raster" href={debugImage.url} x={substrate?.domainBounds?.x ?? effectiveRect.x} y={substrate?.domainBounds?.y ?? effectiveRect.y} width={substrate?.domainBounds?.width ?? effectiveRect.width} height={substrate?.domainBounds?.height ?? effectiveRect.height} preserveAspectRatio="none" />}
         {waveFieldDebugUrl && <image className="debug-raster" href={waveFieldDebugUrl} x={context.glyphField?.worldBounds.x ?? effectiveRect.x} y={context.glyphField?.worldBounds.y ?? effectiveRect.y} width={context.glyphField?.worldBounds.width ?? effectiveRect.width} height={context.glyphField?.worldBounds.height ?? effectiveRect.height} preserveAspectRatio="none" />}
         {state.debug.substrateMode === "gradient" && (

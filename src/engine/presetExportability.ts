@@ -23,6 +23,8 @@ export const presetExportKinds: Record<PresetId, PresetExportKind> = {
   "Sonic Interference": "vector",
   "Counter Resonance": "vector",
   "Split Field": "vector",
+  "Fragment Matrix": "vector",
+  "Display Dislocation": "vector",
   Custom: "vector",
 };
 

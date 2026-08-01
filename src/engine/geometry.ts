@@ -121,12 +121,71 @@ export interface RendererDiagnostics {
   averageGlyphFieldDisplacement?: number;
   rejectedDisplacedCandidates?: number;
   fieldInfluencedAcceptanceCount?: number;
+  dotGridRegular?: boolean;
+  dotGridSpacing?: number;
+  dotGridOriginX?: number;
+  dotGridOriginY?: number;
+  acceptedGridPoints?: number;
+  glyphDisplacementKey?: string;
+  glyphDisplacementFragmentCount?: number;
+  displayDislocationMode?: string;
+  displayDislocationCandidateCount?: number;
+  displayDislocationAffectedCandidates?: number;
+  displayDislocationAcceptedCandidates?: number;
+  displayDislocationRegionCount?: number;
+  displayDislocationGapRejections?: number;
+  displayDislocationInverseSamples?: number;
+  displayDislocationMaxDisplacement?: number;
+  displayDislocationBuildTimeMs?: number;
+  displayDislocationClippingState?: "none" | "artboard" | "node-budget" | "artboard-and-node-budget";
+  displayDislocationSourceCount?: number;
+  displayDislocationSourceDomain?: "original-glyph";
 }
 
 export interface GeometryGroup {
   id: string;
   geometries: VectorGeometry[];
   diagnostics?: RendererDiagnostics;
+}
+
+export interface VectorGeometryBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  complete: boolean;
+}
+
+/** Deterministic semantic bounds for renderer output. Path data is deliberately
+ * reported as incomplete because exact Bézier extrema require a path parser;
+ * circle/line/polyline renderers (including Dot Matrix) are exact. */
+export function vectorGeometryBounds(group: GeometryGroup): VectorGeometryBounds | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let complete = true;
+  const include = (x: number, y: number) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  };
+  for (const geometry of group.geometries) {
+    if (geometry.type === "circle") {
+      include(geometry.center.x - geometry.radius, geometry.center.y - geometry.radius);
+      include(geometry.center.x + geometry.radius, geometry.center.y + geometry.radius);
+    } else if (geometry.type === "line") {
+      include(geometry.start.x, geometry.start.y);
+      include(geometry.end.x, geometry.end.y);
+    } else if (geometry.type === "polyline") {
+      geometry.points.forEach((point) => include(point.x, point.y));
+    } else {
+      complete = false;
+    }
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY, complete };
 }
 
 export function geometryNodeCost(group: GeometryGroup): number {

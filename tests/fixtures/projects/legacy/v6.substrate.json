@@ -1,0 +1,17 @@
+{
+  "version": 6,
+  "text": "LEGACY SIX",
+  "renderer": "sdf-contours",
+  "preset": "Topographic Type",
+  "seed": 60606,
+  "fontSize": 188,
+  "lineHeight": 1.2,
+  "tracking": 0,
+  "kerningMode": "none",
+  "kerningStrength": 0.65,
+  "opticalSpacing": true,
+  "opticalSpacingStrength": 0.4,
+  "textAlign": "right",
+  "textOffsetY": 137,
+  "font": null
+}

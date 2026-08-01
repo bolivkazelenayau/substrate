@@ -1,0 +1,62 @@
+{
+  "warp": {
+    "displacementKey": "glyph-displacement:a87f811487546ee2",
+    "geometryKey": "typography-displaced:10c4fa62b931b6c2",
+    "fragmentCount": 8,
+    "clippingStatus": "complete",
+    "inkBounds": { "x": 294.505, "y": 319.7, "width": 638.973, "height": 151.138 },
+    "fragmentBoundsHash": "bd85b8e5428f06c3d95f",
+    "sceneKey": "scene-layout|authored:1200x720|effective:0,0,1200x720|typography:typography-placement:600:420.68:0:0:420.68:274.14:272.68:651.721:174.64:294.505:319.7:638.973:151.138:domain:typography-displaced:10c4fa62b931b6c2|padding:48|expanded:0,0",
+    "rendererKey": "sdf-halftone|1200x720|0,0,1200x720|substrate:typography-displaced:10c4fa62b931b6c2|typography-displaced:10c4fa62b931b6c2|FRAGMENT|native|148|1|-3|46|22|18|42|68|2800|91234|medium|1~12~2.2~0.55~0.18|single~1~~custom~1~0.09~0~360~smoothstep~1~0.65~add~600~360|field~58~180~48~24~68~100~78~72~18|continuous|11|1.8|text-halo|behind-text|2.2|0.72|2.4|0.28|80|off~60~12~45~45~20|0:0",
+    "renderer": { "geometryType": "circle", "elementCount": 140, "pointCount": 140, "estimatedSvgNodes": 140, "estimatedByteSize": 12100, "maxNodesClipped": false },
+    "svg": { "viewBox": "0 0 1200 720", "elementCounts": { "path": 16, "circle": 140, "line": 0, "polyline": 0, "image": 0, "canvas": 0, "foreignObject": 0 }, "hasDataImage": false, "hasBase64": false, "canonicalHash": "5928c28a342649d1aea95801cb19c0392b759c5b92c73a7656cc16d913630f33" }
+  },
+  "horizontal-slices": {
+    "displacementKey": "glyph-displacement:8df75930414ea684",
+    "geometryKey": "typography-displaced:9a035033969a9129",
+    "fragmentCount": 3,
+    "clippingStatus": "complete",
+    "inkBounds": { "x": 227.264, "y": 298.635, "width": 752.879, "height": 168.401 },
+    "fragmentBoundsHash": "b25a10216be8cdc3fef0",
+    "sceneKey": "scene-layout|authored:1200x720|effective:0,0,1200x720|typography:typography-placement:600:420.68:0:0:420.68:274.14:272.68:651.721:174.64:227.264:298.635:752.879:168.401:domain:typography-displaced:9a035033969a9129|padding:48|expanded:0,0",
+    "rendererKey": "sdf-halftone|1200x720|0,0,1200x720|substrate:typography-displaced:9a035033969a9129|typography-displaced:9a035033969a9129|FRAGMENT|native|148|1|-3|46|22|18|42|68|2800|91234|medium|1~12~2.2~0.55~0.18|single~1~~custom~1~0.09~0~360~smoothstep~1~0.65~add~600~360|field~58~180~48~24~68~100~78~72~18|continuous|11|1.8|text-halo|behind-text|2.2|0.72|2.4|0.28|80|off~60~12~45~45~20|0:0",
+    "renderer": { "geometryType": "circle", "elementCount": 97, "pointCount": 97, "estimatedSvgNodes": 97, "estimatedByteSize": 8660, "maxNodesClipped": false },
+    "svg": { "viewBox": "0 0 1200 720", "elementCounts": { "path": 16, "circle": 97, "line": 0, "polyline": 0, "image": 0, "canvas": 0, "foreignObject": 0 }, "hasDataImage": false, "hasBase64": false, "canonicalHash": "11284d9a81efb4fb6fc3d2150da462e8b47e43f8789bc3f0b027bd1ce5037398" }
+  },
+  "vertical-slices": {
+    "displacementKey": "glyph-displacement:b99cb32eb5c51ca5",
+    "geometryKey": "typography-displaced:07d250aa14db8141",
+    "fragmentCount": 15,
+    "clippingStatus": "complete",
+    "inkBounds": { "x": 275.997, "y": 295.666, "width": 653.357, "height": 173.648 },
+    "fragmentBoundsHash": "03d54bfac1d722ea2665",
+    "sceneKey": "scene-layout|authored:1200x720|effective:0,0,1200x720|typography:typography-placement:600:420.68:0:0:420.68:274.14:272.68:651.721:174.64:275.997:295.666:653.357:173.648:domain:typography-displaced:07d250aa14db8141|padding:48|expanded:0,0",
+    "rendererKey": "sdf-halftone|1200x720|0,0,1200x720|substrate:typography-displaced:07d250aa14db8141|typography-displaced:07d250aa14db8141|FRAGMENT|native|148|1|-3|46|22|18|42|68|2800|91234|medium|1~12~2.2~0.55~0.18|single~1~~custom~1~0.09~0~360~smoothstep~1~0.65~add~600~360|field~58~180~48~24~68~100~78~72~18|continuous|11|1.8|text-halo|behind-text|2.2|0.72|2.4|0.28|80|off~60~12~45~45~20|0:0",
+    "renderer": { "geometryType": "circle", "elementCount": 116, "pointCount": 116, "estimatedSvgNodes": 116, "estimatedByteSize": 10180, "maxNodesClipped": false },
+    "svg": { "viewBox": "0 0 1200 720", "elementCounts": { "path": 16, "circle": 116, "line": 0, "polyline": 0, "image": 0, "canvas": 0, "foreignObject": 0 }, "hasDataImage": false, "hasBase64": false, "canonicalHash": "e2fe08a8e2b29373ad7a19b16759a20c9c06e25f0c1744565f81b97fa2accbc5" }
+  },
+  "grid": {
+    "displacementKey": "glyph-displacement:c789cc32d540ea98",
+    "geometryKey": "typography-displaced:48fbb94087a596d3",
+    "fragmentCount": 43,
+    "clippingStatus": "complete",
+    "inkBounds": { "x": 273.797, "y": 296.832, "width": 646.96, "height": 154.078 },
+    "fragmentBoundsHash": "62fc7fb33b35db135266",
+    "sceneKey": "scene-layout|authored:1200x720|effective:0,0,1200x720|typography:typography-placement:600:420.68:0:0:420.68:274.14:272.68:651.721:174.64:273.797:296.832:646.96:154.078:domain:typography-displaced:48fbb94087a596d3|padding:48|expanded:0,0",
+    "rendererKey": "sdf-halftone|1200x720|0,0,1200x720|substrate:typography-displaced:48fbb94087a596d3|typography-displaced:48fbb94087a596d3|FRAGMENT|native|148|1|-3|46|22|18|42|68|2800|91234|medium|1~12~2.2~0.55~0.18|single~1~~custom~1~0.09~0~360~smoothstep~1~0.65~add~600~360|field~58~180~48~24~68~100~78~72~18|continuous|11|1.8|text-halo|behind-text|2.2|0.72|2.4|0.28|80|off~60~12~45~45~20|0:0",
+    "renderer": { "geometryType": "circle", "elementCount": 93, "pointCount": 93, "estimatedSvgNodes": 93, "estimatedByteSize": 8340, "maxNodesClipped": false },
+    "svg": { "viewBox": "0 0 1200 720", "elementCounts": { "path": 16, "circle": 93, "line": 0, "polyline": 0, "image": 0, "canvas": 0, "foreignObject": 0 }, "hasDataImage": false, "hasBase64": false, "canonicalHash": "5337819eba37ab38be12e19dd8be685e6e530702928ef70f038b5e6e4ab4bae3" }
+  },
+  "radial-sectors": {
+    "displacementKey": "glyph-displacement:4fee07499c4bec1b",
+    "geometryKey": "typography-displaced:ace5c961ef554dae",
+    "fragmentCount": 119,
+    "clippingStatus": "complete",
+    "inkBounds": { "x": 277.861, "y": 297.049, "width": 655.391, "height": 178.83 },
+    "fragmentBoundsHash": "d18b28f3787fbbc96d37",
+    "sceneKey": "scene-layout|authored:1200x720|effective:0,0,1200x720|typography:typography-placement:600:420.68:0:0:420.68:274.14:272.68:651.721:174.64:277.861:297.049:655.391:178.83:domain:typography-displaced:ace5c961ef554dae|padding:48|expanded:0,0",
+    "rendererKey": "sdf-halftone|1200x720|0,0,1200x720|substrate:typography-displaced:ace5c961ef554dae|typography-displaced:ace5c961ef554dae|FRAGMENT|native|148|1|-3|46|22|18|42|68|2800|91234|medium|1~12~2.2~0.55~0.18|single~1~~custom~1~0.09~0~360~smoothstep~1~0.65~add~600~360|field~58~180~48~24~68~100~78~72~18|continuous|11|1.8|text-halo|behind-text|2.2|0.72|2.4|0.28|80|off~60~12~45~45~20|0:0",
+    "renderer": { "geometryType": "circle", "elementCount": 65, "pointCount": 65, "estimatedSvgNodes": 65, "estimatedByteSize": 6100, "maxNodesClipped": false },
+    "svg": { "viewBox": "0 0 1200 720", "elementCounts": { "path": 16, "circle": 65, "line": 0, "polyline": 0, "image": 0, "canvas": 0, "foreignObject": 0 }, "hasDataImage": false, "hasBase64": false, "canonicalHash": "143fb6a1aba21a8d6e06623713d58357f55099e2e7e9c5b57e8a7cebb5c06317" }
+  }
+}

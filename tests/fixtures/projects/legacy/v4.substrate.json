@@ -1,0 +1,30 @@
+{
+  "version": 4,
+  "text": "LEGACY FOUR",
+  "renderer": "wave-contours",
+  "preset": "Sonic Contours",
+  "seed": 40404,
+  "fontSize": 164,
+  "tracking": -3,
+  "emitter": {
+    "id": "legacy-single",
+    "glyphId": "auto-o",
+    "enabled": true,
+    "sourceMode": "counter-center",
+    "fieldType": "radial-wave",
+    "amplitude": 1.6,
+    "frequency": 0.08,
+    "phase": 0.25,
+    "radius": 360,
+    "falloff": "gaussian",
+    "selfInfluence": 1.2,
+    "neighborInfluence": 0.4,
+    "blendMode": "max",
+    "customX": 540,
+    "customY": 330
+  },
+  "waveContourMode": "dotted",
+  "waveDotSpacing": 13,
+  "waveDotRadius": 2.4,
+  "font": null
+}

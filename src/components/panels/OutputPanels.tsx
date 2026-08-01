@@ -42,7 +42,7 @@ export function OutputPanels(props: OutputPanelsProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const displayedPreviewBackend = state.renderer === "flow" ? previewSettings.backend : "svg-dom";
+  const displayedPreviewBackend = previewSettings.backend;
   const recommendedPreviewBackend = recommendedPreviewBackends[state.preset];
 
   return (
@@ -67,7 +67,7 @@ export function OutputPanels(props: OutputPanelsProps) {
             <label className="field compact-field">
               <span>Preview Mode</span>
               <select value={displayedPreviewBackend} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, backend: event.target.value as PreviewSettings["backend"] })}>
-                <option value="canvas-2d" disabled={state.renderer !== "flow"}>{previewBackends["canvas-2d"].label} · {previewBackends["canvas-2d"].detail}</option>
+                <option value="canvas-2d">{previewBackends["canvas-2d"].label} · {previewBackends["canvas-2d"].detail}</option>
                 <option value="svg-dom">{previewBackends["svg-dom"].label} · {previewBackends["svg-dom"].detail}</option>
               </select>
               <small>Preview only — does not affect SVG export. Canvas: faster / SVG: crisper.{recommendedPreviewBackend === "canvas-2d" ? " Recommended for Edge Current." : ""}</small>

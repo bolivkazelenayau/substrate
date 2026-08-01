@@ -3,13 +3,15 @@ export type ExportMode = "artwork" | "editable";
 export type ExportFrameMode = "current" | "time-zero";
 export type ArtboardOverflowMode = "clip" | "auto-grow";
 export type SubstrateQuality = "low" | "medium" | "high" | "ultra";
-export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Custom";
+export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Fragment Matrix" | "Display Dislocation" | "Custom";
 export type FieldControlId = "density" | "amplitude" | "frequency" | "turbulence" | "edgeInfluence" | "maxNodes";
 export type PreviewFpsCap = 24 | 30 | 60;
 export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | "custom";
 export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
 export type EmitterDisplayMode = "field" | "distort" | "exclude" | "orbit";
+export type GlyphDisplacementMode = "warp" | "horizontal-slices" | "vertical-slices" | "grid" | "radial-sectors";
+export type DisplayDislocationMode = "horizontal-bands" | "vertical-bands" | "blocks";
 export type WaveContourMode = "continuous" | "dotted";
 export type EmitterMode = "single" | "multiple";
 export type FieldBlendMode = "add" | "max";
@@ -60,6 +62,57 @@ export interface EmitterDisplaySettings {
   orbitAmount: number;
   divergence: number;
 }
+
+/**
+ * Authoring controls for the vector glyph-domain stage. These values affect
+ * derived typography geometry, never already-generated renderer marks.
+ */
+export interface GlyphDisplacementSettings {
+  enabled: boolean;
+  mode: GlyphDisplacementMode;
+  strength: number;
+  responseRadius: number;
+  falloff: GlyphEmitterFalloff;
+  fragmentSize: number;
+  gap: number;
+  quantizationSteps: number;
+  direction: number;
+  /** -100 = tangential, 0 = authored direction, 100 = radial. */
+  radialTangential: number;
+  jitter: number;
+  fragmentRotation: number;
+  seedInfluence: number;
+}
+
+/** Regular world-grid rendering controls owned by SDF Halftone. */
+export interface DotGridSettings {
+  enabled: boolean;
+  spacing: number;
+  radius: number;
+  threshold: number;
+  edgeSoftness: number;
+}
+
+/**
+ * Renderer-local inverse-domain displacement for SDF Halftone's regular dot
+ * grid. This is deliberately independent from polygonal glyph fragmentation.
+ */
+export interface DisplayDislocationSettings {
+  enabled: boolean;
+  mode: DisplayDislocationMode;
+  responseRadius: number;
+  falloff: GlyphEmitterFalloff;
+  displacementAmount: number;
+  regionSize: number;
+  gap: number;
+  quantizationSteps: number;
+  direction: number;
+  /** Percentage chance that region parity, rather than seed noise, sets sign. */
+  alternatingOffset: number;
+  /** 0 = authored direction, 100 = radial push from the emitter. */
+  radialBias: number;
+  seed: number;
+}
 export type PreviewBackendPreference = "canvas-2d" | "svg-dom";
 export type PreviewQuality = "full" | "balanced" | "performance";
 export type DiagnosticsMode = "off" | "compact" | "full";
@@ -104,7 +157,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 8;
+  version: 10;
   artboard: {
     width: number;
     height: number;
@@ -140,6 +193,9 @@ export interface ProjectState {
   emitterMode: EmitterMode;
   emitters: GlyphEmitterInstance[];
   emitterDisplay: EmitterDisplaySettings;
+  glyphDisplacement: GlyphDisplacementSettings;
+  dotGrid: DotGridSettings;
+  displayDislocation: DisplayDislocationSettings;
   fieldBlendMode: FieldBlendMode;
   waveContourMode: WaveContourMode;
   contourStrokeWidth: number;

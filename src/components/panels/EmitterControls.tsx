@@ -22,6 +22,8 @@ const defaults: Record<string, number> = {
   Radius: baseState.emitter.radius,
   "Self influence": baseState.emitter.selfInfluence,
   "Neighbor influence": baseState.emitter.neighborInfluence,
+  "Emitter X": baseState.emitter.customX,
+  "Emitter Y": baseState.emitter.customY,
   Weight: baseState.emitters[0].weight,
   "Radius ×": baseState.emitters[0].radiusMultiplier,
   "Global strength": baseState.emitter.amplitude,
@@ -30,6 +32,8 @@ const defaults: Record<string, number> = {
   "Global base radius": baseState.emitter.radius,
   "Global self influence": baseState.emitter.selfInfluence,
   "Global neighbor influence": baseState.emitter.neighborInfluence,
+  "Global emitter X": baseState.emitter.customX,
+  "Global emitter Y": baseState.emitter.customY,
   "Micro distortion": baseState.emitterDisplay.distortionStrength,
   "Response radius": baseState.emitterDisplay.distortionRadius,
   "Noise scale": baseState.emitterDisplay.noiseScale,
@@ -160,6 +164,10 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
     <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Emitter enabled</span></label>
     <label className="field compact-field"><span>Source glyph</span><select value={state.emitter.glyphId ?? ""} onChange={(event) => patchEmitter({ glyphId: event.target.value || null })}><option value="">First eligible glyph</option><option value="auto-o-middle">Auto · O/o/0 or middle glyph</option>{eligibleGlyphs.map((glyph) => <option key={glyph.glyphId} value={glyph.glyphId}>{getGlyphDisplayLabel(glyph)}</option>)}</select></label>
     <label className="field compact-field"><span>Source mode</span><select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}><option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option></select></label>
+    {state.emitter.sourceMode === "custom" && <>
+      <Range label="Emitter X" value={state.emitter.customX} min={0} max={state.artboard.width} step={10} onChange={(customX) => patchEmitter({ customX })} />
+      <Range label="Emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
+    </>}
     <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
     <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
     <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
@@ -181,6 +189,10 @@ function GlobalEmitter({ state, patchField, patchEmitter }: { state: ProjectStat
     <div className="section-subheading">Global field shaping · all emitters</div><small className="inactive-hint">These shared controls intentionally affect every enabled emitter row.</small>
     <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Global field enabled</span></label>
     <label className="field compact-field"><span>Shared source mode</span><select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}><option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option></select></label>
+    {state.emitter.sourceMode === "custom" && <>
+      <Range label="Global emitter X" value={state.emitter.customX} min={0} max={state.artboard.width} step={10} onChange={(customX) => patchEmitter({ customX })} />
+      <Range label="Global emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
+    </>}
     <Range label="Global strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
     <Range label="Global wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
     <Range label="Global phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />

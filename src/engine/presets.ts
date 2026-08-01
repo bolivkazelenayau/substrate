@@ -46,7 +46,7 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 8,
+  version: 10,
   artboard: { width: 1200, height: 720 },
   text: "SUBSTRATE",
   fontSize: 148,
@@ -105,6 +105,42 @@ export const baseState: ProjectState = {
     edgeBias: 78,
     orbitAmount: 72,
     divergence: 18,
+  },
+  glyphDisplacement: {
+    enabled: false,
+    mode: "horizontal-slices",
+    strength: 56,
+    responseRadius: 420,
+    falloff: "smoothstep",
+    fragmentSize: 44,
+    gap: 8,
+    quantizationSteps: 6,
+    direction: 0,
+    radialTangential: 0,
+    jitter: 22,
+    fragmentRotation: 1.5,
+    seedInfluence: 100,
+  },
+  dotGrid: {
+    enabled: false,
+    spacing: 12,
+    radius: 2.2,
+    threshold: 0.55,
+    edgeSoftness: 0.18,
+  },
+  displayDislocation: {
+    enabled: false,
+    mode: "horizontal-bands",
+    responseRadius: 280,
+    falloff: "smoothstep",
+    displacementAmount: 48,
+    regionSize: 42,
+    gap: 7,
+    quantizationSteps: 6,
+    direction: 0,
+    alternatingOffset: 78,
+    radialBias: 12,
+    seed: 19041,
   },
   fieldBlendMode: "add",
   waveContourMode: "continuous",
@@ -311,6 +347,78 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
     ],
     emitter: { ...baseState.emitter, enabled: true, radius: 420, neighborInfluence: 0.76, falloff: "smoothstep" },
   },
+  "Fragment Matrix": {
+    renderer: "sdf-halftone",
+    density: 68,
+    amplitude: 18,
+    turbulence: 0,
+    edgeInfluence: 24,
+    maxNodes: 4200,
+    emitterMode: "single",
+    emitter: { ...baseState.emitter, enabled: true, glyphId: "auto-middle", sourceMode: "center" },
+    glyphDisplacement: {
+      ...baseState.glyphDisplacement,
+      enabled: true,
+      mode: "grid",
+      strength: 76,
+      responseRadius: 520,
+      fragmentSize: 54,
+      gap: 12,
+      quantizationSteps: 6,
+      radialTangential: 38,
+      jitter: 28,
+      fragmentRotation: 2.2,
+    },
+    dotGrid: { ...baseState.dotGrid, enabled: true, spacing: 12, radius: 2.15 },
+  },
+  "Display Dislocation": {
+    text: "DISPLAY",
+    fontSize: 184,
+    tracking: -4,
+    renderer: "sdf-halftone",
+    density: 72,
+    amplitude: 16,
+    turbulence: 0,
+    edgeInfluence: 20,
+    maxNodes: 5000,
+    emitterMode: "single",
+    emitter: {
+      ...baseState.emitter,
+      enabled: true,
+      glyphId: "auto-middle",
+      sourceMode: "custom",
+      customX: 600,
+      customY: 360,
+      radius: 320,
+      falloff: "smoothstep",
+    },
+    emitterDisplay: { ...baseState.emitterDisplay, mode: "field" },
+    glyphDisplacement: { ...baseState.glyphDisplacement, enabled: false },
+    dotGrid: {
+      ...baseState.dotGrid,
+      enabled: true,
+      spacing: 10,
+      radius: 1.9,
+      threshold: 0.52,
+      edgeSoftness: 0.12,
+    },
+    displayDislocation: {
+      ...baseState.displayDislocation,
+      enabled: true,
+      mode: "horizontal-bands",
+      responseRadius: 285,
+      displacementAmount: 54,
+      regionSize: 40,
+      gap: 8,
+      quantizationSteps: 6,
+      direction: 0,
+      alternatingOffset: 82,
+      radialBias: 10,
+      seed: 27183,
+    },
+    overlayMode: "hidden",
+    textOverlayOpacity: 0,
+  },
 };
 
 // Presentation only: the legacy preset name remains the persisted compatibility
@@ -418,6 +526,18 @@ export const presetMetadata: Record<PresetId, PresetMetadata> = {
     family: "field",
     description: "Divided field behavior with separated typographic force zones.",
   },
+  "Fragment Matrix": {
+    studyCode: "MATRIX / 18",
+    legacyName: "Fragment Matrix",
+    family: "halftone",
+    description: "Regular dot-matrix typography split into displaced vector cells.",
+  },
+  "Display Dislocation": {
+    studyCode: "DISPLAY / 19",
+    legacyName: "Display Dislocation",
+    family: "halftone",
+    description: "A stable dot display with localized, emitter-driven band dislocation.",
+  },
   Custom: {
     legacyName: "Custom",
     family: "custom",
@@ -434,8 +554,16 @@ export function getPresetDisplayLabel(preset: PresetId) {
 
 export function applyPreset(state: ProjectState, preset: PresetId): ProjectState {
   if (preset === "Custom") return { ...state, preset };
-  // Legacy presets predate emitter display response. Reset that independent
-  // capability so selecting an existing preset still restores its historical
-  // output instead of inheriting a previously configured exclusion/orbit pass.
-  return { ...state, emitterDisplay: baseState.emitterDisplay, ...presets[preset], preset };
+  // Legacy presets predate both independent display-response stages. Reset
+  // them before applying a preset so historical output cannot inherit a prior
+  // glyph-domain or mark-space configuration. New presets explicitly opt in.
+  return {
+    ...state,
+    emitterDisplay: baseState.emitterDisplay,
+    glyphDisplacement: baseState.glyphDisplacement,
+    dotGrid: baseState.dotGrid,
+    displayDislocation: baseState.displayDislocation,
+    ...presets[preset],
+    preset,
+  };
 }

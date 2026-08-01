@@ -130,6 +130,20 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .emitter-row-actions button, .emitter-add { width: 100%; }
 .emitter-inline-warning { display: block; color: var(--accent); line-height: 1.35; }
 .control-group.nested-group { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.glyph-displacement-section fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.glyph-displacement-section fieldset:disabled { opacity: 0.58; }
+.glyph-displacement-section .control-warning { color: var(--muted); }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .control-group.disabled-group { opacity: 0.35; }
 .control-group.disabled-group .section-subheading { color: var(--muted); }
 
