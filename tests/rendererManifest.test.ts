@@ -80,6 +80,22 @@ describe("renderer manifests", () => {
     expect(rendererManifests["wave-contours"].glyphDomainDisplacement).toBe("supported");
     expect(rendererManifests["glyph-diffuser"].glyphDomainDisplacement).toBe("supported");
   });
+
+  it("centrally classifies Emitter Micro Response support without silently consuming other renderers", () => {
+    for (const renderer of rendererList) {
+      expect(["supported", "unaffected", "unsupported"])
+        .toContain(rendererManifests[renderer.id].emitterMicroResponse);
+    }
+    expect(rendererManifests["glyph-diffuser"].emitterMicroResponse).toBe("supported");
+    expect(rendererManifests["sdf-halftone"].emitterMicroResponse).toBe("supported");
+    expect(rendererManifests.flow.emitterMicroResponse).toBe("unaffected");
+    expect(rendererManifests.ripple.emitterMicroResponse).toBe("unaffected");
+    expect(rendererManifests["wave-contours"].emitterMicroResponse).toBe("unaffected");
+    expect(rendererManifests.dots.emitterMicroResponse).toBe("unsupported");
+    expect(rendererManifests["sdf-flow"].emitterMicroResponse).toBe("unsupported");
+    expect(rendererManifests["sdf-streamlines"].emitterMicroResponse).toBe("unsupported");
+    expect(rendererManifests["sdf-contours"].emitterMicroResponse).toBe("unsupported");
+  });
 });
 
 describe("manifest dependency and cache identity", () => {

@@ -1,5 +1,6 @@
 import type { ProjectState, RendererId } from "../types";
 import { supportsEmitterDisplay } from "./field/emitterDisplayResponse";
+import { emitterMicroResponseCapability, supportsEmitterMicroResponse } from "./field/emitterMicroResponse";
 
 const GLYPH_MODULATION_RENDERERS = new Set<RendererId>(["sdf-halftone", "sdf-contours", "sdf-streamlines"]);
 
@@ -12,6 +13,9 @@ export interface ControlActivity {
   glyphRadiusModulation: boolean;
   glyphOpacityModulation: boolean;
   emitterDisplay: boolean;
+  emitterMicroResponse: boolean;
+  emitterMicroResponseCapability: "supported" | "unaffected" | "unsupported";
+  glyphMicroWarp: boolean;
   diffuser: boolean;
   overlay: boolean;
   outlineActive: boolean;
@@ -57,6 +61,9 @@ export function getControlActivity(state: ProjectState, parsedFontPaths: boolean
     glyphRadiusModulation: state.renderer === "sdf-halftone",
     glyphOpacityModulation: state.renderer === "sdf-halftone",
     emitterDisplay: supportsEmitterDisplay(state.renderer),
+    emitterMicroResponse: supportsEmitterMicroResponse(state.renderer),
+    emitterMicroResponseCapability: emitterMicroResponseCapability(state.renderer),
+    glyphMicroWarp: parsedFontPaths,
     diffuser,
     overlay,
     outlineActive,

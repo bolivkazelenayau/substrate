@@ -87,17 +87,26 @@ export function createSvg(
     .every(([name, value]) => state.dotGrid[name as keyof ProjectState["dotGrid"]] === value);
   const legacyDisplayDislocation = Object.entries(baseState.displayDislocation)
     .every(([name, value]) => state.displayDislocation[name as keyof ProjectState["displayDislocation"]] === value);
-  // A disabled/default v10 Display Dislocation state is metadata-compatible
-  // with the exact v9 document. This keeps existing fragmentation SVGs byte-
-  // stable (after timestamp normalization) while active v10 projects persist
-  // and export the new settings in full.
-  const compatibilityMetadataState = legacyDisplayDislocation
+  const legacyEmitterMicroResponse = Object.entries(baseState.emitterMicroResponse)
+    .every(([name, value]) => state.emitterMicroResponse[name as keyof ProjectState["emitterMicroResponse"]] === value);
+  const legacyGlyphMicroWarp = Object.entries(baseState.glyphMicroWarp)
+    .every(([name, value]) => state.glyphMicroWarp[name as keyof ProjectState["glyphMicroWarp"]] === value);
+  // Sequential default-state elision keeps pre-feature SVG metadata byte-stable
+  // after timestamp normalization. An active stage retains its introducing
+  // schema and cannot be mislabeled as an older project.
+  const compatibilityMetadataState = legacyGlyphMicroWarp
     ? (() => {
-        const { displayDislocation: _displayDislocation, ...v10Project } = state;
-        return { ...v10Project, version: 9 as const };
+        const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutMicroWarp } = state;
+        const v11Project = { ...v12WithoutMicroWarp, version: 11 as const };
+        if (!legacyEmitterMicroResponse) return v11Project;
+        const { emitterMicroResponse: _emitterMicroResponse, ...v11WithoutEmitterMicro } = v11Project;
+        const v10Project = { ...v11WithoutEmitterMicro, version: 10 as const };
+        if (!legacyDisplayDislocation) return v10Project;
+        const { displayDislocation: _displayDislocation, ...v10WithoutDisplayDislocation } = v10Project;
+        return { ...v10WithoutDisplayDislocation, version: 9 as const };
       })()
     : state;
-  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation
+  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation && legacyEmitterMicroResponse && legacyGlyphMicroWarp
     ? (() => {
         const {
           artboard: _artboard,
@@ -131,9 +140,10 @@ export function createSvg(
     authoredArtboard: { width: authoredWidth, height: authoredHeight },
     effectiveArtboard: { x: rectX, y: rectY, width, height },
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
+    glyphMicroWarp: textGeometry?.microWarp ?? undefined,
     glyphDisplacement: textGeometry?.displacement ?? undefined,
-    glyphDomainAuthority: textGeometry?.displacement ? {
-      typographyKey: authority?.typographyKey ?? textGeometry.displacement.geometryKey,
+    glyphDomainAuthority: textGeometry?.displacement || textGeometry?.microWarp ? {
+      typographyKey: authority?.typographyKey ?? textGeometry.displacement?.geometryKey ?? textGeometry.microWarp!.geometryKey,
       sceneKey: authority?.sceneKey,
       rendererKey: authority?.rendererKey,
       rendererElementCount: geometry.geometries.length,
@@ -148,7 +158,7 @@ export function createSvg(
   const background = state.transparentBackground
     ? ""
     : `<g id="${SVG_IDS.background}"><rect ${rectArgs} fill="${state.backgroundColor}"/></g>`;
-  const editable = textGeometry?.displacement
+  const editable = textGeometry?.displacement || textGeometry?.microWarp
     ? `<g id="${SVG_IDS.artwork}" fill="${state.primaryColor}" fill-rule="nonzero">${serializeGlyphPaths(textGeometry)}</g>`
     : `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines

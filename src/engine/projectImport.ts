@@ -7,7 +7,7 @@ import {
 } from "./projectSchema";
 
 type UnknownRecord = Record<string, unknown>;
-type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
 
 export type ProjectImportErrorCode =
   | "invalid-json"
@@ -32,9 +32,33 @@ export interface HistoricalProjectCandidate extends UnknownRecord {
 
 export type ProjectStateCandidate = ProjectState;
 
-type ProjectStateV9Candidate = Omit<ProjectState, "version" | "displayDislocation"> & { version: 9 };
+type ProjectStateV11Candidate = Omit<ProjectState, "version" | "glyphMicroWarp"> & { version: 11 };
+type ProjectStateV10Candidate = Omit<ProjectStateV11Candidate, "version" | "emitterMicroResponse"> & { version: 10 };
+type ProjectStateV9Candidate = Omit<ProjectStateV10Candidate, "version" | "displayDislocation"> & { version: 9 };
 
-const { displayDislocation: _displayDislocation, ...baseStateV9Fields } = baseState;
+const {
+  version: _baseStateVersion,
+  glyphMicroWarp: _glyphMicroWarp,
+  ...baseStateV11Fields
+} = baseState;
+const baseStateV11Template: ProjectStateV11Candidate = {
+  ...baseStateV11Fields,
+  version: 11,
+};
+const {
+  version: _baseStateV11Version,
+  emitterMicroResponse: _emitterMicroResponse,
+  ...baseStateV10Fields
+} = baseStateV11Template;
+const baseStateV10Template: ProjectStateV10Candidate = {
+  ...baseStateV10Fields,
+  version: 10,
+};
+const {
+  version: _baseStateV10Version,
+  displayDislocation: _displayDislocation,
+  ...baseStateV9Fields
+} = baseStateV10Template;
 const baseStateV9Template: ProjectStateV9Candidate = {
   ...baseStateV9Fields,
   version: 9,
@@ -159,10 +183,16 @@ function validateHistoricalMinimum(
     );
   }
 
-  // v9 was the first exact persisted shape. Keep validating it against its
-  // historical field set while v10 adds Display Dislocation independently.
+  // v9 was the first exact persisted shape. Keep validating each released
+  // exact shape while later schemas add independent feature state.
   if (version === 9) {
     requireTemplateKeys(input, baseStateV9Template as unknown as UnknownRecord, version);
+  }
+  if (version === 10) {
+    requireTemplateKeys(input, baseStateV10Template as unknown as UnknownRecord, version);
+  }
+  if (version === 11) {
+    requireTemplateKeys(input, baseStateV11Template as unknown as UnknownRecord, version);
   }
   if (version === CURRENT_PROJECT_VERSION) {
     requireTemplateKeys(input, baseState as unknown as UnknownRecord, version);
@@ -211,10 +241,22 @@ export function parseImportedProjectJson(input: unknown): UnknownRecord {
   return input;
 }
 
-export function validateProjectV10Shape(input: unknown): ProjectStateCandidate {
+export function validateProjectV12Shape(input: unknown): ProjectStateCandidate {
+  const parsed = parseImportedProjectJson(input);
+  validateHistoricalMinimum(parsed, 12);
+  return validateLatestProjectState(parsed);
+}
+
+export function validateProjectV11Shape(input: unknown): ProjectStateV11Candidate {
+  const parsed = parseImportedProjectJson(input);
+  validateHistoricalMinimum(parsed, 11);
+  return parsed as unknown as ProjectStateV11Candidate;
+}
+
+export function validateProjectV10Shape(input: unknown): ProjectStateV10Candidate {
   const parsed = parseImportedProjectJson(input);
   validateHistoricalMinimum(parsed, 10);
-  return validateLatestProjectState(parsed);
+  return parsed as unknown as ProjectStateV10Candidate;
 }
 
 export function validateProjectV9Shape(input: unknown): ProjectStateV9Candidate {

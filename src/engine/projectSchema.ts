@@ -6,7 +6,7 @@ import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
 
 type UnknownRecord = Record<string, unknown>;
 
-export const CURRENT_PROJECT_VERSION = 10 as const;
+export const CURRENT_PROJECT_VERSION = 12 as const;
 
 const rendererIds: RendererId[] = ["flow", "ripple", "dots", "sdf-flow", "sdf-streamlines", "sdf-contours", "sdf-halftone", "wave-contours", "glyph-diffuser"];
 const exportModes: ExportMode[] = ["artwork", "editable"];
@@ -119,6 +119,20 @@ export function migrateProject(input: unknown): UnknownRecord {
       displayDislocation: migrated.displayDislocation ?? { ...baseState.displayDislocation },
     };
   }
+  if (version <= 10) {
+    migrated = {
+      ...migrated,
+      version: 11,
+      emitterMicroResponse: migrated.emitterMicroResponse ?? { ...baseState.emitterMicroResponse },
+    };
+  }
+  if (version <= 11) {
+    migrated = {
+      ...migrated,
+      version: 12,
+      glyphMicroWarp: migrated.glyphMicroWarp ?? { ...baseState.glyphMicroWarp },
+    };
+  }
   return migrated;
 }
 
@@ -161,6 +175,8 @@ export function validateProject(input: unknown): ProjectValidationResult {
   const debugSource = isRecord(source.debug) ? source.debug : {};
   const emitterSource = isRecord(source.emitter) ? source.emitter : {};
   const emitterDisplaySource = isRecord(source.emitterDisplay) ? source.emitterDisplay : {};
+  const emitterMicroResponseSource = isRecord(source.emitterMicroResponse) ? source.emitterMicroResponse : {};
+  const glyphMicroWarpSource = isRecord(source.glyphMicroWarp) ? source.glyphMicroWarp : {};
   const glyphDisplacementSource = isRecord(source.glyphDisplacement) ? source.glyphDisplacement : {};
   const dotGridSource = isRecord(source.dotGrid) ? source.dotGrid : {};
   const displayDislocationSource = isRecord(source.displayDislocation) ? source.displayDislocation : {};
@@ -182,7 +198,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 10,
+    version: 12,
     artboard: {
       width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
       height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
@@ -246,6 +262,124 @@ export function validateProject(input: unknown): ProjectValidationResult {
       edgeBias: clamp(emitterDisplaySource.edgeBias, baseState.emitterDisplay.edgeBias, 0, 100),
       orbitAmount: clamp(emitterDisplaySource.orbitAmount, baseState.emitterDisplay.orbitAmount, 0, 100),
       divergence: clamp(emitterDisplaySource.divergence, baseState.emitterDisplay.divergence, -100, 100),
+    },
+    emitterMicroResponse: {
+      enabled: typeof emitterMicroResponseSource.enabled === "boolean"
+        ? emitterMicroResponseSource.enabled
+        : baseState.emitterMicroResponse.enabled,
+      positionDetail: clamp(
+        emitterMicroResponseSource.positionDetail,
+        baseState.emitterMicroResponse.positionDetail,
+        0,
+        100,
+      ),
+      densityBreakup: clamp(
+        emitterMicroResponseSource.densityBreakup,
+        baseState.emitterMicroResponse.densityBreakup,
+        0,
+        100,
+      ),
+      detailScale: clamp(
+        emitterMicroResponseSource.detailScale,
+        baseState.emitterMicroResponse.detailScale,
+        2,
+        160,
+      ),
+      responseRadius: clamp(
+        emitterMicroResponseSource.responseRadius,
+        baseState.emitterMicroResponse.responseRadius,
+        8,
+        SIZE_HARD_LIMITS.emitterRadius,
+      ),
+      falloff: enumValue(
+        emitterMicroResponseSource.falloff,
+        ["smoothstep", "gaussian", "linear"],
+        baseState.emitterMicroResponse.falloff,
+      ),
+      maxDisplacement: clamp(
+        emitterMicroResponseSource.maxDisplacement,
+        baseState.emitterMicroResponse.maxDisplacement,
+        0,
+        96,
+      ),
+      occupancy: enumValue(
+        emitterMicroResponseSource.occupancy,
+        ["legacy", "exclude-interior", "disperse-exterior"],
+        baseState.emitterMicroResponse.occupancy,
+      ),
+      exteriorPush: clamp(
+        emitterMicroResponseSource.exteriorPush,
+        baseState.emitterMicroResponse.exteriorPush,
+        0,
+        100,
+      ),
+      tangentialFlow: clamp(
+        emitterMicroResponseSource.tangentialFlow,
+        baseState.emitterMicroResponse.tangentialFlow,
+        0,
+        100,
+      ),
+      divergence: clamp(
+        emitterMicroResponseSource.divergence,
+        baseState.emitterMicroResponse.divergence,
+        0,
+        100,
+      ),
+      exteriorShell: clamp(
+        emitterMicroResponseSource.exteriorShell,
+        baseState.emitterMicroResponse.exteriorShell,
+        1,
+        240,
+      ),
+    },
+    glyphMicroWarp: {
+      enabled: typeof glyphMicroWarpSource.enabled === "boolean"
+        ? glyphMicroWarpSource.enabled
+        : baseState.glyphMicroWarp.enabled,
+      strength: clamp(glyphMicroWarpSource.strength, baseState.glyphMicroWarp.strength, 0, 100),
+      responseRadius: clamp(
+        glyphMicroWarpSource.responseRadius,
+        baseState.glyphMicroWarp.responseRadius,
+        8,
+        SIZE_HARD_LIMITS.emitterRadius,
+      ),
+      falloff: enumValue(
+        glyphMicroWarpSource.falloff,
+        ["smoothstep", "gaussian", "linear"],
+        baseState.glyphMicroWarp.falloff,
+      ),
+      detailScale: clamp(glyphMicroWarpSource.detailScale, baseState.glyphMicroWarp.detailScale, 4, 160),
+      detailOctaves: clamp(glyphMicroWarpSource.detailOctaves, baseState.glyphMicroWarp.detailOctaves, 1, 3, true),
+      normalDisplacement: clamp(
+        glyphMicroWarpSource.normalDisplacement,
+        baseState.glyphMicroWarp.normalDisplacement,
+        0,
+        100,
+      ),
+      tangentialDisplacement: clamp(
+        glyphMicroWarpSource.tangentialDisplacement,
+        baseState.glyphMicroWarp.tangentialDisplacement,
+        0,
+        100,
+      ),
+      edgeTurbulence: clamp(glyphMicroWarpSource.edgeTurbulence, baseState.glyphMicroWarp.edgeTurbulence, 0, 100),
+      quantizationSteps: clamp(
+        glyphMicroWarpSource.quantizationSteps,
+        baseState.glyphMicroWarp.quantizationSteps,
+        0,
+        16,
+        true,
+      ),
+      maxDisplacement: clamp(
+        glyphMicroWarpSource.maxDisplacement,
+        baseState.glyphMicroWarp.maxDisplacement,
+        0,
+        48,
+      ),
+      preserveCounters: typeof glyphMicroWarpSource.preserveCounters === "boolean"
+        ? glyphMicroWarpSource.preserveCounters
+        : baseState.glyphMicroWarp.preserveCounters,
+      seedInfluence: clamp(glyphMicroWarpSource.seedInfluence, baseState.glyphMicroWarp.seedInfluence, 0, 100),
     },
     glyphDisplacement: {
       enabled: typeof glyphDisplacementSource.enabled === "boolean" ? glyphDisplacementSource.enabled : baseState.glyphDisplacement.enabled,

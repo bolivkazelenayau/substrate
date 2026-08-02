@@ -40,6 +40,9 @@ async function attachStage(page: Page, testInfo: TestInfo, name: string) {
 test("Display Dislocation visual, backend, export, and restoration gates", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByLabel("Preset").selectOption("Display Dislocation");
+  await openPanel(page, "Preview");
+  await page.getByLabel("Preview Mode").selectOption("svg-dom");
+  await expect(stage(page)).toHaveAttribute("data-preview-backend", "svg-dom");
   await waitForDisplay(page, "horizontal-bands");
 
   const toggle = page.getByTestId("display-dislocation-enabled");

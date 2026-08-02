@@ -46,7 +46,7 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 10,
+  version: 12,
   artboard: { width: 1200, height: 720 },
   text: "SUBSTRATE",
   fontSize: 148,
@@ -105,6 +105,35 @@ export const baseState: ProjectState = {
     edgeBias: 78,
     orbitAmount: 72,
     divergence: 18,
+  },
+  emitterMicroResponse: {
+    enabled: false,
+    positionDetail: 42,
+    densityBreakup: 18,
+    detailScale: 14,
+    responseRadius: 180,
+    falloff: "smoothstep",
+    maxDisplacement: 18,
+    occupancy: "legacy",
+    exteriorPush: 42,
+    tangentialFlow: 38,
+    divergence: 20,
+    exteriorShell: 36,
+  },
+  glyphMicroWarp: {
+    enabled: false,
+    strength: 64,
+    responseRadius: 170,
+    falloff: "smoothstep",
+    detailScale: 18,
+    detailOctaves: 2,
+    normalDisplacement: 82,
+    tangentialDisplacement: 14,
+    edgeTurbulence: 36,
+    quantizationSteps: 0,
+    maxDisplacement: 12,
+    preserveCounters: true,
+    seedInfluence: 100,
   },
   glyphDisplacement: {
     enabled: false,
@@ -560,6 +589,8 @@ export function applyPreset(state: ProjectState, preset: PresetId): ProjectState
   return {
     ...state,
     emitterDisplay: baseState.emitterDisplay,
+    emitterMicroResponse: baseState.emitterMicroResponse,
+    glyphMicroWarp: baseState.glyphMicroWarp,
     glyphDisplacement: baseState.glyphDisplacement,
     dotGrid: baseState.dotGrid,
     displayDislocation: baseState.displayDislocation,

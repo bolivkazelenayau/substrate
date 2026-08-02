@@ -195,6 +195,13 @@ describe("useSubstrateBackend identity and lifecycle", () => {
     expect(latest.outputKey).toBe(SUBSTRATE_NOT_REQUIRED_KEY);
     expect(latest.status.phase).toBe("not-required");
     expect(latest.status.activeRequestId).toBeNull();
+    // Let the stale active request finish. Its final scheduler snapshot must
+    // not overwrite the disabled stage with a phantom `building` phase.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(latest.outputKey).toBe(SUBSTRATE_NOT_REQUIRED_KEY);
+    expect(latest.status.phase).toBe("not-required");
     computeDelayMs = 0;
   });
 

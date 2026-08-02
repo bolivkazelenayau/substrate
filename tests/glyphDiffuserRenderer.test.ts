@@ -17,6 +17,8 @@ import { generateEdgeErosionMarks, MAX_EDGE_EROSION_MARKS } from "../src/engine/
 import { buildCompositeWaveField, createGlyphFieldContext } from "../src/engine/field/compositeWaveField";
 import { areOutlineWarpControlsActive, generateWarpedOutline, getFinalOutlineGeometry, NATIVE_OUTLINE_WARP_WARNING, outlineWarpCacheKey } from "../src/engine/outlineWarp";
 import type { ProjectState, RenderContext } from "../src/types";
+import { authoritativeFootprintClearance } from "../src/engine/field/emitterMicroResponse";
+import type { CircleMark } from "../src/engine/geometry";
 
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
   const canvas = createCanvas(width, height);
@@ -192,6 +194,116 @@ describe("Glyph Diffuser renderer", () => {
     expect(orbit.geometries.every((geometry) => geometry.type === "circle"
       && sampleMask(context.substrateData!, geometry.center.x, geometry.center.y) < 0.5)).toBe(true);
     expect(renderer.clipPreviewToText?.(orbitState)).toBe(false);
+  });
+
+  it("adds fine local microstructure and restores exact Glyph Diffuser output when disabled", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const referenceState: ProjectState = {
+      ...state,
+      density: 76,
+      maxNodes: 3000,
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+    };
+    const baseline = renderer.generateGeometry(referenceState, context);
+    const configuredButDisabled = renderer.generateGeometry({
+      ...referenceState,
+      emitterMicroResponse: {
+        ...referenceState.emitterMicroResponse,
+        enabled: false,
+        occupancy: "legacy",
+        positionDetail: 99,
+        densityBreakup: 99,
+        detailScale: 4,
+      },
+    }, context);
+    const detailedState: ProjectState = {
+      ...referenceState,
+      emitterMicroResponse: {
+        ...referenceState.emitterMicroResponse,
+        enabled: true,
+        positionDetail: 84,
+        densityBreakup: 0,
+        detailScale: 9,
+        responseRadius: 150,
+        maxDisplacement: 8,
+        occupancy: "legacy",
+      },
+    };
+    const detailed = renderer.generateGeometry(detailedState, context);
+    const anchor = {
+      x: baseline.diagnostics?.emitterAnchorX ?? 0,
+      y: baseline.diagnostics?.emitterAnchorY ?? 0,
+    };
+
+    expect(configuredButDisabled.geometries).toEqual(baseline.geometries);
+    expect(configuredButDisabled.diagnostics?.acceptedCandidates).toBe(baseline.diagnostics?.acceptedCandidates);
+    expect(detailed.geometries).not.toEqual(baseline.geometries);
+    expect(detailed.geometries).toHaveLength(baseline.geometries.length);
+    expect(detailed.diagnostics).toMatchObject({
+      emitterMicroResponseMode: "micro/legacy",
+      emitterMicroRejectedCount: 0,
+    });
+    expect(detailed.diagnostics?.emitterMicroAdjustedCount).toBeGreaterThan(0);
+
+    const detailedByGeometry = new Set(detailed.geometries
+      .filter((geometry): geometry is CircleMark => geometry.type === "circle")
+      .map((circle) => JSON.stringify(circle)));
+    const distant = baseline.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle"
+      && Math.hypot(geometry.center.x - anchor.x, geometry.center.y - anchor.y) >= detailedState.emitterMicroResponse.responseRadius);
+    expect(distant.length).toBeGreaterThan(0);
+    expect(distant.every((circle) => detailedByGeometry.has(JSON.stringify(circle)))).toBe(true);
+
+    expect(renderer.generateGeometry({
+      ...detailedState,
+      emitterMicroResponse: { ...detailedState.emitterMicroResponse, enabled: false },
+    }, context).geometries).toEqual(baseline.geometries);
+  });
+
+  it("keeps every complete footprint exterior and disperses invalid marks instead of only deleting them", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const exclusionState: ProjectState = {
+      ...state,
+      density: 80,
+      maxNodes: 4000,
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      emitterMicroResponse: {
+        ...state.emitterMicroResponse,
+        enabled: false,
+        responseRadius: 180,
+        occupancy: "exclude-interior",
+        exteriorShell: 36,
+      },
+    };
+    const excluded = renderer.generateGeometry(exclusionState, context);
+    const dispersedState: ProjectState = {
+      ...exclusionState,
+      emitterMicroResponse: {
+        ...exclusionState.emitterMicroResponse,
+        occupancy: "disperse-exterior",
+        exteriorPush: 50,
+        tangentialFlow: 42,
+        divergence: 20,
+      },
+    };
+    const dispersed = renderer.generateGeometry(dispersedState, context);
+    const finalCircles = dispersed.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle");
+
+    expect(excluded.diagnostics?.emitterMicroFootprintInvalidCount).toBeGreaterThan(0);
+    expect(excluded.diagnostics?.emitterMicroRelocatedCount).toBe(0);
+    expect(dispersed.diagnostics?.emitterMicroInteriorCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroRelocatedCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroFinalExteriorCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroFinalFootprintViolations).toBe(0);
+    expect(dispersed.diagnostics?.emitterMicroRejectedCount)
+      .toBeLessThan(excluded.diagnostics?.emitterMicroRejectedCount ?? Number.POSITIVE_INFINITY);
+    expect(finalCircles.length).toBeGreaterThan(0);
+    expect(finalCircles.every((circle) => authoritativeFootprintClearance(context.substrateData!, circle).valid)).toBe(true);
+    expect(renderer.clipPreviewToText?.(dispersedState)).toBe(false);
+
+    const svg = createSvg(dispersedState, context, context.textGeometry, dispersed);
+    const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(parsed.querySelectorAll("#generated-artwork circle")).toHaveLength(dispersed.geometries.length);
+    expect(svg).not.toMatch(/<image|<canvas|data:image/i);
   });
 
   it("preserves single-mode geometry and reacts deterministically to multiple emitters", () => {

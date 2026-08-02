@@ -5,6 +5,7 @@ import { createCanvas, Path2D } from "@napi-rs/canvas";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createSvg } from "../src/engine/exportSvg";
 import { buildCompositeWaveField, createGlyphFieldContext } from "../src/engine/field/compositeWaveField";
+import { authoritativeFootprintClearance } from "../src/engine/field/emitterMicroResponse";
 import { deriveDisplacedTypographyGeometry } from "../src/engine/glyphDisplacement";
 import { layoutGlyphs } from "../src/engine/glyphLayout";
 import { generateRendererGeometry, rendererGeometryCacheKey, summarizeGeometry } from "../src/engine/rendererRuntime";
@@ -13,6 +14,7 @@ import { buildSubstrate, SUBSTRATE_RESOLUTIONS } from "../src/engine/substrate/b
 import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyphs";
 import { getTextLayout } from "../src/engine/textLayout";
 import type { GlyphBounds } from "../src/engine/glyphGeometry";
+import type { CircleMark } from "../src/engine/geometry";
 import type { LoadedFont } from "../src/engine/fontLoader";
 import type { ProjectState, RenderContext } from "../src/types";
 import { currentFragmentationFixtures, protectedFragmentationModes } from "./fixtures/currentFragmentationProjects";
@@ -42,7 +44,7 @@ function fragmentBoundsHash(bounds: GlyphBounds[]): string {
     .slice(0, 20);
 }
 
-async function fragmentationSummary(state: ProjectState, font: LoadedFont) {
+async function fragmentationArtifacts(state: ProjectState, font: LoadedFont) {
   const source = layoutGlyphs(state, font);
   const displaced = deriveDisplacedTypographyGeometry(
     state,
@@ -93,6 +95,12 @@ async function fragmentationSummary(state: ProjectState, font: LoadedFont) {
     { typographyKey: displaced.geometryKey, sceneKey: scene.key, rendererKey },
   );
 
+  return { displaced, activeGeometry, scene, substrate, context, geometry, rendererKey, svg };
+}
+
+async function fragmentationSummary(state: ProjectState, font: LoadedFont) {
+  const { displaced, scene, geometry, rendererKey, svg } = await fragmentationArtifacts(state, font);
+
   return {
     displacementKey: displaced.displacementKey,
     geometryKey: displaced.geometryKey,
@@ -124,5 +132,42 @@ describe("protected current glyph fragmentation structural output", () => {
       "utf8",
     )) as unknown;
     expect(summaries).toEqual(expected);
+  });
+
+  it("uses fragmented typography as the authoritative exterior obstacle", async () => {
+    const baseline = currentFragmentationFixtures.grid;
+    const state: ProjectState = {
+      ...baseline,
+      maxNodes: 5000,
+      emitterMicroResponse: {
+        ...baseline.emitterMicroResponse,
+        enabled: true,
+        positionDetail: 34,
+        densityBreakup: 0,
+        responseRadius: 520,
+        maxDisplacement: 14,
+        occupancy: "disperse-exterior",
+        exteriorPush: 64,
+        tangentialFlow: 30,
+        divergence: 18,
+        exteriorShell: 52,
+      },
+    };
+    const { displaced, substrate, context, geometry } = await fragmentationArtifacts(state, font);
+    const circles = geometry.geometries.filter(
+      (item): item is CircleMark => item.type === "circle",
+    );
+    const diagnostics = geometry.diagnostics!;
+
+    expect(displaced.fragments.length).toBeGreaterThan(0);
+    expect(context.substrateKey).toBe(`substrate:${displaced.geometryKey}`);
+    expect(diagnostics.emitterMicroInteriorCount).toBeGreaterThan(0);
+    expect(diagnostics.emitterMicroRelocatedCount).toBeGreaterThan(0);
+    expect(diagnostics.emitterMicroFinalExteriorCount).toBeGreaterThan(0);
+    expect(diagnostics.emitterMicroFinalFootprintViolations).toBe(0);
+    expect(circles.length).toBeGreaterThan(0);
+    expect(circles.every((circle) => (
+      authoritativeFootprintClearance(substrate, circle).valid
+    ))).toBe(true);
   });
 });

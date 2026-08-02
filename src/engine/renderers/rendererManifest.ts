@@ -10,6 +10,7 @@ export type RendererDependencyKey =
   | "field"
   | "emitters"
   | "emitterDisplay"
+  | "emitterMicroResponse"
   | "glyphDisplacement"
   | "displayDislocation"
   | "appearance"
@@ -39,6 +40,8 @@ export type RendererManifest = {
   supportedControls: readonly FieldControlId[];
   /** Centralized renderer audit for the active glyph-domain authority. */
   glyphDomainDisplacement: "supported" | "base-only" | "unsupported";
+  /** Post-candidate circle/SDF contract for Emitter Micro Response. */
+  emitterMicroResponse: "supported" | "unaffected" | "unsupported";
   graphNode?: {
     category: "renderer";
     outputKind: "geometry";
@@ -63,6 +66,7 @@ export const rendererManifests = {
     usesSubstrate: false,
     dependencies: ["typography", "time", "seed"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unaffected",
     supportedControls: ["density", "amplitude", "frequency", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   ripple: manifest({
@@ -73,6 +77,7 @@ export const rendererManifests = {
     usesSubstrate: false,
     dependencies: ["typography", "seed"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unaffected",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   dots: manifest({
@@ -83,6 +88,7 @@ export const rendererManifests = {
     usesSubstrate: false,
     dependencies: ["typography", "seed"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unsupported",
     supportedControls: ["density", "edgeInfluence", "maxNodes"],
   }),
   "sdf-flow": manifest({
@@ -93,6 +99,7 @@ export const rendererManifests = {
     usesSubstrate: true,
     dependencies: ["typography", "substrate", "seed"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unsupported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-streamlines": manifest({
@@ -103,6 +110,7 @@ export const rendererManifests = {
     usesSubstrate: true,
     dependencies: ["typography", "substrate", "seed", "field", "glyphModulation"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unsupported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-contours": manifest({
@@ -113,6 +121,7 @@ export const rendererManifests = {
     usesSubstrate: true,
     dependencies: ["substrate", "seed", "field", "contours", "glyphModulation"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unsupported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "sdf-halftone": manifest({
@@ -121,8 +130,9 @@ export const rendererManifests = {
     category: "sdf",
     usesTime: false,
     usesSubstrate: true,
-    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "displayDislocation", "halftone", "glyphModulation"],
+    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "emitterMicroResponse", "displayDislocation", "halftone", "glyphModulation"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "supported",
     supportedControls: ["density", "amplitude", "turbulence", "edgeInfluence", "maxNodes"],
   }),
   "wave-contours": manifest({
@@ -133,6 +143,7 @@ export const rendererManifests = {
     usesSubstrate: true,
     dependencies: ["substrate", "field", "emitters", "contours"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "unaffected",
     supportedControls: ["density", "amplitude", "frequency", "edgeInfluence", "maxNodes"],
   }),
   "glyph-diffuser": manifest({
@@ -141,8 +152,9 @@ export const rendererManifests = {
     category: "diffusion",
     usesTime: false,
     usesSubstrate: true,
-    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "diffuser"],
+    dependencies: ["textGeometry", "substrate", "seed", "field", "emitters", "emitterDisplay", "emitterMicroResponse", "diffuser"],
     glyphDomainDisplacement: "supported",
+    emitterMicroResponse: "supported",
     supportedControls: ["density", "amplitude", "frequency", "turbulence", "edgeInfluence", "maxNodes"],
   }),
 } satisfies Record<RendererId, RendererManifest>;

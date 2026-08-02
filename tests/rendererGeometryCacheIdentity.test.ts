@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { baseState } from "../src/engine/presets";
-import { generateRendererGeometry, rendererGeometryCacheKey } from "../src/engine/rendererRuntime";
+import { generateRendererGeometry, rendererGeometryCacheKey, rendererGeometryStateKey } from "../src/engine/rendererRuntime";
 import type { ProjectState, RenderContext } from "../src/types";
 
 const context = (overrides: Partial<RenderContext> = {}): RenderContext => ({
@@ -76,6 +76,25 @@ describe("renderer geometry cache identity", () => {
     expect(rendererGeometryCacheKey(recolored, context())).toBe(base);
   });
 
+  it("does not invalidate semantic geometry when only the editor preset label changes", () => {
+    const state: ProjectState = { ...baseState, renderer: "sdf-halftone", preset: "Display Dislocation" };
+    expect(rendererGeometryStateKey({ ...state, preset: "Custom" }))
+      .toBe(rendererGeometryStateKey(state));
+  });
+
+  it("uses the authoritative typography key instead of duplicating Glyph Micro Warp controls", () => {
+    const state: ProjectState = { ...baseState, renderer: "sdf-contours" };
+    const authoredChange: ProjectState = {
+      ...state,
+      glyphMicroWarp: { ...state.glyphMicroWarp, enabled: true, strength: 91 },
+    };
+    expect(rendererGeometryStateKey(authoredChange)).toBe(rendererGeometryStateKey(state));
+    expect(rendererGeometryCacheKey(authoredChange, context({ textGeometryKey: "micro:a", substrateKey: "substrate:a" })))
+      .toBe(rendererGeometryCacheKey(state, context({ textGeometryKey: "micro:a", substrateKey: "substrate:a" })));
+    expect(rendererGeometryCacheKey(authoredChange, context({ textGeometryKey: "micro:b", substrateKey: "substrate:b" })))
+      .not.toBe(rendererGeometryCacheKey(state, context({ textGeometryKey: "micro:a", substrateKey: "substrate:a" })));
+  });
+
   it("does not change when trace enablement changes", () => {
     const state: ProjectState = { ...baseState, renderer: "sdf-contours" };
     const base = rendererGeometryCacheKey(state, context());
@@ -95,6 +114,64 @@ describe("renderer geometry cache identity", () => {
       .not.toBe(rendererGeometryCacheKey(supported, context()));
     expect(rendererGeometryCacheKey({ ...unsupported, emitterDisplay: changedDisplay }, context()))
       .toBe(rendererGeometryCacheKey(unsupported, context()));
+  });
+
+  it("tracks Emitter Micro Response with disabled, renderer, and mode-aware sensitivity", () => {
+    const supported: ProjectState = {
+      ...baseState,
+      renderer: "glyph-diffuser",
+      emitter: { ...baseState.emitter, enabled: true },
+    };
+    const renderContext = context({
+      substrateData: substrate(),
+      substrateKey: "substrate:micro",
+      textGeometryKey: "typography:micro",
+    });
+    const disabledChanged: ProjectState = {
+      ...supported,
+      emitterMicroResponse: {
+        ...supported.emitterMicroResponse,
+        positionDetail: 99,
+        densityBreakup: 99,
+        tangentialFlow: 99,
+      },
+    };
+    expect(rendererGeometryCacheKey(disabledChanged, renderContext))
+      .toBe(rendererGeometryCacheKey(supported, renderContext));
+
+    const enabled: ProjectState = {
+      ...supported,
+      emitterMicroResponse: { ...supported.emitterMicroResponse, enabled: true },
+    };
+    expect(rendererGeometryCacheKey(enabled, renderContext))
+      .not.toBe(rendererGeometryCacheKey(supported, renderContext));
+
+    const excluded: ProjectState = {
+      ...supported,
+      emitterMicroResponse: { ...supported.emitterMicroResponse, occupancy: "exclude-interior" },
+    };
+    const inactiveExteriorChanged: ProjectState = {
+      ...excluded,
+      emitterMicroResponse: {
+        ...excluded.emitterMicroResponse,
+        exteriorPush: 99,
+        tangentialFlow: 99,
+        divergence: 99,
+      },
+    };
+    expect(rendererGeometryCacheKey(inactiveExteriorChanged, renderContext))
+      .toBe(rendererGeometryCacheKey(excluded, renderContext));
+    expect(rendererGeometryCacheKey({
+      ...excluded,
+      emitterMicroResponse: { ...excluded.emitterMicroResponse, exteriorShell: 99 },
+    }, renderContext)).not.toBe(rendererGeometryCacheKey(excluded, renderContext));
+
+    const unsupported: ProjectState = { ...enabled, renderer: "sdf-contours" };
+    expect(rendererGeometryCacheKey(unsupported, renderContext))
+      .toBe(rendererGeometryCacheKey({
+        ...unsupported,
+        emitterMicroResponse: baseState.emitterMicroResponse,
+      }, renderContext));
   });
 
   it("does not change for static renderers when time advances", () => {

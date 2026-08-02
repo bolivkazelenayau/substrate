@@ -6,6 +6,10 @@ import { measure } from "./performance";
 import { glyphModulationCacheKey } from "./controlOwnership";
 import { resolveGlyphEmitterSources } from "./field/glyphEmitters";
 import { emitterDisplayGeometryKey, supportsEmitterDisplay } from "./field/emitterDisplayResponse";
+import {
+  emitterMicroResponseGeometryKey,
+  emitterMicroResponseStateKey,
+} from "./field/emitterMicroResponse";
 import { displayDislocationGeometryKey, isDisplayDislocationActive } from "./displayDislocation";
 import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
 import { roundSceneNumber } from "./sceneLayout";
@@ -79,6 +83,9 @@ export function rendererGeometryStateKey(state: ProjectState) {
     backgroundColor: _backgroundColor,
     transparentBackground: _transparentBackground,
     debug: _debug,
+    // Preset is an editor label. Direct control edits switch it to Custom, but
+    // that label never changes renderer geometry or export structure.
+    preset: _preset,
     // Font bytes/metadata are represented by the typography output key at the
     // authoritative boundary. They are not a renderer-local identity.
     font: _font,
@@ -89,18 +96,25 @@ export function rendererGeometryStateKey(state: ProjectState) {
     // The active typography key is the sole glyph-domain identity. Keeping the
     // authored controls here would duplicate invalidation and would rebuild
     // renderers when parsed-outline displacement is unavailable.
+    glyphMicroWarp: _glyphMicroWarp,
     glyphDisplacement: _glyphDisplacement,
     // Dot-grid controls are owned only by SDF Halftone below.
     dotGrid: _dotGrid,
     // Renderer-local and represented only when the new effect is active.
     displayDislocation: _displayDislocation,
+    // Post-candidate response has its own mode-aware identity below. Keeping it
+    // out of the broad object prevents inactive and exterior-only controls from
+    // invalidating unrelated geometry.
+    emitterMicroResponse: _emitterMicroResponse,
     ...geometryState
   } = state;
+  const emitterMicroKey = emitterMicroResponseStateKey(state);
   return JSON.stringify({
     version: 9,
     ...geometryState,
     dotGrid: state.renderer === "sdf-halftone" ? state.dotGrid : undefined,
     displayDislocation: isDisplayDislocationActive(state) ? state.displayDislocation : undefined,
+    emitterMicroResponse: emitterMicroKey === "emitter-micro:disabled" ? undefined : emitterMicroKey,
   });
 }
 
@@ -149,6 +163,8 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
     time,
   ];
   if (isDisplayDislocationActive(state)) parts.push(displayDislocationGeometryKey(state));
+  const emitterMicroKey = emitterMicroResponseGeometryKey(state, context);
+  if (emitterMicroKey !== "emitter-micro:disabled") parts.push(emitterMicroKey);
   return parts.join("|");
 }
 

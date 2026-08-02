@@ -3,11 +3,17 @@ import { artboardBottom, artboardLeft, artboardRight, artboardTop } from "../sce
 import { buildCompositeWaveField, getEmitterContributionAtPoint, getFalloffWeight, sampleGlyphField } from "../field/compositeWaveField";
 import type { CircleMark, RendererDiagnostics } from "../geometry";
 import { createSeededRandom } from "../random";
-import { sampleEdge, sampleMask } from "../substrate";
+import { sampleDistance, sampleEdge, sampleMask } from "../substrate";
 import type { VectorRenderer } from "./types";
 import type { ProjectState } from "../../types";
 import { SAFETY_BUDGETS } from "../safetyBudget";
 import { createEmitterDisplaySampler, emitterDisplayUsesExterior, type EmitterDisplaySample } from "../field/emitterDisplayResponse";
+import {
+  circleInsideArtboard,
+  createEmitterMicroResponseSampler,
+  emitterMicroResponseDiagnostics,
+  emitterMicroResponseUsesExterior,
+} from "../field/emitterMicroResponse";
 
 function fallbackDiagnostics(warning: string): RendererDiagnostics {
   return {
@@ -56,7 +62,9 @@ export const glyphDiffuserRenderer: VectorRenderer = {
   usesTime: false,
   usesSubstrate: true,
   usesGlyphEmitterField: true,
-  clipPreviewToText: (state) => state.diffuserComposition === "clipped" && !emitterDisplayUsesExterior(state),
+  clipPreviewToText: (state) => state.diffuserComposition === "clipped"
+    && !emitterDisplayUsesExterior(state)
+    && !emitterMicroResponseUsesExterior(state),
   showTextOverlay: (state) => state.overlayMode !== "hidden" && (state.overlayMode === "warped-outline" || state.diffuserComposition === "behind-text" || state.diffuserComposition === "edge-eroded"),
   textOverlayOpacity: (state) => state.textOverlayOpacity,
   estimateCost: (state) => ({ marks: state.maxNodes, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} circles` }),
@@ -78,6 +86,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
       return { id: "glyph-diffuser", geometries: [], diagnostics: fallbackDiagnostics("Glyph Diffuser requires a non-empty substrate.") };
     }
     const displayResponse = createEmitterDisplaySampler(state, context);
+    const microResponse = createEmitterMicroResponseSampler(state, context);
     const started = performance.now();
     const random = createSeededRandom(state.seed);
     const densityRatio = (state.density - 10) / 70;
@@ -184,14 +193,16 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         let mask = sampleMask(substrate, x, y);
         let insideText = mask >= 0.5;
         const insideHalo = normalizedDistance <= 1;
+        const microExteriorCandidate = microResponse.exterior
+          && microResponse.acceptsExteriorCandidate(x, y, sampleDistance(substrate, x, y));
         const domainAccepted = displayResponse.exterior
           ? insideHalo
           : state.diffuserDomain === "inside-text"
-            ? insideText
+            ? insideText || microExteriorCandidate
             : state.diffuserDomain === "halo"
-              ? insideHalo
-              : insideText || insideHalo;
-        if (!domainAccepted || (!displayResponse.exterior && state.diffuserComposition === "clipped" && !insideText)) {
+              ? insideHalo || microExteriorCandidate
+              : insideText || insideHalo || microExteriorCandidate;
+        if (!domainAccepted || (!displayResponse.exterior && !microResponse.exterior && state.diffuserComposition === "clipped" && !insideText)) {
           rejectedOutsideMask += 1;
           continue;
         }
@@ -283,8 +294,24 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         const coordinatePriority = Math.abs(Math.sin(
           x * 12.9898 + y * 78.233 + state.seed * 0.001,
         ));
+        let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+        if (microResponse.active) {
+          const responseSample = microResponse.sampleCircle(geometry, row * columns + column);
+          if (!responseSample.keep) {
+            rejectedByInfluence += 1;
+            continue;
+          }
+          geometry = responseSample.mark;
+          x = geometry.center.x;
+          y = geometry.center.y;
+          if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
+            microResponse.recordSafetyClip();
+            rejectedOutsideMask += 1;
+            continue;
+          }
+        }
         acceptedPool.push({
-          geometry: { type: "circle", center: { x, y }, radius, opacity },
+          geometry,
           emitterId: nearestDomain.source.id,
           crest: ringStrength >= 0.5,
           priority: acceptance * (0.5 + acceptanceRoll * 0.35 + coordinatePriority * 0.15),
@@ -385,6 +412,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         emitterDisplayInteriorRejections: displayInteriorRejections,
         emitterDisplayBreakupRejections: displayBreakupRejections,
         emitterDisplayQuantizedSamples: displayQuantizedSamples,
+        ...emitterMicroResponseDiagnostics(state, microResponse),
         rendererActiveFieldEmitterCount: field.sources.length,
         activeContributingEmitterCount: field.sources.length,
         zeroStrengthEmitterCount: zeroStrengthCount,

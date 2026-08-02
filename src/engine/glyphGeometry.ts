@@ -61,6 +61,19 @@ export interface TextGeometry {
   advanceWidth: number;
   sourceText: string;
   hasOutlines: boolean;
+  /** Present when parsed contours have passed through Glyph Micro Warp. */
+  microWarp?: {
+    sourceTypographyKey: string;
+    warpKey: string;
+    geometryKey: string;
+    sourcePointCount: number;
+    warpedPointCount: number;
+    affectedPointCount: number;
+    emitterCount: number;
+    maxDisplacement: number;
+    affectedBounds: GlyphBounds | null;
+    safetyStatus: "complete" | "displacement-clamped" | "topology-guarded" | "point-budget-limited";
+  };
   /** Present only when this geometry is the active derived glyph domain. */
   displacement?: {
     sourceTypographyKey: string;

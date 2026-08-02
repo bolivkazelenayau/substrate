@@ -12,6 +12,8 @@ import { ArtworkTypographyPanels } from "./ArtworkTypographyPanels";
 import { AdvancedFieldPanel } from "./AdvancedFieldPanel";
 import { EmitterControls } from "./EmitterControls";
 import { GlyphDisplacementControls } from "./GlyphDisplacementControls";
+import { EmitterMicroResponseControls } from "./EmitterMicroResponseControls";
+import { GlyphMicroWarpControls } from "./GlyphMicroWarpControls";
 
 export interface FieldControlsProps {
   state: ProjectState;
@@ -187,11 +189,14 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   const emitterConsumerActive = draft.renderer === "glyph-diffuser"
     || draft.renderer === "wave-contours"
     || controlActivity.emitterDisplay
+    || controlActivity.emitterMicroResponse
+    || controlActivity.glyphMicroWarp
     || (controlActivity.glyphModulation && draft.glyphFieldMode !== "off");
   const patchField = (next: Partial<ProjectState>) => forward({ ...draftRef.current, ...next, preset: "Custom" });
   const defaultOpen = {
     advanced: false,
     emitters: false,
+    microResponse: false,
     output: false,
     debug: false,
   };
@@ -262,7 +267,21 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
         </div>
 
         <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} displayBehaviorSupported={controlActivity.emitterDisplay} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
+        <EmitterMicroResponseControls
+          state={draft}
+          setState={forward}
+          supported={controlActivity.emitterMicroResponse}
+          capability={controlActivity.emitterMicroResponseCapability}
+          open={isOpen("microResponse")}
+          onToggle={() => toggleGroup("microResponse")}
+        />
       </FieldPanel>
+
+      <GlyphMicroWarpControls
+        state={draft}
+        setState={forward}
+        parsedFontPathsAvailable={parsedFontPathsAvailable}
+      />
 
       <GlyphDisplacementControls
         state={draft}

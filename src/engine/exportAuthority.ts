@@ -40,6 +40,7 @@ export interface ExportSnapshot {
   typography: {
     inputKey: ExportKey;
     sourceOutputKey: ExportKey;
+    microWarpKey: ExportKey;
     displacementKey: ExportKey;
     outputKey: ExportKey;
     geometry: TextGeometry | null;
@@ -184,6 +185,7 @@ export function captureExportSnapshot(args: {
   typographyInputKey: ExportKey;
   typographyOutputKey: ExportKey;
   typographySourceOutputKey?: ExportKey;
+  typographyMicroWarpKey?: ExportKey;
   typographyDisplacementKey?: ExportKey;
   typographyGeometry: TextGeometry | null;
   substrateInputKey: ExportKey;
@@ -231,6 +233,7 @@ export function captureExportSnapshot(args: {
     typography: {
       inputKey: args.typographyInputKey,
       sourceOutputKey: args.typographySourceOutputKey ?? args.typographyOutputKey,
+      microWarpKey: args.typographyMicroWarpKey ?? "glyph-micro-warp:disabled",
       displacementKey: args.typographyDisplacementKey ?? "glyph-displacement:disabled",
       outputKey: args.typographyOutputKey,
       geometry: args.typographyGeometry,

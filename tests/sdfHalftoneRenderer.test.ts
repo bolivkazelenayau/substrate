@@ -9,13 +9,14 @@ import { baseState } from "../src/engine/presets";
 import { getRenderer, renderers } from "../src/engine/renderers";
 import { buildSubstrate } from "../src/engine/substrate/buildSubstrate";
 import type { RasterSurfaceFactory } from "../src/engine/substrate/rasterizeGlyphs";
-import { sampleMask } from "../src/engine/substrate/sampling";
+import { sampleDistance, sampleMask } from "../src/engine/substrate/sampling";
 import { getTextLayout } from "../src/engine/textLayout";
 import { validateSvgReload } from "../src/engine/svgValidation";
 import { createDisplayDislocationSampler } from "../src/engine/displayDislocation";
 import type { ProjectState, RenderContext } from "../src/types";
 import { canonicalizeSvgForGolden } from "./utils/canonicalSvg";
 import type { CircleMark } from "../src/engine/geometry";
+import { authoritativeFootprintClearance } from "../src/engine/field/emitterMicroResponse";
 
 const fixturePath = resolve("tests/fixtures/Basic-Regular.ttf");
 const canvasFactory: RasterSurfaceFactory = (width, height) => {
@@ -326,6 +327,171 @@ describe("SDF Halftone renderer", () => {
     expect(document.querySelectorAll("#generated-artwork circle")).toHaveLength(dislocated.geometries.length);
     expect(document.querySelectorAll("#generated-artwork path")).toHaveLength(0);
     expect(document.querySelector("#generated-artwork")?.hasAttribute("mask")).toBe(false);
+  });
+
+  it("composes fine microdetail after coherent Display Dislocation and disables exactly", () => {
+    const displayState: ProjectState = {
+      ...state,
+      maxNodes: 5000,
+      emitter: {
+        ...state.emitter,
+        enabled: true,
+        sourceMode: "custom",
+        customX: 600,
+        customY: 360,
+      },
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      dotGrid: { ...state.dotGrid, enabled: true, spacing: 10, radius: 1.9, threshold: 0.5, edgeSoftness: 0 },
+      displayDislocation: {
+        ...state.displayDislocation,
+        enabled: true,
+        mode: "horizontal-bands",
+        responseRadius: 150,
+        displacementAmount: 54,
+        regionSize: 40,
+        gap: 0,
+        quantizationSteps: 6,
+        alternatingOffset: 100,
+      },
+    };
+    const renderer = getRenderer("sdf-halftone");
+    const baseline = renderer.generateGeometry(displayState, context);
+    const configuredButDisabled = renderer.generateGeometry({
+      ...displayState,
+      emitterMicroResponse: {
+        ...displayState.emitterMicroResponse,
+        enabled: false,
+        occupancy: "legacy",
+        positionDetail: 99,
+        densityBreakup: 99,
+        detailScale: 4,
+      },
+    }, context);
+    const detailedState: ProjectState = {
+      ...displayState,
+      emitterMicroResponse: {
+        ...displayState.emitterMicroResponse,
+        enabled: true,
+        positionDetail: 82,
+        densityBreakup: 0,
+        detailScale: 9,
+        responseRadius: 60,
+        maxDisplacement: 7,
+        occupancy: "legacy",
+      },
+    };
+    const detailed = renderer.generateGeometry(detailedState, context);
+
+    expect(configuredButDisabled.geometries).toEqual(baseline.geometries);
+    expect(configuredButDisabled.diagnostics?.displayDislocationAcceptedCandidates)
+      .toBe(baseline.diagnostics?.displayDislocationAcceptedCandidates);
+    expect(detailed.geometries).not.toEqual(baseline.geometries);
+    expect(detailed.diagnostics).toMatchObject({
+      displayDislocationMode: "horizontal-bands",
+      displayDislocationRegionCount: baseline.diagnostics?.displayDislocationRegionCount,
+      displayDislocationSourceDomain: "original-glyph",
+      emitterMicroResponseMode: "micro/legacy",
+      dotGridRegular: false,
+    });
+    expect(detailed.diagnostics?.emitterMicroAdjustedCount).toBeGreaterThan(0);
+    expect(detailed.diagnostics?.emitterMicroRejectedCount).toBe(0);
+
+    const occupiedState: ProjectState = {
+      ...detailedState,
+      emitterMicroResponse: {
+        ...detailedState.emitterMicroResponse,
+        responseRadius: 190,
+        occupancy: "disperse-exterior",
+        exteriorPush: 64,
+        tangentialFlow: 38,
+        divergence: 20,
+        exteriorShell: 44,
+      },
+    };
+    const occupied = renderer.generateGeometry(occupiedState, context);
+    const occupiedCircles = occupied.geometries.filter(
+      (geometry): geometry is CircleMark => geometry.type === "circle",
+    );
+    expect(occupied.diagnostics).toMatchObject({
+      displayDislocationMode: "horizontal-bands",
+      displayDislocationSourceDomain: "original-glyph",
+      emitterMicroResponseMode: "micro/disperse-exterior",
+      emitterMicroFinalFootprintViolations: 0,
+    });
+    expect(occupied.diagnostics?.emitterMicroRelocatedCount).toBeGreaterThan(0);
+    expect(occupiedCircles.length).toBeGreaterThan(0);
+    expect(occupiedCircles.every((circle) => (
+      authoritativeFootprintClearance(context.substrateData!, circle).valid
+    ))).toBe(true);
+
+    const detailedByCenter = new Set(detailed.geometries
+      .filter((geometry): geometry is CircleMark => geometry.type === "circle")
+      .map((circle) => `${circle.center.x},${circle.center.y},${circle.radius},${circle.opacity}`));
+    const baselineOutside = baseline.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle"
+      && Math.hypot(geometry.center.x - 600, geometry.center.y - 360) >= detailedState.emitterMicroResponse.responseRadius);
+    expect(baselineOutside.length).toBeGreaterThan(0);
+    expect(baselineOutside.every((circle) => detailedByCenter.has(
+      `${circle.center.x},${circle.center.y},${circle.radius},${circle.opacity}`,
+    ))).toBe(true);
+
+    expect(renderer.generateGeometry({
+      ...detailedState,
+      emitterMicroResponse: { ...detailedState.emitterMicroResponse, enabled: false },
+    }, context).geometries).toEqual(baseline.geometries);
+  });
+
+  it("relocates full footprints into the local exterior instead of only deleting them", () => {
+    const baseResponseState: ProjectState = {
+      ...state,
+      maxNodes: 5000,
+      emitter: {
+        ...state.emitter,
+        enabled: true,
+        sourceMode: "custom",
+        customX: 600,
+        customY: 360,
+      },
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      dotGrid: { ...state.dotGrid, enabled: true, spacing: 8, radius: 2.4, threshold: 0.5, edgeSoftness: 0 },
+      displayDislocation: { ...state.displayDislocation, enabled: false },
+      emitterMicroResponse: {
+        ...state.emitterMicroResponse,
+        enabled: false,
+        responseRadius: 190,
+        occupancy: "exclude-interior",
+        exteriorShell: 34,
+      },
+    };
+    const renderer = getRenderer("sdf-halftone");
+    const excluded = renderer.generateGeometry(baseResponseState, context);
+    const dispersedState: ProjectState = {
+      ...baseResponseState,
+      emitterMicroResponse: {
+        ...baseResponseState.emitterMicroResponse,
+        occupancy: "disperse-exterior",
+        exteriorPush: 48,
+        tangentialFlow: 34,
+        divergence: 18,
+      },
+    };
+    const dispersed = renderer.generateGeometry(dispersedState, context);
+    const finalCircles = dispersed.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle");
+
+    expect(excluded.diagnostics?.emitterMicroFootprintInvalidCount).toBeGreaterThan(0);
+    expect(excluded.diagnostics?.emitterMicroRelocatedCount).toBe(0);
+    expect(dispersed.diagnostics?.emitterMicroInteriorCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroRelocatedCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroFinalExteriorCount).toBeGreaterThan(0);
+    expect(dispersed.diagnostics?.emitterMicroFinalFootprintViolations).toBe(0);
+    expect(dispersed.geometries.length).toBeGreaterThan(excluded.geometries.length);
+    expect(finalCircles.length).toBeGreaterThan(0);
+    expect(finalCircles.every((circle) => authoritativeFootprintClearance(context.substrateData!, circle).valid)).toBe(true);
+    expect(renderer.clipPreviewToText?.(dispersedState)).toBe(false);
+
+    const svg = createSvg(dispersedState, context, context.textGeometry, dispersed);
+    const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(document.querySelectorAll("#generated-artwork circle")).toHaveLength(dispersed.geometries.length);
+    expect(document.querySelectorAll("#generated-artwork image, #generated-artwork canvas")).toHaveLength(0);
   });
 
   it("returns a clear empty fallback without substrate data", () => {

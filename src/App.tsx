@@ -31,6 +31,7 @@ import { parseProjectDocumentText } from "./engine/projectImport";
 import { usePreviewSettings } from "./hooks/usePreviewSettings";
 import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
 import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
+import { useGlyphMicroWarpGeometry } from "./hooks/useGlyphMicroWarpGeometry";
 import { useDisplacedTypographyGeometry } from "./hooks/useDisplacedTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
@@ -136,10 +137,15 @@ export default function App() {
     () => typographyOutputKey(activeTypographyInputKey, fontResolution, sourceTextGeometry),
     [activeTypographyInputKey, fontResolution, sourceTextGeometry],
   );
+  const glyphMicroWarp = useGlyphMicroWarpGeometry(
+    state,
+    sourceTextGeometry,
+    sourceTypographyOutputKey ?? `typography-pending:${activeTypographyInputKey}`,
+  );
   const displayDislocationActive = isDisplayDislocationActive(state);
-  // Display Dislocation samples the original glyph mask. Keep authored
-  // fragmentation settings intact, but do not build or consume polygon clips
-  // while the renderer-local display effect is the active authority.
+  // Display Dislocation samples the fine-warped glyph mask. Keep authored
+  // coarse-fragmentation settings intact, but do not build or consume polygon
+  // clips while the renderer-local display effect is the active authority.
   const glyphDomainState = useMemo(() => (
     displayDislocationActive && state.glyphDisplacement.enabled
       ? { ...state, glyphDisplacement: { ...state.glyphDisplacement, enabled: false } }
@@ -147,8 +153,8 @@ export default function App() {
   ), [displayDislocationActive, state]);
   const displacedTypography = useDisplacedTypographyGeometry(
     glyphDomainState,
-    sourceTextGeometry,
-    sourceTypographyOutputKey ?? `typography-pending:${activeTypographyInputKey}`,
+    glyphMicroWarp.geometry,
+    glyphMicroWarp.geometryKey,
   );
   const textGeometry = displacedTypography.geometry;
   // The single production scene authority. Pure: no document writes back.
@@ -480,6 +486,7 @@ snapshot = captureExportSnapshot({
         typographyInputKey: activeTypographyInputKey,
         typographyOutputKey: activeTypographyOutputKey!,
         typographySourceOutputKey: sourceTypographyOutputKey ?? activeTypographyOutputKey!,
+        typographyMicroWarpKey: glyphMicroWarp.warpKey,
         typographyDisplacementKey: displacedTypography.displacementKey,
         typographyGeometry: textGeometry,
         substrateInputKey: substrateBuild.inputKey,
@@ -629,13 +636,14 @@ snapshot = captureExportSnapshot({
               context={renderContext}
               geometry={geometry}
               textGeometry={textGeometry}
+              glyphMicroWarp={glyphMicroWarp}
               displacedTypography={displacedTypography}
               rendererSemanticKey={activeRendererInputKey}
               sceneLayout={sceneLayout}
               exportDiagnostics={diagnostics}
               exportWarnings={exportWarnings}
               performanceWarnings={performanceWarnings}
-              glyphLayoutTimeMs={sourceTextGeometryBuild.durationMs + displacedTypography.diagnostics.buildDurationMs}
+              glyphLayoutTimeMs={sourceTextGeometryBuild.durationMs + glyphMicroWarp.diagnostics.buildDurationMs + displacedTypography.diagnostics.buildDurationMs}
               substrateError={substrateBuild.error}
               substrateBackendStatus={substrateBuild.status}
               previewDiagnostics={previewDiagnostics}

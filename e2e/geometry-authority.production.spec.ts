@@ -15,8 +15,25 @@ async function loadApp(page: Page, preset?: string) {
 }
 
 async function loadFixtureFont(page: Page, fileName = "Basic-Regular.ttf") {
+  const stage = page.getByTestId("viewport-stage");
+  const beforeTextGeometryKey = await stage.getAttribute("data-text-geometry-key");
+  const beforeSubstrateKey = await stage.getAttribute("data-substrate-key");
   const fontInput = page.locator('input[type="file"][accept*=".ttf"]');
   await fontInput.setInputFiles(resolve(`tests/fixtures/${fileName}`));
+  await expect.poll(
+    async () => stage.getAttribute("data-text-geometry-key"),
+    { timeout: 60_000 },
+  ).not.toBe(beforeTextGeometryKey);
+  await expect.poll(async () => {
+    const phase = await stage.getAttribute("data-substrate-phase");
+    const substrateKey = await stage.getAttribute("data-substrate-key");
+    return phase === "not-required" || (
+      phase === "ready"
+      && substrateKey !== null
+      && substrateKey !== "none"
+      && substrateKey !== beforeSubstrateKey
+    );
+  }, { timeout: 60_000 }).toBe(true);
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
 }
 
@@ -305,6 +322,7 @@ test("Gate: glyph outline-only change invalidates renderer geometry", async ({ p
   await selectRenderer(page, "SDF Contours");
   await setSizeDirect(page, 148);
   await loadFixtureFont(page, "Basic-Regular.ttf");
+  await setPreviewBackend(page, "svg-dom");
 
   const before = await stageMetrics(page);
   expect(before.substratePhase).toBe("ready");

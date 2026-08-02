@@ -6,7 +6,7 @@ import {
   migrateAndRepairProject,
   parseImportedProjectJson,
   validateProjectV8Shape,
-  validateProjectV10Shape,
+  validateProjectV12Shape,
 } from "../src/engine/projectImport";
 import { serializeProjectDocument } from "../src/hooks/useProjectDocument";
 import { createDefaultPreviewSettings } from "../src/hooks/usePreviewSettings";
@@ -29,7 +29,7 @@ describe("runtime and document boundaries", () => {
 
   it("defaults new runtime sessions to quiet diagnostics without changing persisted debug", () => {
     expect(createDefaultDiagnosticsMode()).toBe("off");
-    expect(baseState.version).toBe(10);
+    expect(baseState.version).toBe(12);
     expect(baseState).toHaveProperty("debug");
   });
 
@@ -43,10 +43,10 @@ describe("runtime and document boundaries", () => {
       density: 999,
     });
 
-    expect(result.project.version).toBe(10);
+    expect(result.project.version).toBe(12);
     expect(result.project.text).toBe("BOUNDARY");
     expect(result.project.density).toBe(80);
-    expect(validateProjectV10Shape(result.project).version).toBe(10);
+    expect(validateProjectV12Shape(result.project).version).toBe(12);
   });
 
   it("validates a historical v8 shape against v8 before migration", () => {

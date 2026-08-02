@@ -72,6 +72,8 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
   const lastEnqueuedInputKey = useRef<string | null>(null);
   const disposeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(true);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const [backendState, setBackendState] = useState<SubstrateBackendState>({
     data: null,
     outputKey: null,
@@ -80,7 +82,10 @@ export function useSubstrateBackend(input: SubstrateBuildInput, inputKey: string
   });
   const [scheduler] = useState(() => new LatestOnlyScheduler<SubstrateBuildInput, SubstrateFallbackResult>(
     (schedule) => {
-      if (!mounted.current) return;
+      // A stale active request may still emit scheduler snapshots after the
+      // renderer stops requiring substrate data. Do not let those snapshots
+      // overwrite the authoritative `not-required` state with `building`.
+      if (!mounted.current || !enabledRef.current) return;
       traceEvent({
         stage: "substrate.scheduler",
         phase: "instant",

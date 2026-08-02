@@ -44,8 +44,10 @@ describe("project schema", () => {
       version: 9,
     } as Record<string, unknown>;
     delete legacyV9.displayDislocation;
+    delete legacyV9.emitterMicroResponse;
+    delete legacyV9.glyphMicroWarp;
     const migrated = validateProject(legacyV9);
-    expect(migrated.project.version).toBe(10);
+    expect(migrated.project.version).toBe(12);
     expect(migrated.project.displayDislocation).toEqual(baseState.displayDislocation);
     expect(migrated.project.displayDislocation.enabled).toBe(false);
 
@@ -94,15 +96,15 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
-  it("migrates version 1 projects to version 10", () => {
+  it("migrates version 1 projects to version 12", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(10);
+    expect(result.project.version).toBe(12);
     expect(result.project.artboard).toEqual({ width: 1200, height: 720 });
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 10.");
+    expect(result.warnings).toContain("Project was migrated to schema version 12.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -111,7 +113,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(10);
+    expect(result.project.version).toBe(12);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -219,14 +221,14 @@ describe("project schema", () => {
   it("migrates v6 projects to persisted artwork appearance defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 6 });
     expect(project).toMatchObject({
-      version: 10,
+      version: 12,
       artboard: { width: 1200, height: 720 },
       primaryColor: "#e8ff45",
       outlineColor: "#e8ff45",
       backgroundColor: "#11110f",
       transparentBackground: false,
     });
-    expect(warnings).toContain("Project was migrated to schema version 10.");
+    expect(warnings).toContain("Project was migrated to schema version 12.");
   });
 
   it("preserves valid appearance colors and rejects invalid color strings", () => {
@@ -248,7 +250,7 @@ describe("project schema", () => {
   it("migrates version 5 typography fields to layout-preserving defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 5 });
     expect(project).toMatchObject({
-      version: 10,
+      version: 12,
       artboard: { width: 1200, height: 720 },
       kerningMode: "font",
       kerningStrength: 1,
@@ -257,7 +259,7 @@ describe("project schema", () => {
       textAlign: "center",
       textOffsetY: 0,
     });
-    expect(warnings).toContain("Project was migrated to schema version 10.");
+    expect(warnings).toContain("Project was migrated to schema version 12.");
   });
 
   it("validates and clamps typography controls", () => {
@@ -417,5 +419,92 @@ describe("project schema", () => {
     });
     expect(validateProject(JSON.parse(JSON.stringify(project))).project.emitterDisplay)
       .toEqual(project.emitterDisplay);
+  });
+
+  it("migrates, clamps, and round-trips orthogonal emitter micro response settings", () => {
+    const legacyV10 = { ...baseState, version: 10 } as Record<string, unknown>;
+    delete legacyV10.emitterMicroResponse;
+    delete legacyV10.glyphMicroWarp;
+    const migrated = validateProject(legacyV10).project;
+    expect(migrated.version).toBe(12);
+    expect(migrated.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
+
+    const project = validateProject({
+      ...baseState,
+      emitterMicroResponse: {
+        ...baseState.emitterMicroResponse,
+        enabled: true,
+        positionDetail: 120,
+        densityBreakup: -5,
+        detailScale: 500,
+        responseRadius: -1,
+        maxDisplacement: 500,
+        occupancy: "disperse-exterior",
+        exteriorPush: 120,
+        tangentialFlow: -4,
+        divergence: 101,
+        exteriorShell: 500,
+      },
+    }).project;
+    expect(project.emitterMicroResponse).toEqual({
+      ...baseState.emitterMicroResponse,
+      enabled: true,
+      positionDetail: 100,
+      densityBreakup: 0,
+      detailScale: 160,
+      responseRadius: 8,
+      maxDisplacement: 96,
+      occupancy: "disperse-exterior",
+      exteriorPush: 100,
+      tangentialFlow: 0,
+      divergence: 100,
+      exteriorShell: 240,
+    });
+    expect(validateProject(JSON.parse(JSON.stringify(project))).project.emitterMicroResponse)
+      .toEqual(project.emitterMicroResponse);
+  });
+
+  it("migrates, clamps, and round-trips parsed-outline Glyph Micro Warp settings", () => {
+    const legacyV11 = { ...baseState, version: 11 } as Record<string, unknown>;
+    delete legacyV11.glyphMicroWarp;
+    const migrated = validateProject(legacyV11).project;
+    expect(migrated.version).toBe(12);
+    expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
+
+    const project = validateProject({
+      ...baseState,
+      glyphMicroWarp: {
+        ...baseState.glyphMicroWarp,
+        enabled: true,
+        strength: 900,
+        responseRadius: -5,
+        detailScale: 500,
+        detailOctaves: 9,
+        normalDisplacement: 120,
+        tangentialDisplacement: -4,
+        edgeTurbulence: 120,
+        quantizationSteps: 99,
+        maxDisplacement: 500,
+        preserveCounters: false,
+        seedInfluence: -1,
+      },
+    }).project;
+    expect(project.glyphMicroWarp).toEqual({
+      ...baseState.glyphMicroWarp,
+      enabled: true,
+      strength: 100,
+      responseRadius: 8,
+      detailScale: 160,
+      detailOctaves: 3,
+      normalDisplacement: 100,
+      tangentialDisplacement: 0,
+      edgeTurbulence: 100,
+      quantizationSteps: 16,
+      maxDisplacement: 48,
+      preserveCounters: false,
+      seedInfluence: 0,
+    });
+    expect(validateProject(JSON.parse(JSON.stringify(project))).project.glyphMicroWarp)
+      .toEqual(project.glyphMicroWarp);
   });
 });

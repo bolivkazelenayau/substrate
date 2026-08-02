@@ -14,6 +14,13 @@ import {
   isDisplayDislocationActive,
   type DisplayDislocationSampler,
 } from "../displayDislocation";
+import {
+  circleInsideArtboard,
+  createEmitterMicroResponseSampler,
+  emitterMicroResponseDiagnostics,
+  emitterMicroResponseUsesExterior,
+  type EmitterMicroResponseSampler,
+} from "../field/emitterMicroResponse";
 
 interface OccupiedDot {
   x: number;
@@ -58,6 +65,7 @@ function generateRegularDotGrid(
   artboard: ArtboardRect,
   displayResponse: ReturnType<typeof createEmitterDisplaySampler>,
   displayDislocation: DisplayDislocationSampler,
+  microResponse: EmitterMicroResponseSampler,
 ): GeometryGroup {
   const buildStarted = displayDislocation.active ? performance.now() : 0;
   const spacing = Math.max(3, state.dotGrid.spacing);
@@ -69,7 +77,8 @@ function generateRegularDotGrid(
   const baseMaxX = Math.min(artboardRight(artboard), bounds.x + bounds.width);
   const baseMinY = Math.max(artboardTop(artboard), bounds.y);
   const baseMaxY = Math.min(artboardBottom(artboard), bounds.y + bounds.height);
-  const samplingPadding = displayDislocation.active ? displayDislocation.maxDisplacement : 0;
+  const samplingPadding = (displayDislocation.active ? displayDislocation.maxDisplacement : 0)
+    + (microResponse.exterior ? microResponse.candidatePadding : 0);
   const minX = Math.max(artboardLeft(artboard), bounds.x - samplingPadding);
   const maxX = Math.min(artboardRight(artboard), bounds.x + bounds.width + samplingPadding);
   const minY = Math.max(artboardTop(artboard), bounds.y - samplingPadding);
@@ -142,7 +151,16 @@ function generateRegularDotGrid(
       }
       const mask = sampleMask(substrate, sourceX, sourceY);
       const distance = sampleDistance(substrate, sourceX, sourceY);
-      if (mask < threshold || distance <= 0) {
+      const rendererDomainAccepted = mask >= threshold && distance > 0;
+      const microExteriorCandidate = !rendererDomainAccepted
+        && microResponse.exterior
+        && microResponse.acceptsExteriorCandidate(
+          targetX,
+          targetY,
+          sampleDistance(substrate, targetX, targetY),
+          configuredRadius,
+        );
+      if (!rendererDomainAccepted && !microExteriorCandidate) {
         rejectedOutsideMask += 1;
         continue;
       }
@@ -171,7 +189,26 @@ function generateRegularDotGrid(
         : Math.max(0.18, smoothstep((mask - threshold) / Math.max(0.001, softness) + 0.35));
       const radius = Math.max(0.1, configuredRadius * (1 - softness * 0.5 + softness * 0.5 * edgeFactor) * radiusScale);
       const opacity = Math.max(0.12, Math.min(1, edgeFactor * opacityScale));
-      geometries.push({ type: "circle", center: { x, y }, radius, opacity });
+      let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+      if (microResponse.active) {
+        const responseSample = microResponse.sampleCircle(
+          geometry,
+          (row - firstRow) * Math.max(1, columns) + (column - firstColumn),
+        );
+        if (!responseSample.keep) {
+          rejectedByInfluence += 1;
+          continue;
+        }
+        geometry = responseSample.mark;
+        x = geometry.center.x;
+        y = geometry.center.y;
+        if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
+          microResponse.recordSafetyClip();
+          rejectedOutsideMask += 1;
+          continue;
+        }
+      }
+      geometries.push(geometry);
       sampledDistanceTotal += distance;
       radiusTotal += radius;
       minRadius = Math.min(minRadius, radius);
@@ -218,7 +255,7 @@ function generateRegularDotGrid(
       minRadius: geometries.length ? minRadius : 0,
       maxRadius,
       maxNodesClipped: clipped,
-      dotGridRegular: true,
+      dotGridRegular: !microResponse.microActive,
       dotGridSpacing: spacing * candidateStride,
       dotGridOriginX: 0,
       dotGridOriginY: 0,
@@ -230,6 +267,7 @@ function generateRegularDotGrid(
       emitterDisplayInteriorRejections: displayInteriorRejections,
       emitterDisplayBreakupRejections: displayBreakupRejections,
       emitterDisplayQuantizedSamples: displayQuantizedSamples,
+      ...emitterMicroResponseDiagnostics(state, microResponse),
       ...(displayDislocation.active ? {
         displayDislocationMode: state.displayDislocation.mode,
         displayDislocationCandidateCount: attemptedCandidates,
@@ -256,7 +294,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
   svgElementType: "circle",
   usesTime: false,
   usesSubstrate: true,
-  clipPreviewToText: (state) => !isDisplayDislocationActive(state) && !emitterDisplayUsesExterior(state),
+  clipPreviewToText: (state) => !isDisplayDislocationActive(state)
+    && !emitterDisplayUsesExterior(state)
+    && !emitterMicroResponseUsesExterior(state),
   estimateCost(state) {
     const artboard = projectArtboard(state);
     const density = Math.max(10, Math.min(80, state.density));
@@ -278,8 +318,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const glyph = getGlyphFieldSampler(state, context);
     const displayResponse = createEmitterDisplaySampler(state, context);
     const displayDislocation = createDisplayDislocationSampler(state, context);
+    const microResponse = createEmitterMicroResponseSampler(state, context);
     if (state.dotGrid.enabled) {
-      return generateRegularDotGrid(state, context, substrate, artboard, displayResponse, displayDislocation);
+      return generateRegularDotGrid(state, context, substrate, artboard, displayResponse, displayDislocation, microResponse);
     }
 
     const random = createSeededRandom(state.seed);
@@ -292,7 +333,10 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const jitter = spacing * 0.42 * Math.max(0, Math.min(1, state.turbulence / 100));
     const edgeBand = Math.max(spacing, substrate.diagnostics.maxDistance * (0.72 - influence * 0.52));
     const bounds = substrate.bounds;
-    const samplingPadding = displayResponse.exterior ? displayResponse.shellRadius : spacing;
+    const samplingPadding = Math.max(
+      displayResponse.exterior ? displayResponse.shellRadius : spacing,
+      microResponse.exterior ? microResponse.candidatePadding : spacing,
+    );
     const minX = Math.max(artboardLeft(artboard), (bounds?.x ?? artboardLeft(artboard)) - samplingPadding);
     const maxX = Math.min(artboardRight(artboard), (bounds ? bounds.x + bounds.width : artboardRight(artboard)) + samplingPadding);
     const minY = Math.max(artboardTop(artboard), (bounds?.y ?? artboardTop(artboard)) - samplingPadding);
@@ -371,13 +415,21 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           displayDisplacementTotal += displaySample.displacement;
           if (displaySample.quantized) displayQuantizedSamples += 1;
         } else {
-          if (mask < 0.55 || distance <= 0) {
+          let rendererDomainAccepted = mask >= 0.55 && distance > 0;
+          let microExteriorCandidate = !rendererDomainAccepted
+            && microResponse.exterior
+            && microResponse.acceptsExteriorCandidate(x, y, distance, minRadius);
+          if (!rendererDomainAccepted && !microExteriorCandidate) {
             x = centerX;
             y = centerY;
             mask = sampleMask(substrate, x, y);
             distance = sampleDistance(substrate, x, y);
+            rendererDomainAccepted = mask >= 0.55 && distance > 0;
+            microExteriorCandidate = !rendererDomainAccepted
+              && microResponse.exterior
+              && microResponse.acceptsExteriorCandidate(x, y, distance, minRadius);
           }
-          if (mask < 0.55 || distance <= 0) {
+          if (!rendererDomainAccepted && !microExteriorCandidate) {
             rejectedOutsideMask += 1;
             continue;
           }
@@ -418,7 +470,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
 
         const edge = sampleEdge(substrate, x, y);
         const gradient = sampleDistanceGradient(substrate, x, y);
-        const responseDistance = displayResponse.exterior ? Math.abs(distance) : distance;
+        const responseDistance = displayResponse.exterior || microResponse.exterior
+          ? Math.abs(distance)
+          : distance;
         const edgeProximity = Math.exp(-responseDistance / edgeBand);
         const edgeSignal = Math.min(1, edgeProximity * 0.82 + edge * 0.38);
         const fieldDensity = glyph.densityEnabled ? Math.abs(fieldValue) * state.glyphFieldDensity / 100 * glyph.strength : 0;
@@ -445,7 +499,26 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         const radiusModulation = glyph.radiusEnabled ? 1 + fieldValue * state.glyphFieldRadius / 100 * glyph.strength * 0.75 : 1;
         let radius = Math.max(minRadius, Math.min(maxRadius * 1.35, (minRadius + (maxRadius - minRadius) * edgeWeightedRatio) * radiusNoise * gradientSafety * radiusModulation));
         if (displaySample) radius = Math.max(minRadius, Math.min(maxRadius * 1.35, radius * displaySample.radiusScale));
-
+        let opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
+        if (displaySample) opacity = Math.max(0.18, Math.min(0.98, opacity * displaySample.opacityScale));
+        let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+        if (microResponse.active) {
+          const responseSample = microResponse.sampleCircle(geometry, row * columns + column);
+          if (!responseSample.keep) {
+            rejectedByInfluence += 1;
+            continue;
+          }
+          geometry = responseSample.mark;
+          x = geometry.center.x;
+          y = geometry.center.y;
+          radius = geometry.radius;
+          opacity = geometry.opacity;
+          if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
+            microResponse.recordSafetyClip();
+            rejectedOutsideMask += 1;
+            continue;
+          }
+        }
         const cellX = Math.floor(worldToLocal(artboard, { x, y }).x / occupancyCellSize);
         const cellY = Math.floor(worldToLocal(artboard, { x, y }).y / occupancyCellSize);
         let overlaps = false;
@@ -465,9 +538,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
           continue;
         }
 
-        let opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
-        if (displaySample) opacity = Math.max(0.18, Math.min(0.98, opacity * displaySample.opacityScale));
-        geometries.push({ type: "circle", center: { x, y }, radius, opacity });
+        geometries.push(geometry);
         const occupiedKey = (cellY + occupancyKeyOffset) * occupancyKeySpan + (cellX + occupancyKeyOffset);
         const occupied = occupancy.get(occupiedKey) ?? [];
         occupied.push({ x, y, radius });
@@ -515,6 +586,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         emitterDisplayInteriorRejections: displayInteriorRejections,
         emitterDisplayBreakupRejections: displayBreakupRejections,
         emitterDisplayQuantizedSamples: displayQuantizedSamples,
+        ...emitterMicroResponseDiagnostics(state, microResponse),
         warning: clipped ? `Dot output clipped at the ${state.maxNodes} node budget.` : undefined,
       },
     };

@@ -36,7 +36,9 @@ import { resolveSizeSceneTransform } from "../engine/sizeSceneTransform";
 import { artboardBottom, artboardLeft, artboardRight, artboardTop, type ResolvedSceneLayout } from "../engine/sceneLayout";
 import type { SizeInteractionState } from "../hooks/useSizeInteraction";
 import type { DisplacedTypographyGeometry } from "../engine/glyphDisplacement";
+import type { GlyphMicroWarpGeometry } from "../engine/glyphMicroWarp";
 import { emitterDisplayGeometryKey } from "../engine/field/emitterDisplayResponse";
+import { emitterMicroResponseGeometryKey } from "../engine/field/emitterMicroResponse";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 import { traceEvent } from "../dev/interactionTrace";
@@ -44,6 +46,7 @@ import { resolvePreviewStageScale } from "../engine/previewStageScale";
 
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
+  glyphMicroWarp?: GlyphMicroWarpGeometry;
   displacedTypography?: DisplacedTypographyGeometry;
   rendererSemanticKey?: string;
   sceneLayout: ResolvedSceneLayout;
@@ -59,7 +62,7 @@ interface ViewportProps {
   sizeExactReady: boolean;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, displacedTypography, rendererSemanticKey, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, glyphMicroWarp, displacedTypography, rendererSemanticKey, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
@@ -355,6 +358,17 @@ const gradientVectors = useMemo(() => {
       data-renderer-key={rendererSemanticKey ?? geometry.id}
       data-renderer-output-bounds={JSON.stringify(rendererOutputBounds)}
       data-glyph-source-key={resolvedDisplacedTypography.sourceTypographyKey}
+      data-glyph-micro-warp-active={glyphMicroWarp?.active ? "true" : "false"}
+      data-glyph-micro-warp-key={glyphMicroWarp?.warpKey ?? "glyph-micro-warp:disabled"}
+      data-glyph-micro-warp-geometry-key={glyphMicroWarp?.geometryKey ?? resolvedDisplacedTypography.sourceTypographyKey}
+      data-glyph-micro-warp-source-points={glyphMicroWarp?.diagnostics.sourcePointCount ?? 0}
+      data-glyph-micro-warp-points={glyphMicroWarp?.diagnostics.warpedPointCount ?? 0}
+      data-glyph-micro-warp-affected={glyphMicroWarp?.diagnostics.affectedPointCount ?? 0}
+      data-glyph-micro-warp-emitters={glyphMicroWarp?.diagnostics.emitterCount ?? 0}
+      data-glyph-micro-warp-max-displacement={glyphMicroWarp?.diagnostics.maxDisplacement ?? 0}
+      data-glyph-micro-warp-safety={glyphMicroWarp?.diagnostics.safetyStatus ?? "complete"}
+      data-glyph-micro-warp-build-ms={glyphMicroWarp?.diagnostics.buildDurationMs ?? 0}
+      data-glyph-micro-warp-affected-bounds={JSON.stringify(glyphMicroWarp?.diagnostics.affectedBounds ?? null)}
       data-glyph-displacement-key={resolvedDisplacedTypography.active ? resolvedDisplacedTypography.displacementKey : "disabled"}
       data-glyph-domain-key={resolvedDisplacedTypography.geometryKey}
       data-glyph-displacement-mode={resolvedDisplacedTypography.active ? state.glyphDisplacement.mode : "disabled"}
@@ -386,6 +400,25 @@ const gradientVectors = useMemo(() => {
       data-emitter-display-key={emitterDisplayGeometryKey(state)}
       data-emitter-display-samples={geometry.diagnostics?.emitterDisplaySamples ?? 0}
       data-emitter-display-average-displacement={geometry.diagnostics?.emitterDisplayAverageDisplacement ?? 0}
+      data-emitter-anchor-x={geometry.diagnostics?.emitterAnchorX ?? ""}
+      data-emitter-anchor-y={geometry.diagnostics?.emitterAnchorY ?? ""}
+      data-emitter-micro-mode={geometry.diagnostics?.emitterMicroResponseMode ?? "disabled"}
+      data-emitter-micro-key={emitterMicroResponseGeometryKey(state, context)}
+      data-emitter-micro-candidates={geometry.diagnostics?.emitterMicroCandidateCount ?? 0}
+      data-emitter-micro-affected={geometry.diagnostics?.emitterMicroAffectedCount ?? 0}
+      data-emitter-micro-adjusted={geometry.diagnostics?.emitterMicroAdjustedCount ?? 0}
+      data-emitter-micro-interior={geometry.diagnostics?.emitterMicroInteriorCount ?? 0}
+      data-emitter-micro-footprint-invalid={geometry.diagnostics?.emitterMicroFootprintInvalidCount ?? 0}
+      data-emitter-micro-relocated={geometry.diagnostics?.emitterMicroRelocatedCount ?? 0}
+      data-emitter-micro-rejected={geometry.diagnostics?.emitterMicroRejectedCount ?? 0}
+      data-emitter-micro-final-exterior={geometry.diagnostics?.emitterMicroFinalExteriorCount ?? 0}
+      data-emitter-micro-final-footprint-violations={geometry.diagnostics?.emitterMicroFinalFootprintViolations ?? 0}
+      data-emitter-micro-occupancy-domain={state.emitterMicroResponse.occupancy === "legacy"
+        ? "legacy-glyph-ink"
+        : "sealed-glyph-silhouette"}
+      data-emitter-micro-sealed-counter-pixels={geometry.diagnostics?.emitterMicroSealedCounterPixels ?? 0}
+      data-emitter-micro-sdf-reads={geometry.diagnostics?.emitterMicroSdfReadCount ?? 0}
+      data-emitter-micro-build-ms={geometry.diagnostics?.emitterMicroBuildTimeMs ?? 0}
       data-substrate-key={context.substrateKey ?? "none"}
       data-substrate-phase={substrateBackendStatus.phase}
       data-renderer-element-count={geometry.geometries.length}
@@ -441,7 +474,15 @@ const gradientVectors = useMemo(() => {
             <g id={SVG_IDS.substrateMask}>
               <rect x={effectiveRect.x} y={effectiveRect.y} width={effectiveRect.width} height={effectiveRect.height} fill="black" />
               {hasGlyphPaths
-                ? textGeometry!.glyphs.map((glyph) => glyph.path.d && <path key={glyph.textIndex} d={glyph.path.d} fill="white" />)
+                ? textGeometry!.glyphs.map((glyph) => glyph.path.d && (
+                    <path
+                      key={glyph.textIndex}
+                      data-character-index={glyph.textIndex}
+                      data-glyph-index={glyph.glyphIndex}
+                      d={glyph.path.d}
+                      fill="white"
+                    />
+                  ))
                 : <text {...textAttributes(layout)} fill="white">{nativeTextContent}</text>}
             </g>
           </mask>

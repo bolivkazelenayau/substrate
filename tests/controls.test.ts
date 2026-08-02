@@ -316,6 +316,55 @@ describe("Safe Typography controls", () => {
     expect(getUpdated()?.emitterDisplay.interiorSuppression).toBe(84);
   });
 
+  it("keeps Emitter Micro Response orthogonal, mode-aware, and honestly disabled", () => {
+    renderControls({
+      ...baseState,
+      renderer: "sdf-halftone",
+      emitter: { ...baseState.emitter, enabled: true },
+    });
+    openDisclosure("Emitter Micro Response");
+
+    const group = container.querySelector(".emitter-micro-response");
+    expect(group).not.toBeNull();
+    expect(group?.closest(".glyph-displacement-section")).toBeNull();
+    const enabled = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')!;
+    const occupancyEnabled = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-occupancy-enabled"]')!;
+    const occupancy = container.querySelector<HTMLSelectElement>('[data-testid="emitter-micro-occupancy"]')!;
+    expect(enabled.disabled).toBe(false);
+    expect(occupancyEnabled.checked).toBe(false);
+    expect([...occupancy.options].map((option) => option.value)).toEqual([
+      "legacy", "exclude-interior", "disperse-exterior",
+    ]);
+
+    act(() => enabled.click());
+    expect(getUpdated()?.emitterMicroResponse.enabled).toBe(true);
+    expect(container.textContent).toContain("Position detail");
+    expect(container.textContent).toContain("Density breakup");
+    expect(container.textContent).not.toContain("Tangential flow");
+
+    updated = null;
+    change(occupancy, "disperse-exterior");
+    expect(getUpdated()?.emitterMicroResponse.occupancy).toBe("disperse-exterior");
+    expect(container.textContent).toContain("Exterior push");
+    expect(container.textContent).toContain("Tangential flow");
+    expect(container.textContent).toContain("Exterior shell");
+    const activeOccupancy = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-occupancy-enabled"]')!;
+    expect(activeOccupancy.checked).toBe(true);
+    updated = null;
+    act(() => activeOccupancy.click());
+    expect(getUpdated()?.emitterMicroResponse.occupancy).toBe("legacy");
+
+    updated = null;
+    change(field("Position detail", "input"), "73");
+    expect(getUpdated()?.emitterMicroResponse.positionDetail).toBe(73);
+
+    renderControls({ ...baseState, renderer: "flow" });
+    openDisclosure("Emitter Micro Response");
+    expect(container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')?.matches(":disabled")).toBe(true);
+    expect(container.textContent).toContain("intentionally unaffected");
+    expect(container.textContent).toContain("unavailable");
+  });
+
   it("resets numeric controls through their normal update path without touching siblings", () => {
     renderControls({
       ...baseState,
@@ -430,7 +479,30 @@ describe("Safe Typography controls", () => {
     expect(mode.value).toBe("grid");
     change(mode, "horizontal-slices");
     expect(getUpdated()?.glyphDisplacement.mode).toBe("horizontal-slices");
-    expect(container.querySelector("legend")?.textContent).toContain("Glyph fragmentation parameters");
+    expect(container.querySelector(".glyph-displacement-section legend")?.textContent).toContain("Glyph fragmentation parameters");
+  });
+
+  it("exposes Glyph Micro Warp as a separate parsed-outline control group", () => {
+    renderControls();
+    const unsupported = container.querySelector<HTMLInputElement>('[data-testid="glyph-micro-warp-enabled"]');
+    expect(unsupported?.disabled).toBe(true);
+    expect(container.textContent).toContain("native fallback remains exactly unwarped");
+
+    renderControls({
+      ...baseState,
+      emitter: { ...baseState.emitter, enabled: true },
+      glyphMicroWarp: { ...baseState.glyphMicroWarp, enabled: true },
+    }, true);
+    const group = container.querySelector(".glyph-micro-warp-section");
+    expect(group).not.toBeNull();
+    expect(group?.closest(".emitter-micro-response")).toBeNull();
+    expect(group?.closest(".glyph-displacement-section")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-micro-warp-enabled"]')?.disabled).toBe(false);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-micro-warp-normal"]')?.disabled).toBe(false);
+    expect(container.textContent).toContain("before Fragmentation, mask, SDF, preview, and export");
+
+    change(container.querySelector<HTMLInputElement>('[data-testid="glyph-micro-warp-normal"]')!, "57");
+    expect(getUpdated()?.glyphMicroWarp.normalDisplacement).toBe(57);
   });
 
   it("keeps regular dot-grid and static Canvas Performance controls available for SDF Halftone", () => {

@@ -31,7 +31,7 @@ async function saveProject(page: Page) {
 }
 
 test.describe("legacy project compatibility browser gates", () => {
-  test("imports v8, renders, exports, saves as v10, and reloads normalized state", async ({ page }) => {
+  test("imports v8, renders, exports, saves as v12, and reloads normalized state", async ({ page }) => {
     await page.goto("/");
     await openExportPanel(page);
     await projectInput(page).setInputFiles(legacyV8);
@@ -44,7 +44,7 @@ test.describe("legacy project compatibility browser gates", () => {
     await expect(stage(page)).toHaveAttribute("data-glyph-displacement-mode", "disabled");
     await expect(stage(page)).toHaveAttribute("data-dot-grid-regular", "false");
     await expect(stage(page)).toHaveAttribute("data-emitter-display-mode", "field");
-    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 10");
+    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 12");
     await waitForExactPreview(page);
 
     const svgDownloadPromise = page.waitForEvent("download");
@@ -59,7 +59,7 @@ test.describe("legacy project compatibility browser gates", () => {
 
     const firstSave = await saveProject(page);
     expect(firstSave.document).toMatchObject({
-      version: 10,
+      version: 12,
       text: "LEGACY EIGHT",
       renderer: "glyph-diffuser",
       seed: 80808,
@@ -68,6 +68,8 @@ test.describe("legacy project compatibility browser gates", () => {
       glyphDisplacement: { enabled: false },
       dotGrid: { enabled: false },
       displayDislocation: { enabled: false },
+      emitterMicroResponse: { enabled: false, occupancy: "legacy" },
+      glyphMicroWarp: { enabled: false },
     });
 
     await openExportPanel(page);
@@ -99,11 +101,11 @@ test.describe("legacy project compatibility browser gates", () => {
     await expect(page.getByLabel("Text substrate")).toHaveValue("KEEP CURRENT PROJECT");
 
     await projectInput(page).setInputFiles({
-      name: "missing-field.json",
+      name: "missing-current-field.json",
       mimeType: "application/json",
-      buffer: Buffer.from(JSON.stringify({ version: 8, artboard: { width: 1200, height: 720 }, renderer: "flow", seed: 1 })),
+      buffer: Buffer.from(JSON.stringify({ version: 12, artboard: { width: 1200, height: 720 }, renderer: "flow", seed: 1 })),
     });
-    await expect(page.getByTestId("project-message")).toContainText('missing required historical field "text"');
+    await expect(page.getByTestId("project-message")).toContainText('missing required current field "text"');
     await expect(page.getByLabel("Text substrate")).toHaveValue("KEEP CURRENT PROJECT");
 
     await projectInput(page).setInputFiles({

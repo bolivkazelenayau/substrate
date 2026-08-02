@@ -130,9 +130,14 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .emitter-row-actions button, .emitter-add { width: 100%; }
 .emitter-inline-warning { display: block; color: var(--accent); line-height: 1.35; }
 .control-group.nested-group { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
-.glyph-displacement-section fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.glyph-displacement-section fieldset:disabled { opacity: 0.58; }
+.glyph-displacement-section fieldset,
+.glyph-micro-warp-section fieldset,
+.emitter-micro-response fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.glyph-displacement-section fieldset:disabled,
+.glyph-micro-warp-section fieldset:disabled,
+.emitter-micro-response fieldset:disabled { opacity: 0.58; }
 .glyph-displacement-section .control-warning { color: var(--muted); }
+.glyph-micro-warp-section .control-warning { color: var(--muted); }
 .visually-hidden {
   position: absolute;
   width: 1px;

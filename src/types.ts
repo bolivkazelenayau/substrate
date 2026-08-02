@@ -10,6 +10,7 @@ export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | 
 export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
 export type EmitterDisplayMode = "field" | "distort" | "exclude" | "orbit";
+export type EmitterOccupancyMode = "legacy" | "exclude-interior" | "disperse-exterior";
 export type GlyphDisplacementMode = "warp" | "horizontal-slices" | "vertical-slices" | "grid" | "radial-sectors";
 export type DisplayDislocationMode = "horizontal-bands" | "vertical-bands" | "blocks";
 export type WaveContourMode = "continuous" | "dotted";
@@ -61,6 +62,51 @@ export interface EmitterDisplaySettings {
   edgeBias: number;
   orbitAmount: number;
   divergence: number;
+}
+
+/**
+ * Fine, emitter-local response applied after a renderer has resolved a mark's
+ * final footprint. This is deliberately independent from the released
+ * `emitterDisplay` modes and from both glyph-domain displacement systems.
+ */
+export interface EmitterMicroResponseSettings {
+  /** Enables positional microstructure and density breakup. */
+  enabled: boolean;
+  positionDetail: number;
+  densityBreakup: number;
+  detailScale: number;
+  responseRadius: number;
+  falloff: GlyphEmitterFalloff;
+  maxDisplacement: number;
+  occupancy: EmitterOccupancyMode;
+  exteriorPush: number;
+  tangentialFlow: number;
+  divergence: number;
+  exteriorShell: number;
+}
+
+/**
+ * Fine, emitter-local deformation of parsed glyph contours. Unlike
+ * `emitterMicroResponse`, this stage derives the authoritative typography
+ * geometry before masks, SDFs, renderers, and export consume it.
+ */
+export interface GlyphMicroWarpSettings {
+  enabled: boolean;
+  /** Global, art-directable amount. Normal and tangent remain independent. */
+  strength: number;
+  responseRadius: number;
+  falloff: GlyphEmitterFalloff;
+  /** World-space wavelength of the coherent contour detail. */
+  detailScale: number;
+  detailOctaves: number;
+  normalDisplacement: number;
+  tangentialDisplacement: number;
+  edgeTurbulence: number;
+  /** Zero keeps continuous displacement; positive values create steps. */
+  quantizationSteps: number;
+  maxDisplacement: number;
+  preserveCounters: boolean;
+  seedInfluence: number;
 }
 
 /**
@@ -157,7 +203,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 10;
+  version: 12;
   artboard: {
     width: number;
     height: number;
@@ -193,6 +239,8 @@ export interface ProjectState {
   emitterMode: EmitterMode;
   emitters: GlyphEmitterInstance[];
   emitterDisplay: EmitterDisplaySettings;
+  emitterMicroResponse: EmitterMicroResponseSettings;
+  glyphMicroWarp: GlyphMicroWarpSettings;
   glyphDisplacement: GlyphDisplacementSettings;
   dotGrid: DotGridSettings;
   displayDislocation: DisplayDislocationSettings;

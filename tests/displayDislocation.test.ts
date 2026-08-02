@@ -134,7 +134,11 @@ describe("Display Dislocation inverse-domain sampler", () => {
     expect(validateProject(JSON.parse(JSON.stringify(state))).project.displayDislocation)
       .toEqual(state.displayDislocation);
 
-    const { displayDislocation: _displayDislocation, ...v10Fields } = state;
+    const {
+      displayDislocation: _displayDislocation,
+      emitterMicroResponse: _emitterMicroResponse,
+      ...v10Fields
+    } = state;
     const migrated = validateProject({ ...v10Fields, version: 9 }).project;
     expect(migrated.displayDislocation).toEqual(baseState.displayDislocation);
     expect(migrated.displayDislocation.enabled).toBe(false);
