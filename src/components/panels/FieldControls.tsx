@@ -13,6 +13,7 @@ import { AdvancedFieldPanel } from "./AdvancedFieldPanel";
 import { EmitterControls } from "./EmitterControls";
 import { GlyphDisplacementControls } from "./GlyphDisplacementControls";
 import { EmitterMicroResponseControls } from "./EmitterMicroResponseControls";
+import { GlyphFalloffDisplacementControls } from "./GlyphFalloffDisplacementControls";
 import { GlyphMicroWarpControls } from "./GlyphMicroWarpControls";
 
 export interface FieldControlsProps {
@@ -197,6 +198,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
     advanced: false,
     emitters: false,
     microResponse: false,
+    glyphFalloff: false,
     output: false,
     debug: false,
   };
@@ -274,6 +276,14 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
           capability={controlActivity.emitterMicroResponseCapability}
           open={isOpen("microResponse")}
           onToggle={() => toggleGroup("microResponse")}
+        />
+        <GlyphFalloffDisplacementControls
+          state={draft}
+          setState={forward}
+          supported={controlActivity.glyphFalloffDisplacement}
+          capability={controlActivity.glyphFalloffDisplacementCapability}
+          open={isOpen("glyphFalloff")}
+          onToggle={() => toggleGroup("glyphFalloff")}
         />
       </FieldPanel>
 

@@ -306,6 +306,87 @@ describe("Glyph Diffuser renderer", () => {
     expect(svg).not.toMatch(/<image|<canvas|data:image/i);
   });
 
+  it("composes contour falloff before exterior occupancy and exports the same final marks", () => {
+    const renderer = getRenderer("glyph-diffuser");
+    const exteriorState: ProjectState = {
+      ...state,
+      density: 80,
+      maxNodes: 4000,
+      diffuserDomain: "text-halo",
+      emitterDisplay: { ...state.emitterDisplay, mode: "field" },
+      emitterMicroResponse: {
+        ...state.emitterMicroResponse,
+        enabled: false,
+        occupancy: "disperse-exterior",
+        responseRadius: 220,
+        exteriorShell: 64,
+        exteriorPush: 52,
+        tangentialFlow: 28,
+      },
+    };
+    const baseline = renderer.generateGeometry(exteriorState, context);
+    const falloffState: ProjectState = {
+      ...exteriorState,
+      glyphFalloffDisplacement: {
+        ...exteriorState.glyphFalloffDisplacement,
+        mode: "contour-rings",
+        strength: 18,
+        fieldWidth: 84,
+        ringFrequency: 4,
+        ringSharpness: 2.2,
+      },
+    };
+    const displaced = renderer.generateGeometry(falloffState, context);
+    const circles = displaced.geometries.filter((geometry): geometry is CircleMark => geometry.type === "circle");
+    const clippedWithoutFalloff: ProjectState = {
+      ...falloffState,
+      diffuserComposition: "clipped",
+      emitterMicroResponse: {
+        ...falloffState.emitterMicroResponse,
+        occupancy: "legacy",
+      },
+      glyphFalloffDisplacement: {
+        ...falloffState.glyphFalloffDisplacement,
+        mode: "off",
+      },
+    };
+
+    expect(displaced.geometries).not.toEqual(baseline.geometries);
+    expect(displaced.diagnostics).toMatchObject({
+      glyphFalloffDisplacementMode: "contour-rings",
+      emitterMicroFinalFootprintViolations: 0,
+    });
+    expect(displaced.diagnostics?.glyphFalloffAffectedCount).toBeGreaterThan(0);
+    expect(circles.length).toBeGreaterThan(0);
+    expect(circles.every((circle) => authoritativeFootprintClearance(context.substrateData!, circle).valid)).toBe(true);
+    expect(renderer.clipPreviewToText?.(clippedWithoutFalloff)).toBe(true);
+    expect(renderer.clipPreviewToText?.({
+      ...clippedWithoutFalloff,
+      glyphFalloffDisplacement: falloffState.glyphFalloffDisplacement,
+    })).toBe(false);
+
+    const svg = createSvg(falloffState, context, context.textGeometry);
+    const document = new DOMParser().parseFromString(svg, "image/svg+xml");
+    const metadata = JSON.parse(document.querySelector("metadata")!.textContent!);
+    expect(metadata.project).toMatchObject({
+      version: 13,
+      glyphFalloffDisplacement: { mode: "contour-rings", ringFrequency: 4 },
+    });
+    const exported = [...document.querySelectorAll("#generated-artwork circle")].map((circle) => ({
+      x: Number(circle.getAttribute("cx")),
+      y: Number(circle.getAttribute("cy")),
+      radius: Number(circle.getAttribute("r")),
+      opacity: Number(circle.getAttribute("opacity")),
+    }));
+    const exportedNumber = (value: number) => Number(value.toFixed(falloffState.precision));
+    expect(exported).toEqual(circles.map((circle) => ({
+      x: exportedNumber(circle.center.x),
+      y: exportedNumber(circle.center.y),
+      radius: exportedNumber(circle.radius),
+      opacity: exportedNumber(circle.opacity),
+    })));
+  });
+
   it("preserves single-mode geometry and reacts deterministically to multiple emitters", () => {
     const renderer = getRenderer("glyph-diffuser");
     const legacy = renderer.generateGeometry(state, context);

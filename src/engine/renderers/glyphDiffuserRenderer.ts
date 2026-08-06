@@ -14,6 +14,11 @@ import {
   emitterMicroResponseDiagnostics,
   emitterMicroResponseUsesExterior,
 } from "../field/emitterMicroResponse";
+import {
+  createGlyphFalloffDisplacementSampler,
+  glyphFalloffDisplacementDiagnostics,
+  isGlyphFalloffDisplacementConfigured,
+} from "../field/glyphFalloffDisplacement";
 
 function fallbackDiagnostics(warning: string): RendererDiagnostics {
   return {
@@ -64,7 +69,8 @@ export const glyphDiffuserRenderer: VectorRenderer = {
   usesGlyphEmitterField: true,
   clipPreviewToText: (state) => state.diffuserComposition === "clipped"
     && !emitterDisplayUsesExterior(state)
-    && !emitterMicroResponseUsesExterior(state),
+    && !emitterMicroResponseUsesExterior(state)
+    && !isGlyphFalloffDisplacementConfigured(state),
   showTextOverlay: (state) => state.overlayMode !== "hidden" && (state.overlayMode === "warped-outline" || state.diffuserComposition === "behind-text" || state.diffuserComposition === "edge-eroded"),
   textOverlayOpacity: (state) => state.textOverlayOpacity,
   estimateCost: (state) => ({ marks: state.maxNodes, nodes: state.maxNodes, label: `≤ ${state.maxNodes.toLocaleString()} circles` }),
@@ -87,6 +93,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
     }
     const displayResponse = createEmitterDisplaySampler(state, context);
     const microResponse = createEmitterMicroResponseSampler(state, context);
+    const glyphFalloff = createGlyphFalloffDisplacementSampler(state, context);
     const started = performance.now();
     const random = createSeededRandom(state.seed);
     const densityRatio = (state.density - 10) / 70;
@@ -295,6 +302,15 @@ export const glyphDiffuserRenderer: VectorRenderer = {
           x * 12.9898 + y * 78.233 + state.seed * 0.001,
         ));
         let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+        let glyphFalloffAffected = false;
+        let microResponseAffected = false;
+        if (glyphFalloff.active) {
+          const falloffSample = glyphFalloff.sampleCircle(geometry);
+          geometry = falloffSample.mark;
+          glyphFalloffAffected = falloffSample.affected;
+          x = geometry.center.x;
+          y = geometry.center.y;
+        }
         if (microResponse.active) {
           const responseSample = microResponse.sampleCircle(geometry, row * columns + column);
           if (!responseSample.keep) {
@@ -302,13 +318,15 @@ export const glyphDiffuserRenderer: VectorRenderer = {
             continue;
           }
           geometry = responseSample.mark;
+          microResponseAffected = responseSample.affected;
           x = geometry.center.x;
           y = geometry.center.y;
-          if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
-            microResponse.recordSafetyClip();
-            rejectedOutsideMask += 1;
-            continue;
-          }
+        }
+        if ((glyphFalloffAffected || microResponseAffected) && !circleInsideArtboard(geometry, artboard)) {
+          if (glyphFalloffAffected) glyphFalloff.recordSafetyClip();
+          if (microResponseAffected) microResponse.recordSafetyClip();
+          rejectedOutsideMask += 1;
+          continue;
         }
         acceptedPool.push({
           geometry,
@@ -413,6 +431,7 @@ export const glyphDiffuserRenderer: VectorRenderer = {
         emitterDisplayBreakupRejections: displayBreakupRejections,
         emitterDisplayQuantizedSamples: displayQuantizedSamples,
         ...emitterMicroResponseDiagnostics(state, microResponse),
+        ...glyphFalloffDisplacementDiagnostics(state, glyphFalloff),
         rendererActiveFieldEmitterCount: field.sources.length,
         activeContributingEmitterCount: field.sources.length,
         zeroStrengthEmitterCount: zeroStrengthCount,

@@ -10,6 +10,7 @@ import {
   validateProjectV10Shape,
   validateProjectV11Shape,
   validateProjectV12Shape,
+  validateProjectV13Shape,
 } from "../src/engine/projectImport";
 import { applyPreset, baseState } from "../src/engine/presets";
 import { serializeProjectDocument } from "../src/hooks/useProjectDocument";
@@ -60,7 +61,7 @@ describe("historical project compatibility matrix", () => {
       const raw = readLegacy(version);
       const first = migrateAndRepairProject(raw);
 
-      expect(first.project).toMatchObject({ version: 12, ...expectedCore[version] });
+      expect(first.project).toMatchObject({ version: 13, ...expectedCore[version] });
       expect(first.project.emitterDisplay.mode).toBe("field");
       expect(first.project.glyphDisplacement).toEqual(baseState.glyphDisplacement);
       expect(first.project.glyphDisplacement.enabled).toBe(false);
@@ -72,11 +73,13 @@ describe("historical project compatibility matrix", () => {
       expect(first.project.emitterMicroResponse.enabled).toBe(false);
       expect(first.project.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
       expect(first.project.glyphMicroWarp.enabled).toBe(false);
-      expect(first.warnings).toContain("Project was migrated to schema version 12.");
+      expect(first.project.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
+      expect(first.project.glyphFalloffDisplacement.mode).toBe("off");
+      expect(first.warnings).toContain("Project was migrated to schema version 13.");
 
       const saved = serializeProjectDocument(first.project);
       const savedObject = parseProjectDocumentText(saved);
-      expect(validateProjectV12Shape(savedObject).version).toBe(12);
+      expect(validateProjectV13Shape(savedObject).version).toBe(13);
       const reloaded = migrateAndRepairProject(savedObject);
       expect(reloaded.project).toEqual(first.project);
     });
@@ -140,7 +143,7 @@ describe("historical project compatibility matrix", () => {
 
     const first = migrateAndRepairProject(raw).project;
     expect(first).toMatchObject({
-      version: 12,
+      version: 13,
       artboard: { width: 1200, height: 720 },
       text: "Private\nSonics",
       fontSize: 540,
@@ -162,9 +165,10 @@ describe("historical project compatibility matrix", () => {
     expect(first.displayDislocation).toEqual(baseState.displayDislocation);
     expect(first.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
     expect(first.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
+    expect(first.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
 
     const saved = parseProjectDocumentText(serializeProjectDocument(first));
-    expect(validateProjectV12Shape(saved).version).toBe(12);
+    expect(validateProjectV13Shape(saved).version).toBe(13);
     expect(migrateAndRepairProject(saved).project).toEqual(first);
   });
 
@@ -191,13 +195,14 @@ describe("protected current glyph fragmentation documents", () => {
         displayDislocation: _displayDislocation,
         emitterMicroResponse: _emitterMicroResponse,
         glyphMicroWarp: _glyphMicroWarp,
+        glyphFalloffDisplacement: _glyphFalloffDisplacement,
         ...v10Fields
       } = source;
       const v9 = { ...v10Fields, version: 9 };
 
       expect(validateProjectV9Shape(v9).version).toBe(9);
       const migrated = migrateAndRepairProject(v9).project;
-      expect(migrated.version).toBe(12);
+      expect(migrated.version).toBe(13);
       expect(migrated.glyphDisplacement).toEqual(source.glyphDisplacement);
       expect(migrated.dotGrid).toEqual(source.dotGrid);
       expect(migrated.emitter).toEqual(source.emitter);
@@ -206,22 +211,29 @@ describe("protected current glyph fragmentation documents", () => {
       expect(migrated.displayDislocation.enabled).toBe(false);
       expect(migrated.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
       expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
+      expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
     });
   }
 
   it("migrates exact v10 Display Dislocation documents without reinterpreting their state", () => {
     const source = applyPreset(baseState, "Display Dislocation");
-    const { emitterMicroResponse: _emitterMicroResponse, glyphMicroWarp: _glyphMicroWarp, ...v11Fields } = source;
+    const {
+      emitterMicroResponse: _emitterMicroResponse,
+      glyphMicroWarp: _glyphMicroWarp,
+      glyphFalloffDisplacement: _glyphFalloffDisplacement,
+      ...v11Fields
+    } = source;
     const v10 = { ...v11Fields, version: 10 as const };
 
     expect(validateProjectV10Shape(v10).version).toBe(10);
     const migrated = migrateAndRepairProject(v10).project;
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(13);
     expect(migrated.displayDislocation).toEqual(source.displayDislocation);
     expect(migrated.displayDislocation.enabled).toBe(true);
     expect(migrated.glyphDisplacement).toEqual(source.glyphDisplacement);
     expect(migrated.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
+    expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
   });
 
   it("migrates exact v11 mark-response documents by adding only disabled Glyph Micro Warp defaults", () => {
@@ -233,14 +245,34 @@ describe("protected current glyph fragmentation documents", () => {
         positionDetail: 71,
       },
     };
-    const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutWarp } = source;
+    const {
+      glyphMicroWarp: _glyphMicroWarp,
+      glyphFalloffDisplacement: _glyphFalloffDisplacement,
+      ...v12WithoutWarp
+    } = source;
     const v11 = { ...v12WithoutWarp, version: 11 as const };
 
     expect(validateProjectV11Shape(v11).version).toBe(11);
     const migrated = migrateAndRepairProject(v11).project;
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(13);
     expect(migrated.emitterMicroResponse).toEqual(source.emitterMicroResponse);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
+    expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
+  });
+
+  it("migrates exact v12 glyph-warp documents by adding only disabled Glyph Falloff Field defaults", () => {
+    const source: typeof baseState = {
+      ...baseState,
+      glyphMicroWarp: { ...baseState.glyphMicroWarp, enabled: true, strength: 73 },
+    };
+    const { glyphFalloffDisplacement: _glyphFalloffDisplacement, ...v13WithoutFalloff } = source;
+    const v12 = { ...v13WithoutFalloff, version: 12 as const };
+
+    expect(validateProjectV12Shape(v12).version).toBe(12);
+    const migrated = migrateAndRepairProject(v12).project;
+    expect(migrated.version).toBe(13);
+    expect(migrated.glyphMicroWarp).toEqual(source.glyphMicroWarp);
+    expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
   });
 });
 
@@ -259,7 +291,7 @@ describe("project import errors and repair reporting", () => {
   it("repairs sparse historical documents before latest-shape validation", () => {
     const repaired = migrateAndRepairProject({ version: 8, renderer: "flow", seed: 1 }).project;
     expect(repaired).toMatchObject({
-      version: 12,
+      version: 13,
       text: baseState.text,
       renderer: "flow",
       seed: 1,

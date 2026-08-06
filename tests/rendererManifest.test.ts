@@ -96,6 +96,17 @@ describe("renderer manifests", () => {
     expect(rendererManifests["sdf-streamlines"].emitterMicroResponse).toBe("unsupported");
     expect(rendererManifests["sdf-contours"].emitterMicroResponse).toBe("unsupported");
   });
+
+  it("centrally limits Glyph Falloff Field to final-circle renderers with an authoritative SDF", () => {
+    for (const renderer of rendererList) {
+      expect(["supported", "unaffected", "unsupported"])
+        .toContain(rendererManifests[renderer.id].glyphFalloffDisplacement);
+    }
+    expect(rendererManifests["glyph-diffuser"].glyphFalloffDisplacement).toBe("supported");
+    expect(rendererManifests["sdf-halftone"].glyphFalloffDisplacement).toBe("supported");
+    expect(rendererManifests.flow.glyphFalloffDisplacement).toBe("unaffected");
+    expect(rendererManifests["sdf-contours"].glyphFalloffDisplacement).toBe("unsupported");
+  });
 });
 
 describe("manifest dependency and cache identity", () => {
@@ -162,6 +173,35 @@ describe("manifest dependency and cache identity", () => {
       .not.toBe(rendererGeometryStateKey({ ...baseState, renderer: "sdf-halftone" }));
     expect(rendererGeometryStateKey({ ...changed, renderer: "sdf-contours" }))
       .toBe(rendererGeometryStateKey({ ...baseState, renderer: "sdf-contours" }));
+  });
+
+  it("scopes Glyph Falloff Field identity to supported renderers and ignores disabled values", () => {
+    const halftone = { ...baseState, renderer: "sdf-halftone" as const };
+    const enabled = {
+      ...halftone,
+      glyphFalloffDisplacement: {
+        ...halftone.glyphFalloffDisplacement,
+        mode: "contour-rings" as const,
+        ringFrequency: 8,
+      },
+    };
+    const configuredButDisabled = {
+      ...halftone,
+      glyphFalloffDisplacement: {
+        ...halftone.glyphFalloffDisplacement,
+        mode: "off" as const,
+        strength: 96,
+        ringFrequency: 16,
+      },
+    };
+
+    expect(rendererGeometryStateKey(enabled)).not.toBe(rendererGeometryStateKey(halftone));
+    expect(rendererGeometryCacheKey(enabled, context({ substrateKey: "sdf:a" })))
+      .not.toBe(rendererGeometryCacheKey(enabled, context({ substrateKey: "sdf:b" })));
+    expect(rendererGeometryStateKey(configuredButDisabled)).toBe(rendererGeometryStateKey(halftone));
+    expect(rendererGeometryCacheKey(configuredButDisabled, context())).toBe(rendererGeometryCacheKey(halftone, context()));
+    expect(rendererGeometryStateKey({ ...enabled, renderer: "sdf-contours" }))
+      .toBe(rendererGeometryStateKey({ ...halftone, renderer: "sdf-contours" }));
   });
 
   it("scopes enabled Display Dislocation state to SDF Halftone's regular grid", () => {

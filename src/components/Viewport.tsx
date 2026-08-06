@@ -39,6 +39,7 @@ import type { DisplacedTypographyGeometry } from "../engine/glyphDisplacement";
 import type { GlyphMicroWarpGeometry } from "../engine/glyphMicroWarp";
 import { emitterDisplayGeometryKey } from "../engine/field/emitterDisplayResponse";
 import { emitterMicroResponseGeometryKey } from "../engine/field/emitterMicroResponse";
+import { glyphFalloffDisplacementGeometryKey } from "../engine/field/glyphFalloffDisplacement";
 import { LEGACY_PREVIEW_STROKE_WIDTH } from "../engine/contourStroke";
 import { planDiagnosticSamples } from "../engine/safetyBudget";
 import { traceEvent } from "../dev/interactionTrace";
@@ -419,6 +420,18 @@ const gradientVectors = useMemo(() => {
       data-emitter-micro-sealed-counter-pixels={geometry.diagnostics?.emitterMicroSealedCounterPixels ?? 0}
       data-emitter-micro-sdf-reads={geometry.diagnostics?.emitterMicroSdfReadCount ?? 0}
       data-emitter-micro-build-ms={geometry.diagnostics?.emitterMicroBuildTimeMs ?? 0}
+      data-glyph-falloff-mode={geometry.diagnostics?.glyphFalloffDisplacementMode ?? "disabled"}
+      data-glyph-falloff-key={glyphFalloffDisplacementGeometryKey(state, context)}
+      data-glyph-falloff-candidates={geometry.diagnostics?.glyphFalloffCandidateCount ?? 0}
+      data-glyph-falloff-affected={geometry.diagnostics?.glyphFalloffAffectedCount ?? 0}
+      data-glyph-falloff-sdf-reads={geometry.diagnostics?.glyphFalloffSdfReadCount ?? 0}
+      data-glyph-falloff-safety-clipped={geometry.diagnostics?.glyphFalloffSafetyClippedCount ?? 0}
+      data-glyph-falloff-average-displacement={geometry.diagnostics?.glyphFalloffAverageDisplacement ?? 0}
+      data-glyph-falloff-max-displacement={geometry.diagnostics?.glyphFalloffMaxDisplacement ?? 0}
+      data-glyph-falloff-build-ms={geometry.diagnostics?.glyphFalloffBuildTimeMs ?? 0}
+      data-glyph-falloff-ring-frequency={state.glyphFalloffDisplacement.mode === "contour-rings"
+        ? state.glyphFalloffDisplacement.ringFrequency
+        : "disabled"}
       data-substrate-key={context.substrateKey ?? "none"}
       data-substrate-phase={substrateBackendStatus.phase}
       data-renderer-element-count={geometry.geometries.length}

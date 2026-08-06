@@ -10,6 +10,10 @@ import {
   emitterMicroResponseGeometryKey,
   emitterMicroResponseStateKey,
 } from "./field/emitterMicroResponse";
+import {
+  glyphFalloffDisplacementGeometryKey,
+  glyphFalloffDisplacementStateKey,
+} from "./field/glyphFalloffDisplacement";
 import { displayDislocationGeometryKey, isDisplayDislocationActive } from "./displayDislocation";
 import { interactionTraceEnabled, traceStartSpan } from "../dev/interactionTrace";
 import { roundSceneNumber } from "./sceneLayout";
@@ -106,15 +110,18 @@ export function rendererGeometryStateKey(state: ProjectState) {
     // out of the broad object prevents inactive and exterior-only controls from
     // invalidating unrelated geometry.
     emitterMicroResponse: _emitterMicroResponse,
+    glyphFalloffDisplacement: _glyphFalloffDisplacement,
     ...geometryState
   } = state;
   const emitterMicroKey = emitterMicroResponseStateKey(state);
+  const glyphFalloffKey = glyphFalloffDisplacementStateKey(state);
   return JSON.stringify({
     version: 9,
     ...geometryState,
     dotGrid: state.renderer === "sdf-halftone" ? state.dotGrid : undefined,
     displayDislocation: isDisplayDislocationActive(state) ? state.displayDislocation : undefined,
     emitterMicroResponse: emitterMicroKey === "emitter-micro:disabled" ? undefined : emitterMicroKey,
+    glyphFalloffDisplacement: glyphFalloffKey === "glyph-falloff:disabled" ? undefined : glyphFalloffKey,
   });
 }
 
@@ -165,6 +172,8 @@ export function rendererGeometryCacheKey(state: ProjectState, context: RenderCon
   if (isDisplayDislocationActive(state)) parts.push(displayDislocationGeometryKey(state));
   const emitterMicroKey = emitterMicroResponseGeometryKey(state, context);
   if (emitterMicroKey !== "emitter-micro:disabled") parts.push(emitterMicroKey);
+  const glyphFalloffKey = glyphFalloffDisplacementGeometryKey(state, context);
+  if (glyphFalloffKey !== "glyph-falloff:disabled") parts.push(glyphFalloffKey);
   return parts.join("|");
 }
 

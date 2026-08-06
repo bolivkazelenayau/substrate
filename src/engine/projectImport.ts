@@ -7,7 +7,7 @@ import {
 } from "./projectSchema";
 
 type UnknownRecord = Record<string, unknown>;
-type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export type ProjectImportErrorCode =
   | "invalid-json"
@@ -32,15 +32,25 @@ export interface HistoricalProjectCandidate extends UnknownRecord {
 
 export type ProjectStateCandidate = ProjectState;
 
-type ProjectStateV11Candidate = Omit<ProjectState, "version" | "glyphMicroWarp"> & { version: 11 };
+type ProjectStateV12Candidate = Omit<ProjectState, "version" | "glyphFalloffDisplacement"> & { version: 12 };
+type ProjectStateV11Candidate = Omit<ProjectStateV12Candidate, "version" | "glyphMicroWarp"> & { version: 11 };
 type ProjectStateV10Candidate = Omit<ProjectStateV11Candidate, "version" | "emitterMicroResponse"> & { version: 10 };
 type ProjectStateV9Candidate = Omit<ProjectStateV10Candidate, "version" | "displayDislocation"> & { version: 9 };
 
 const {
   version: _baseStateVersion,
+  glyphFalloffDisplacement: _glyphFalloffDisplacement,
+  ...baseStateV12Fields
+} = baseState;
+const baseStateV12Template: ProjectStateV12Candidate = {
+  ...baseStateV12Fields,
+  version: 12,
+};
+const {
+  version: _baseStateV12Version,
   glyphMicroWarp: _glyphMicroWarp,
   ...baseStateV11Fields
-} = baseState;
+} = baseStateV12Template;
 const baseStateV11Template: ProjectStateV11Candidate = {
   ...baseStateV11Fields,
   version: 11,
@@ -194,6 +204,9 @@ function validateHistoricalMinimum(
   if (version === 11) {
     requireTemplateKeys(input, baseStateV11Template as unknown as UnknownRecord, version);
   }
+  if (version === 12) {
+    requireTemplateKeys(input, baseStateV12Template as unknown as UnknownRecord, version);
+  }
   if (version === CURRENT_PROJECT_VERSION) {
     requireTemplateKeys(input, baseState as unknown as UnknownRecord, version);
   }
@@ -241,10 +254,16 @@ export function parseImportedProjectJson(input: unknown): UnknownRecord {
   return input;
 }
 
-export function validateProjectV12Shape(input: unknown): ProjectStateCandidate {
+export function validateProjectV13Shape(input: unknown): ProjectStateCandidate {
+  const parsed = parseImportedProjectJson(input);
+  validateHistoricalMinimum(parsed, 13);
+  return validateLatestProjectState(parsed);
+}
+
+export function validateProjectV12Shape(input: unknown): ProjectStateV12Candidate {
   const parsed = parseImportedProjectJson(input);
   validateHistoricalMinimum(parsed, 12);
-  return validateLatestProjectState(parsed);
+  return parsed as unknown as ProjectStateV12Candidate;
 }
 
 export function validateProjectV11Shape(input: unknown): ProjectStateV11Candidate {

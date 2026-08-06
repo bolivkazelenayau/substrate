@@ -159,6 +159,37 @@ describe("SDF Halftone renderer", () => {
     expect(sharp.diagnostics?.acceptedCrestDots).not.toBe(broad.diagnostics?.acceptedCrestDots);
   });
 
+  it("applies contour-following falloff displacement and exposes distinct ring frequencies", () => {
+    const renderer = getRenderer("sdf-halftone");
+    const baseline = renderer.generateGeometry(state, context);
+    const lowState: ProjectState = {
+      ...state,
+      density: 72,
+      turbulence: 0,
+      maxNodes: 3000,
+      glyphFalloffDisplacement: {
+        ...state.glyphFalloffDisplacement,
+        mode: "contour-rings",
+        strength: 18,
+        fieldWidth: 96,
+        ringFrequency: 1,
+        ringSharpness: 2,
+      },
+    };
+    const low = renderer.generateGeometry(lowState, context);
+    const high = renderer.generateGeometry({
+      ...lowState,
+      glyphFalloffDisplacement: { ...lowState.glyphFalloffDisplacement, ringFrequency: 9 },
+    }, context);
+
+    expect(low.geometries).not.toEqual(baseline.geometries);
+    expect(high.geometries).not.toEqual(low.geometries);
+    expect(low.diagnostics).toMatchObject({ glyphFalloffDisplacementMode: "contour-rings" });
+    expect(low.diagnostics?.glyphFalloffAffectedCount).toBeGreaterThan(0);
+    expect(high.diagnostics?.glyphFalloffAffectedCount).toBeGreaterThan(0);
+    expect(renderer.clipPreviewToText?.(lowState)).toBe(false);
+  });
+
   it("enforces maxNodes as a circle budget", () => {
     const group = getRenderer("sdf-halftone").generateGeometry({ ...state, density: 80, maxNodes: 20 }, context);
     expect(group.geometries.length).toBeLessThanOrEqual(20);

@@ -317,11 +317,11 @@ describe("Glyph Micro Warp authoritative outline stage", () => {
     expect(metadata.glyphMicroWarp.geometryKey).toBe(result.geometryKey);
   });
 
-  it("migrates v11 with disabled defaults and round-trips active v12 settings", () => {
+  it("migrates v11 with disabled defaults and round-trips active settings", () => {
     const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutWarp } = stateWithWarp();
     const v11 = { ...v12WithoutWarp, version: 11 };
     const migrated = migrateAndRepairProject(v11).project;
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(13);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
     const active = stateWithWarp({ strength: 73, detailScale: 13, preserveCounters: false });
     expect(migrateAndRepairProject(JSON.parse(JSON.stringify(active))).project.glyphMicroWarp).toEqual(active.glyphMicroWarp);

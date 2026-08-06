@@ -74,7 +74,7 @@ export function EmitterMicroResponseControls({
                   occupancy: event.target.checked ? "exclude-interior" : "legacy",
                 })}
               />
-              <span>Enable solid-glyph occupancy</span>
+              <span>Keep particles outside glyph</span>
             </label>
             <label className="field compact-field">
               <span>Occupancy</span>
@@ -89,7 +89,7 @@ export function EmitterMicroResponseControls({
                 <option value="exclude-interior">Exclude interior</option>
                 <option value="disperse-exterior">Disperse exterior</option>
               </select>
-              <small>Occupancy is independent from positional detail and density breakup.</small>
+              <small>Applied after falloff and micro displacement; Exclude rejects intersections, Disperse relocates them outside.</small>
             </label>
 
             {responseActive && (

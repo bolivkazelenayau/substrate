@@ -443,7 +443,7 @@ test("Emitter Micro Response legacy, locality, occupancy, parity, and disable ga
 
   const firstSave = await saveProject(page);
   expect(firstSave.document).toMatchObject({
-    version: 12,
+    version: 13,
     text: "Private\nSonics",
     renderer: "glyph-diffuser",
     artboard: { width: 1200, height: 720 },
@@ -451,6 +451,7 @@ test("Emitter Micro Response legacy, locality, occupancy, parity, and disable ga
     displayDislocation: { enabled: false },
     emitterMicroResponse: { enabled: false, occupancy: "legacy" },
     glyphMicroWarp: { enabled: false },
+    glyphFalloffDisplacement: { mode: "off" },
   });
   await page.locator('input[type="file"][accept*="application/json"]').setInputFiles(firstSave.path);
   await page.locator('input[type="file"][accept*=".ttf"]').setInputFiles(parsedFontFixture);

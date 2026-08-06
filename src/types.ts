@@ -11,6 +11,7 @@ export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
 export type EmitterDisplayMode = "field" | "distort" | "exclude" | "orbit";
 export type EmitterOccupancyMode = "legacy" | "exclude-interior" | "disperse-exterior";
+export type GlyphFalloffDisplacementMode = "off" | "contour-rings";
 export type GlyphDisplacementMode = "warp" | "horizontal-slices" | "vertical-slices" | "grid" | "radial-sectors";
 export type DisplayDislocationMode = "horizontal-bands" | "vertical-bands" | "blocks";
 export type WaveContourMode = "continuous" | "dotted";
@@ -83,6 +84,24 @@ export interface EmitterMicroResponseSettings {
   tangentialFlow: number;
   divergence: number;
   exteriorShell: number;
+}
+
+/**
+ * Post-candidate displacement driven by the authoritative glyph signed-distance
+ * field. The disabled mode is an exact no-op and therefore preserves legacy
+ * renderer geometry and export output.
+ */
+export interface GlyphFalloffDisplacementSettings {
+  mode: GlyphFalloffDisplacementMode;
+  /** Maximum world-space displacement at the glyph contour. */
+  strength: number;
+  /** Width of the signed-distance response band on either side of the contour. */
+  fieldWidth: number;
+  falloff: GlyphEmitterFalloff;
+  /** Number of contour-following cycles across `fieldWidth`. */
+  ringFrequency: number;
+  /** Shapes broad waves into narrow, display-like crests. */
+  ringSharpness: number;
 }
 
 /**
@@ -203,7 +222,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 12;
+  version: 13;
   artboard: {
     width: number;
     height: number;
@@ -240,6 +259,7 @@ export interface ProjectState {
   emitters: GlyphEmitterInstance[];
   emitterDisplay: EmitterDisplaySettings;
   emitterMicroResponse: EmitterMicroResponseSettings;
+  glyphFalloffDisplacement: GlyphFalloffDisplacementSettings;
   glyphMicroWarp: GlyphMicroWarpSettings;
   glyphDisplacement: GlyphDisplacementSettings;
   dotGrid: DotGridSettings;

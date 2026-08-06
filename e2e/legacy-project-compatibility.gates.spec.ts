@@ -44,7 +44,7 @@ test.describe("legacy project compatibility browser gates", () => {
     await expect(stage(page)).toHaveAttribute("data-glyph-displacement-mode", "disabled");
     await expect(stage(page)).toHaveAttribute("data-dot-grid-regular", "false");
     await expect(stage(page)).toHaveAttribute("data-emitter-display-mode", "field");
-    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 12");
+    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 13");
     await waitForExactPreview(page);
 
     const svgDownloadPromise = page.waitForEvent("download");
@@ -59,7 +59,7 @@ test.describe("legacy project compatibility browser gates", () => {
 
     const firstSave = await saveProject(page);
     expect(firstSave.document).toMatchObject({
-      version: 12,
+      version: 13,
       text: "LEGACY EIGHT",
       renderer: "glyph-diffuser",
       seed: 80808,
@@ -68,6 +68,7 @@ test.describe("legacy project compatibility browser gates", () => {
       glyphDisplacement: { enabled: false },
       dotGrid: { enabled: false },
       displayDislocation: { enabled: false },
+      glyphFalloffDisplacement: { mode: "off" },
       emitterMicroResponse: { enabled: false, occupancy: "legacy" },
       glyphMicroWarp: { enabled: false },
     });

@@ -114,6 +114,14 @@ export interface RendererDiagnostics {
   emitterMicroSourceCount?: number;
   emitterMicroMaxEmitterContributions?: number;
   emitterMicroBuildTimeMs?: number;
+  glyphFalloffDisplacementMode?: string;
+  glyphFalloffCandidateCount?: number;
+  glyphFalloffAffectedCount?: number;
+  glyphFalloffSdfReadCount?: number;
+  glyphFalloffSafetyClippedCount?: number;
+  glyphFalloffAverageDisplacement?: number;
+  glyphFalloffMaxDisplacement?: number;
+  glyphFalloffBuildTimeMs?: number;
   diffuserComposition?: string;
   rendererActiveFieldEmitterCount?: number;
   activeContributingEmitterCount?: number;

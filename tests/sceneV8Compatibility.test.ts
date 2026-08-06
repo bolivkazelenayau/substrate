@@ -6,7 +6,7 @@ import { loadLargeV8Project } from "./utils/sceneLayoutHarness";
 describe("existing large v8 project compatibility", () => {
   it("keeps persisted artboard dimensions as the authored baseline", () => {
     const project = loadLargeV8Project();
-    expect(project.version).toBe(12);
+    expect(project.version).toBe(13);
     expect(project.artboard).toEqual({ width: 3367, height: 777 });
   });
 
@@ -26,6 +26,6 @@ describe("existing large v8 project compatibility", () => {
       renderer: "flow",
     }).project;
     expect(repaired.artboard).toEqual({ width: 3367, height: 777 });
-    expect(repaired.version).toBe(12);
+    expect(repaired.version).toBe(13);
   });
 });

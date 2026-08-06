@@ -6,7 +6,7 @@ import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
 
 type UnknownRecord = Record<string, unknown>;
 
-export const CURRENT_PROJECT_VERSION = 12 as const;
+export const CURRENT_PROJECT_VERSION = 13 as const;
 
 const rendererIds: RendererId[] = ["flow", "ripple", "dots", "sdf-flow", "sdf-streamlines", "sdf-contours", "sdf-halftone", "wave-contours", "glyph-diffuser"];
 const exportModes: ExportMode[] = ["artwork", "editable"];
@@ -133,6 +133,13 @@ export function migrateProject(input: unknown): UnknownRecord {
       glyphMicroWarp: migrated.glyphMicroWarp ?? { ...baseState.glyphMicroWarp },
     };
   }
+  if (version <= 12) {
+    migrated = {
+      ...migrated,
+      version: 13,
+      glyphFalloffDisplacement: migrated.glyphFalloffDisplacement ?? { ...baseState.glyphFalloffDisplacement },
+    };
+  }
   return migrated;
 }
 
@@ -176,6 +183,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
   const emitterSource = isRecord(source.emitter) ? source.emitter : {};
   const emitterDisplaySource = isRecord(source.emitterDisplay) ? source.emitterDisplay : {};
   const emitterMicroResponseSource = isRecord(source.emitterMicroResponse) ? source.emitterMicroResponse : {};
+  const glyphFalloffDisplacementSource = isRecord(source.glyphFalloffDisplacement) ? source.glyphFalloffDisplacement : {};
   const glyphMicroWarpSource = isRecord(source.glyphMicroWarp) ? source.glyphMicroWarp : {};
   const glyphDisplacementSource = isRecord(source.glyphDisplacement) ? source.glyphDisplacement : {};
   const dotGridSource = isRecord(source.dotGrid) ? source.dotGrid : {};
@@ -198,7 +206,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 12,
+    version: 13,
     artboard: {
       width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
       height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
@@ -330,6 +338,42 @@ export function validateProject(input: unknown): ProjectValidationResult {
         baseState.emitterMicroResponse.exteriorShell,
         1,
         240,
+      ),
+    },
+    glyphFalloffDisplacement: {
+      mode: enumValue(
+        glyphFalloffDisplacementSource.mode,
+        ["off", "contour-rings"],
+        baseState.glyphFalloffDisplacement.mode,
+      ),
+      strength: clamp(
+        glyphFalloffDisplacementSource.strength,
+        baseState.glyphFalloffDisplacement.strength,
+        0,
+        96,
+      ),
+      fieldWidth: clamp(
+        glyphFalloffDisplacementSource.fieldWidth,
+        baseState.glyphFalloffDisplacement.fieldWidth,
+        4,
+        320,
+      ),
+      falloff: enumValue(
+        glyphFalloffDisplacementSource.falloff,
+        ["smoothstep", "gaussian", "linear"],
+        baseState.glyphFalloffDisplacement.falloff,
+      ),
+      ringFrequency: clamp(
+        glyphFalloffDisplacementSource.ringFrequency,
+        baseState.glyphFalloffDisplacement.ringFrequency,
+        0.5,
+        16,
+      ),
+      ringSharpness: clamp(
+        glyphFalloffDisplacementSource.ringSharpness,
+        baseState.glyphFalloffDisplacement.ringSharpness,
+        0.5,
+        8,
       ),
     },
     glyphMicroWarp: {

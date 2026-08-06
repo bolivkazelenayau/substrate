@@ -46,8 +46,9 @@ describe("project schema", () => {
     delete legacyV9.displayDislocation;
     delete legacyV9.emitterMicroResponse;
     delete legacyV9.glyphMicroWarp;
+    delete legacyV9.glyphFalloffDisplacement;
     const migrated = validateProject(legacyV9);
-    expect(migrated.project.version).toBe(12);
+    expect(migrated.project.version).toBe(13);
     expect(migrated.project.displayDislocation).toEqual(baseState.displayDislocation);
     expect(migrated.project.displayDislocation.enabled).toBe(false);
 
@@ -96,15 +97,15 @@ describe("project schema", () => {
     expect(project).toEqual(baseState);
   });
 
-  it("migrates version 1 projects to version 12", () => {
+  it("migrates version 1 projects to version 13", () => {
     const result = validateProject({ version: 1, text: "OLD", renderer: "dots" });
-    expect(result.project.version).toBe(12);
+    expect(result.project.version).toBe(13);
     expect(result.project.artboard).toEqual({ width: 1200, height: 720 });
     expect(result.project.text).toBe("OLD");
     expect(result.project.renderer).toBe("dots");
     expect(result.project.exportFrameMode).toBe("current");
     expect(result.project.font).toBeNull();
-    expect(result.warnings).toContain("Project was migrated to schema version 12.");
+    expect(result.warnings).toContain("Project was migrated to schema version 13.");
   });
 
   it("migrates version 2 projects and preserves existing debug settings", () => {
@@ -113,7 +114,7 @@ describe("project schema", () => {
       version: 2,
       debug: { ...defaultDebugSettings, emitter: true },
     });
-    expect(result.project.version).toBe(12);
+    expect(result.project.version).toBe(13);
     expect(result.project.debug.emitter).toBe(true);
     expect(result.project.debug.glyphBounds).toBe(false);
   });
@@ -221,14 +222,14 @@ describe("project schema", () => {
   it("migrates v6 projects to persisted artwork appearance defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 6 });
     expect(project).toMatchObject({
-      version: 12,
+      version: 13,
       artboard: { width: 1200, height: 720 },
       primaryColor: "#e8ff45",
       outlineColor: "#e8ff45",
       backgroundColor: "#11110f",
       transparentBackground: false,
     });
-    expect(warnings).toContain("Project was migrated to schema version 12.");
+    expect(warnings).toContain("Project was migrated to schema version 13.");
   });
 
   it("preserves valid appearance colors and rejects invalid color strings", () => {
@@ -250,7 +251,7 @@ describe("project schema", () => {
   it("migrates version 5 typography fields to layout-preserving defaults", () => {
     const { project, warnings } = validateProject({ ...baseState, version: 5 });
     expect(project).toMatchObject({
-      version: 12,
+      version: 13,
       artboard: { width: 1200, height: 720 },
       kerningMode: "font",
       kerningStrength: 1,
@@ -259,7 +260,7 @@ describe("project schema", () => {
       textAlign: "center",
       textOffsetY: 0,
     });
-    expect(warnings).toContain("Project was migrated to schema version 12.");
+    expect(warnings).toContain("Project was migrated to schema version 13.");
   });
 
   it("validates and clamps typography controls", () => {
@@ -425,8 +426,9 @@ describe("project schema", () => {
     const legacyV10 = { ...baseState, version: 10 } as Record<string, unknown>;
     delete legacyV10.emitterMicroResponse;
     delete legacyV10.glyphMicroWarp;
+    delete legacyV10.glyphFalloffDisplacement;
     const migrated = validateProject(legacyV10).project;
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(13);
     expect(migrated.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
 
     const project = validateProject({
@@ -467,8 +469,9 @@ describe("project schema", () => {
   it("migrates, clamps, and round-trips parsed-outline Glyph Micro Warp settings", () => {
     const legacyV11 = { ...baseState, version: 11 } as Record<string, unknown>;
     delete legacyV11.glyphMicroWarp;
+    delete legacyV11.glyphFalloffDisplacement;
     const migrated = validateProject(legacyV11).project;
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(13);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
 
     const project = validateProject({
@@ -506,5 +509,35 @@ describe("project schema", () => {
     });
     expect(validateProject(JSON.parse(JSON.stringify(project))).project.glyphMicroWarp)
       .toEqual(project.glyphMicroWarp);
+  });
+
+  it("migrates v12 and safely validates Glyph Falloff Field settings", () => {
+    const legacyV12 = { ...baseState, version: 12 } as Record<string, unknown>;
+    delete legacyV12.glyphFalloffDisplacement;
+    const migrated = validateProject(legacyV12).project;
+    expect(migrated.version).toBe(13);
+    expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
+
+    const project = validateProject({
+      ...baseState,
+      glyphFalloffDisplacement: {
+        mode: "contour-rings",
+        strength: 999,
+        fieldWidth: -1,
+        falloff: "invalid",
+        ringFrequency: 99,
+        ringSharpness: 0,
+      },
+    }).project;
+    expect(project.glyphFalloffDisplacement).toEqual({
+      ...baseState.glyphFalloffDisplacement,
+      mode: "contour-rings",
+      strength: 96,
+      fieldWidth: 4,
+      ringFrequency: 16,
+      ringSharpness: 0.5,
+    });
+    expect(validateProject(JSON.parse(JSON.stringify(project))).project.glyphFalloffDisplacement)
+      .toEqual(project.glyphFalloffDisplacement);
   });
 });

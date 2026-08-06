@@ -332,6 +332,7 @@ describe("Safe Typography controls", () => {
     const occupancy = container.querySelector<HTMLSelectElement>('[data-testid="emitter-micro-occupancy"]')!;
     expect(enabled.disabled).toBe(false);
     expect(occupancyEnabled.checked).toBe(false);
+    expect(container.textContent).toContain("Keep particles outside glyph");
     expect([...occupancy.options].map((option) => option.value)).toEqual([
       "legacy", "exclude-interior", "disperse-exterior",
     ]);
@@ -363,6 +364,31 @@ describe("Safe Typography controls", () => {
     expect(container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')?.matches(":disabled")).toBe(true);
     expect(container.textContent).toContain("intentionally unaffected");
     expect(container.textContent).toContain("unavailable");
+  });
+
+  it("exposes an independent glyph-contour falloff mode and explicit ring frequency", () => {
+    renderControls({ ...baseState, renderer: "sdf-halftone" });
+    openDisclosure("Glyph Falloff Field");
+
+    const group = container.querySelector(".glyph-falloff-displacement");
+    const mode = container.querySelector<HTMLSelectElement>('[data-testid="glyph-falloff-mode"]')!;
+    expect(group).not.toBeNull();
+    expect([...mode.options].map((option) => option.value)).toEqual(["off", "contour-rings"]);
+    expect(container.textContent).not.toContain("Ring frequency");
+
+    change(mode, "contour-rings");
+    expect(getUpdated()?.glyphFalloffDisplacement.mode).toBe("contour-rings");
+    expect(container.textContent).toContain("Ring frequency");
+    expect(container.textContent).toContain("number of contour-following cycles");
+
+    updated = null;
+    change(field("Ring frequency", "input"), "9");
+    expect(getUpdated()?.glyphFalloffDisplacement.ringFrequency).toBe(9);
+
+    renderControls({ ...baseState, renderer: "flow" });
+    openDisclosure("Glyph Falloff Field");
+    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-falloff-mode"]')?.matches(":disabled")).toBe(true);
+    expect(container.textContent).toContain("intentionally unaffected");
   });
 
   it("resets numeric controls through their normal update path without touching siblings", () => {

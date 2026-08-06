@@ -46,7 +46,7 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 12,
+  version: 13,
   artboard: { width: 1200, height: 720 },
   text: "SUBSTRATE",
   fontSize: 148,
@@ -119,6 +119,14 @@ export const baseState: ProjectState = {
     tangentialFlow: 38,
     divergence: 20,
     exteriorShell: 36,
+  },
+  glyphFalloffDisplacement: {
+    mode: "off",
+    strength: 24,
+    fieldWidth: 96,
+    falloff: "smoothstep",
+    ringFrequency: 4,
+    ringSharpness: 2.4,
   },
   glyphMicroWarp: {
     enabled: false,
@@ -590,6 +598,7 @@ export function applyPreset(state: ProjectState, preset: PresetId): ProjectState
     ...state,
     emitterDisplay: baseState.emitterDisplay,
     emitterMicroResponse: baseState.emitterMicroResponse,
+    glyphFalloffDisplacement: baseState.glyphFalloffDisplacement,
     glyphMicroWarp: baseState.glyphMicroWarp,
     glyphDisplacement: baseState.glyphDisplacement,
     dotGrid: baseState.dotGrid,

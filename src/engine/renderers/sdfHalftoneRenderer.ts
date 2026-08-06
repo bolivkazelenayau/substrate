@@ -21,6 +21,12 @@ import {
   emitterMicroResponseUsesExterior,
   type EmitterMicroResponseSampler,
 } from "../field/emitterMicroResponse";
+import {
+  createGlyphFalloffDisplacementSampler,
+  glyphFalloffDisplacementDiagnostics,
+  isGlyphFalloffDisplacementConfigured,
+  type GlyphFalloffDisplacementSampler,
+} from "../field/glyphFalloffDisplacement";
 
 interface OccupiedDot {
   x: number;
@@ -65,6 +71,7 @@ function generateRegularDotGrid(
   artboard: ArtboardRect,
   displayResponse: ReturnType<typeof createEmitterDisplaySampler>,
   displayDislocation: DisplayDislocationSampler,
+  glyphFalloff: GlyphFalloffDisplacementSampler,
   microResponse: EmitterMicroResponseSampler,
 ): GeometryGroup {
   const buildStarted = displayDislocation.active ? performance.now() : 0;
@@ -190,6 +197,15 @@ function generateRegularDotGrid(
       const radius = Math.max(0.1, configuredRadius * (1 - softness * 0.5 + softness * 0.5 * edgeFactor) * radiusScale);
       const opacity = Math.max(0.12, Math.min(1, edgeFactor * opacityScale));
       let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+      let glyphFalloffAffected = false;
+      let microResponseAffected = false;
+      if (glyphFalloff.active) {
+        const falloffSample = glyphFalloff.sampleCircle(geometry);
+        geometry = falloffSample.mark;
+        glyphFalloffAffected = falloffSample.affected;
+        x = geometry.center.x;
+        y = geometry.center.y;
+      }
       if (microResponse.active) {
         const responseSample = microResponse.sampleCircle(
           geometry,
@@ -200,13 +216,15 @@ function generateRegularDotGrid(
           continue;
         }
         geometry = responseSample.mark;
+        microResponseAffected = responseSample.affected;
         x = geometry.center.x;
         y = geometry.center.y;
-        if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
-          microResponse.recordSafetyClip();
-          rejectedOutsideMask += 1;
-          continue;
-        }
+      }
+      if ((glyphFalloffAffected || microResponseAffected) && !circleInsideArtboard(geometry, artboard)) {
+        if (glyphFalloffAffected) glyphFalloff.recordSafetyClip();
+        if (microResponseAffected) microResponse.recordSafetyClip();
+        rejectedOutsideMask += 1;
+        continue;
       }
       geometries.push(geometry);
       sampledDistanceTotal += distance;
@@ -255,7 +273,7 @@ function generateRegularDotGrid(
       minRadius: geometries.length ? minRadius : 0,
       maxRadius,
       maxNodesClipped: clipped,
-      dotGridRegular: !microResponse.microActive,
+      dotGridRegular: !microResponse.microActive && !glyphFalloff.active,
       dotGridSpacing: spacing * candidateStride,
       dotGridOriginX: 0,
       dotGridOriginY: 0,
@@ -268,6 +286,7 @@ function generateRegularDotGrid(
       emitterDisplayBreakupRejections: displayBreakupRejections,
       emitterDisplayQuantizedSamples: displayQuantizedSamples,
       ...emitterMicroResponseDiagnostics(state, microResponse),
+      ...glyphFalloffDisplacementDiagnostics(state, glyphFalloff),
       ...(displayDislocation.active ? {
         displayDislocationMode: state.displayDislocation.mode,
         displayDislocationCandidateCount: attemptedCandidates,
@@ -296,7 +315,8 @@ export const sdfHalftoneRenderer: VectorRenderer = {
   usesSubstrate: true,
   clipPreviewToText: (state) => !isDisplayDislocationActive(state)
     && !emitterDisplayUsesExterior(state)
-    && !emitterMicroResponseUsesExterior(state),
+    && !emitterMicroResponseUsesExterior(state)
+    && !isGlyphFalloffDisplacementConfigured(state),
   estimateCost(state) {
     const artboard = projectArtboard(state);
     const density = Math.max(10, Math.min(80, state.density));
@@ -319,8 +339,9 @@ export const sdfHalftoneRenderer: VectorRenderer = {
     const displayResponse = createEmitterDisplaySampler(state, context);
     const displayDislocation = createDisplayDislocationSampler(state, context);
     const microResponse = createEmitterMicroResponseSampler(state, context);
+    const glyphFalloff = createGlyphFalloffDisplacementSampler(state, context);
     if (state.dotGrid.enabled) {
-      return generateRegularDotGrid(state, context, substrate, artboard, displayResponse, displayDislocation, microResponse);
+      return generateRegularDotGrid(state, context, substrate, artboard, displayResponse, displayDislocation, glyphFalloff, microResponse);
     }
 
     const random = createSeededRandom(state.seed);
@@ -502,6 +523,15 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         let opacity = Math.max(0.18, Math.min(0.98, (0.48 + interiorRatio * 0.34 + edgeSignal * influence * 0.14) * (glyph.opacityEnabled ? (1 + fieldValue * state.glyphFieldOpacity / 100 * glyph.strength) : 1)));
         if (displaySample) opacity = Math.max(0.18, Math.min(0.98, opacity * displaySample.opacityScale));
         let geometry: CircleMark = { type: "circle", center: { x, y }, radius, opacity };
+        let glyphFalloffAffected = false;
+        let microResponseAffected = false;
+        if (glyphFalloff.active) {
+          const falloffSample = glyphFalloff.sampleCircle(geometry);
+          geometry = falloffSample.mark;
+          glyphFalloffAffected = falloffSample.affected;
+          x = geometry.center.x;
+          y = geometry.center.y;
+        }
         if (microResponse.active) {
           const responseSample = microResponse.sampleCircle(geometry, row * columns + column);
           if (!responseSample.keep) {
@@ -509,15 +539,17 @@ export const sdfHalftoneRenderer: VectorRenderer = {
             continue;
           }
           geometry = responseSample.mark;
+          microResponseAffected = responseSample.affected;
           x = geometry.center.x;
           y = geometry.center.y;
           radius = geometry.radius;
           opacity = geometry.opacity;
-          if (responseSample.affected && !circleInsideArtboard(geometry, artboard)) {
-            microResponse.recordSafetyClip();
-            rejectedOutsideMask += 1;
-            continue;
-          }
+        }
+        if ((glyphFalloffAffected || microResponseAffected) && !circleInsideArtboard(geometry, artboard)) {
+          if (glyphFalloffAffected) glyphFalloff.recordSafetyClip();
+          if (microResponseAffected) microResponse.recordSafetyClip();
+          rejectedOutsideMask += 1;
+          continue;
         }
         const cellX = Math.floor(worldToLocal(artboard, { x, y }).x / occupancyCellSize);
         const cellY = Math.floor(worldToLocal(artboard, { x, y }).y / occupancyCellSize);
@@ -587,6 +619,7 @@ export const sdfHalftoneRenderer: VectorRenderer = {
         emitterDisplayBreakupRejections: displayBreakupRejections,
         emitterDisplayQuantizedSamples: displayQuantizedSamples,
         ...emitterMicroResponseDiagnostics(state, microResponse),
+        ...glyphFalloffDisplacementDiagnostics(state, glyphFalloff),
         warning: clipped ? `Dot output clipped at the ${state.maxNodes} node budget.` : undefined,
       },
     };

@@ -91,12 +91,20 @@ export function createSvg(
     .every(([name, value]) => state.emitterMicroResponse[name as keyof ProjectState["emitterMicroResponse"]] === value);
   const legacyGlyphMicroWarp = Object.entries(baseState.glyphMicroWarp)
     .every(([name, value]) => state.glyphMicroWarp[name as keyof ProjectState["glyphMicroWarp"]] === value);
+  const legacyGlyphFalloffDisplacement = Object.entries(baseState.glyphFalloffDisplacement)
+    .every(([name, value]) => state.glyphFalloffDisplacement[name as keyof ProjectState["glyphFalloffDisplacement"]] === value);
   // Sequential default-state elision keeps pre-feature SVG metadata byte-stable
   // after timestamp normalization. An active stage retains its introducing
   // schema and cannot be mislabeled as an older project.
-  const compatibilityMetadataState = legacyGlyphMicroWarp
+  const v12CompatibilityMetadataState = legacyGlyphFalloffDisplacement
     ? (() => {
-        const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutMicroWarp } = state;
+        const { glyphFalloffDisplacement: _glyphFalloffDisplacement, ...v13WithoutGlyphFalloff } = state;
+        return { ...v13WithoutGlyphFalloff, version: 12 as const };
+      })()
+    : state;
+  const compatibilityMetadataState = legacyGlyphFalloffDisplacement && legacyGlyphMicroWarp
+    ? (() => {
+        const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutMicroWarp } = v12CompatibilityMetadataState;
         const v11Project = { ...v12WithoutMicroWarp, version: 11 as const };
         if (!legacyEmitterMicroResponse) return v11Project;
         const { emitterMicroResponse: _emitterMicroResponse, ...v11WithoutEmitterMicro } = v11Project;
@@ -105,8 +113,8 @@ export function createSvg(
         const { displayDislocation: _displayDislocation, ...v10WithoutDisplayDislocation } = v10Project;
         return { ...v10WithoutDisplayDislocation, version: 9 as const };
       })()
-    : state;
-  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation && legacyEmitterMicroResponse && legacyGlyphMicroWarp
+    : v12CompatibilityMetadataState;
+  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation && legacyEmitterMicroResponse && legacyGlyphMicroWarp && legacyGlyphFalloffDisplacement
     ? (() => {
         const {
           artboard: _artboard,
