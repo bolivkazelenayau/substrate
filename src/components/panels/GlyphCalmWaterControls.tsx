@@ -2,6 +2,7 @@ import { GLYPH_CALM_WATER_PARSED_FONT_WARNING } from "../../engine/glyphCalmWate
 import { getControlActivity } from "../../engine/controlOwnership";
 import { baseState } from "../../engine/presets";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface GlyphCalmWaterControlsProps {
   state: ProjectState;
@@ -107,21 +108,5 @@ function Range({ testId, label, value, min, max, step, onChange }: {
   onChange: (value: number) => void;
 }) {
   const resetValue = defaults[label];
-  return (
-    <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input
-        aria-label={label}
-        data-testid={testId}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        title="Double-click to reset"
-        onDoubleClick={() => resetValue !== undefined && onChange(resetValue)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`glyph-geometry.calm-water.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }

@@ -1,5 +1,7 @@
 import { baseState } from "../../engine/presets";
+import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface GlyphInfluenceControlsProps {
   state: ProjectState;
@@ -69,8 +71,8 @@ export function GlyphInfluenceControls({ state, setState, open, onToggle }: Glyp
             onChange={(neighborhoodSize) => patchEmitter({ neighborhoodSize })}
           />}
         </> : <small className="control-note">Each emitter row owns its scope and neighborhood.</small>}
-        <Range testId="glyph-influence-radius" label="Radius" value={settings.radius} min={0} max={640} step={5} onChange={(radius) => patch({ radius })} />
-        <Range testId="glyph-influence-softness" label="Edge softness" value={settings.edgeSoftness} min={0} max={720} step={5} onChange={(edgeSoftness) => patch({ edgeSoftness })} />
+        <Range testId="glyph-influence-radius" label="Radius" value={settings.radius} min={0} max={640} step={5} hardMax={SIZE_HARD_LIMITS.emitterRadius} onChange={(radius) => patch({ radius })} />
+        <Range testId="glyph-influence-softness" label="Edge softness" value={settings.edgeSoftness} min={0} max={720} step={5} hardMax={SIZE_HARD_LIMITS.emitterRadius} onChange={(edgeSoftness) => patch({ edgeSoftness })} />
         <label className="field compact-field">
           <span>Falloff shape</span>
           <select
@@ -90,31 +92,16 @@ export function GlyphInfluenceControls({ state, setState, open, onToggle }: Glyp
   );
 }
 
-function Range({ testId, label, value, min, max, step, onChange }: {
+function Range({ testId, label, value, min, max, hardMax, step, onChange }: {
   testId: string;
   label: string;
   value: number;
   min: number;
   max: number;
+  hardMax?: number;
   step: number;
   onChange: (value: number) => void;
 }) {
   const resetValue = defaults[label];
-  return (
-    <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input
-        aria-label={label}
-        data-testid={testId}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        title="Double-click to reset"
-        onDoubleClick={() => resetValue !== undefined && onChange(resetValue)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`glyph-geometry.influence.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }

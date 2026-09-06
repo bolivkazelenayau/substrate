@@ -1,7 +1,8 @@
 import { baseState } from "../../engine/presets";
 import { getControlActivity } from "../../engine/controlOwnership";
-import { resolveDisplacementBounds, resolveOutlineWidthBounds } from "../../engine/numericBounds";
+import { resolveDisplacementBounds, resolveOutlineWidthBounds, SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface DiffuserAppearancePanelProps {
   state: ProjectState;
@@ -45,7 +46,7 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
         </select>
       </label>
       {state.overlayMode === "outline" && <>
-        <Range label="Outline width" value={state.outlineStrokeWidth} min={outlineBounds.min} max={outlineBounds.softMax} step={outlineBounds.step} onChange={(outlineStrokeWidth) => patchField({ outlineStrokeWidth })} />
+ <Range label="Outline width" value={state.outlineStrokeWidth} min={outlineBounds.min} max={outlineBounds.softMax} hardMax={SIZE_HARD_LIMITS.outlineWidth} step={outlineBounds.step} onChange={(outlineStrokeWidth) => patchField({ outlineStrokeWidth })} />
         {outlineBounds.warningThreshold !== undefined && state.outlineStrokeWidth > outlineBounds.warningThreshold && <small className="inactive-hint">Large centered outlines can close counters.</small>}
       </>}
       {state.overlayMode !== "hidden" && <Range label="Overlay opacity" value={state.textOverlayOpacity} min={0} max={1} step={0.05} onChange={(textOverlayOpacity) => patchField({ textOverlayOpacity })} />}
@@ -66,7 +67,7 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
               <Range label="Warp scale" value={state.outlineWarpScale} min={0.25} max={3} step={0.05} onChange={(outlineWarpScale) => patchField({ outlineWarpScale })} />
               <Range label="Warp smoothing" value={state.outlineWarpSmoothing} min={0} max={1} step={0.05} onChange={(outlineWarpSmoothing) => patchField({ outlineWarpSmoothing })} />
               <Range label="Warp edge bias" value={state.outlineWarpEdgeBias} min={0} max={1} step={0.05} onChange={(outlineWarpEdgeBias) => patchField({ outlineWarpEdgeBias })} />
-              <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={displacementBounds.min} max={displacementBounds.softMax} step={displacementBounds.step} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
+               <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={displacementBounds.min} max={displacementBounds.softMax} hardMax={SIZE_HARD_LIMITS.displacement} step={displacementBounds.step} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
               <label className="debug-toggle"><input type="checkbox" checked={state.preserveCounters} onChange={(event) => patchField({ preserveCounters: event.target.checked })} /><span>Preserve counters</span></label>
             </>
           )}
@@ -76,7 +77,7 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
   );
 }
 
-function Range({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
+function Range({ label, value, min, max, hardMax, step = 1, onChange }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; onChange: (value: number) => void }) {
   const resetValue = defaults[label];
- return <label className="range"><span>{label}<output>{value}</output></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => resetValue !== undefined && onChange(resetValue)} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+ return <NumericRange parameter={`appearance.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} onChange={onChange} />;
 }

@@ -714,6 +714,85 @@ describe("Safe Typography controls", () => {
     ranges.forEach((range) => expect(range.getAttribute("aria-label")).toBeTruthy());
   });
 
+  it("supports exact entry, invalid-input cancellation, and a discoverable per-control reset", () => {
+    renderControls({
+      ...baseState,
+      renderer: "glyph-diffuser",
+      emitter: { ...baseState.emitter, enabled: true, amplitude: 2.4 },
+    });
+    openDisclosure("Emitters");
+
+    const wrapper = [...container.querySelectorAll("label.range")]
+      .find((candidate) => candidate.querySelector(":scope > span")?.textContent?.startsWith("Strength"));
+    expect(wrapper).not.toBeNull();
+    const output = wrapper!.querySelector("output")!;
+    act(() => output.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    const editor = wrapper!.querySelector<HTMLInputElement>("input.range-value-edit")!;
+    expect(editor).not.toBeNull();
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(editor, "not-a-number");
+      editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(updated).toBeNull();
+
+    const currentWrapper = [...container.querySelectorAll("label.range")]
+      .find((candidate) => candidate.querySelector(":scope > span")?.textContent?.startsWith("Strength"))!;
+    act(() => currentWrapper.querySelector("output")!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    const validEditor = currentWrapper.querySelector<HTMLInputElement>("input.range-value-edit")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(validEditor, "2.9");
+      validEditor.dispatchEvent(new Event("input", { bubbles: true }));
+      validEditor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    expect(updated?.emitter.amplitude).toBe(2.9);
+
+    const resetWrapper = [...container.querySelectorAll("label.range")]
+      .find((candidate) => candidate.querySelector(":scope > span")?.textContent?.startsWith("Strength"))!;
+    const reset = resetWrapper.querySelector<HTMLButtonElement>("button.range-reset");
+    expect(reset?.getAttribute("aria-label")).toContain("Reset Strength");
+    act(() => reset!.click());
+    expect(updated?.emitter.amplitude).toBe(baseState.emitter.amplitude);
+  });
+
+  it("uses coherent coarse and fine keyboard tuning without changing stored units", () => {
+    renderControls({
+      ...baseState,
+      renderer: "glyph-diffuser",
+      emitter: { ...baseState.emitter, enabled: true },
+    });
+    openDisclosure("Emitters");
+    const strength = field("Strength", "input") as HTMLInputElement;
+    expect(strength.getAttribute("data-parameter")).toContain("emitters");
+
+    act(() => {
+      strength.focus();
+      strength.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true }));
+      strength.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(updated?.emitter.amplitude).toBeCloseTo(baseState.emitter.amplitude + 0.5, 8);
+
+    updated = null;
+    act(() => {
+      strength.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
+      strength.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const keyboardResult = updated as ProjectState | null;
+    expect(keyboardResult?.emitter.amplitude).toBeCloseTo(baseState.emitter.amplitude + 0.5 + 0.01, 8);
+  });
+
+  it("keeps reset help out of slider names and exposes phase as degrees", () => {
+    renderControls({
+      ...baseState,
+      renderer: "glyph-diffuser",
+      emitter: { ...baseState.emitter, enabled: true, phase: Math.PI / 2 },
+    });
+    openDisclosure("Emitters");
+    const phase = field("Phase", "input") as HTMLInputElement;
+    expect(phase.getAttribute("aria-label")).toBe("Phase");
+    expect(phase.getAttribute("title")).toBeNull();
+    expect(phase.getAttribute("aria-valuetext")).toContain("90");
+  });
+
   it("keeps occupancy as one product control and does not duplicate its legacy boolean", () => {
     renderControls({
       ...baseState,

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { resolveEmitterRadiusBounds } from "../../engine/numericBounds";
+import { resolveEmitterRadiusBounds, SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import { baseState } from "../../engine/presets";
 import { addEmitterRow, duplicateEmitterRow, MAX_EMITTER_ROWS, removeEmitterRow, updateEmitterRow } from "../../engine/emitterEditor";
 import { getGlyphDisplayLabel, type GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
 import type { ProjectState } from "../../types";
+import { NumericRange, type NumericRangeMapping } from "./NumericRange";
 
 interface EmitterControlsProps {
   state: ProjectState;
@@ -86,7 +87,7 @@ export function EmitterControls({ state, setState, emitterGlyphs, consumerActive
                     {invalidGlyph(row.glyphId) && <small className="emitter-inline-warning">Selected glyph is unavailable; this row will be skipped.</small>}
                     {expanded && <div className="emitter-row-details">
                       <Range label="Weight" value={row.weight} min={0} max={2} step={0.05} onChange={(weight) => patchRow(row.id, { weight })} />
-                      <Range label="Phase" value={row.phaseOffset} min={-6.3} max={6.3} step={0.1} onChange={(phaseOffset) => patchRow(row.id, { phaseOffset })} />
+                      <Range label="Phase" value={row.phaseOffset} min={-6.3} max={6.3} step={0.1} displayScale={180 / Math.PI} displayStep={1} unit="°" onChange={(phaseOffset) => patchRow(row.id, { phaseOffset })} />
                       <Range label="Radius ×" value={row.radiusMultiplier} min={0.25} max={2} step={0.05} onChange={(radiusMultiplier) => patchRow(row.id, { radiusMultiplier })} />
                       <label className="field compact-field">
                         <span>Influence scope</span>
@@ -206,9 +207,9 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
       <Range label="Emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
     </>}
     <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
-    <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
-    <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
+    <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} mapping="logarithmic" unit="cycles / world unit" onChange={(frequency) => patchEmitter({ frequency })} />
+    <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} displayScale={180 / Math.PI} displayStep={1} unit="°" onChange={(phase) => patchEmitter({ phase })} />
+    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} hardMax={SIZE_HARD_LIMITS.emitterRadius} step={radiusBounds.step} unit="world units" onChange={(radius) => patchEmitter({ radius })} />
     <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
@@ -231,16 +232,16 @@ function GlobalEmitter({ state, patchEmitter }: { state: ProjectState; patchEmit
       <Range label="Emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
     </>}
     <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
-    <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
-    <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
+    <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} mapping="logarithmic" unit="cycles / world unit" onChange={(frequency) => patchEmitter({ frequency })} />
+    <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} displayScale={180 / Math.PI} displayStep={1} unit="°" onChange={(phase) => patchEmitter({ phase })} />
+    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} hardMax={SIZE_HARD_LIMITS.emitterRadius} step={radiusBounds.step} unit="world units" onChange={(radius) => patchEmitter({ radius })} />
     <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
     <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
     <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
   </div>;
 }
 
-function Range({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
+function Range({ label, value, min, max, hardMax, step = 1, mapping, unit, displayScale, displayStep, onChange }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; mapping?: NumericRangeMapping; unit?: string; displayScale?: number; displayStep?: number; onChange: (value: number) => void }) {
   const resetValue = defaults[label];
- return <label className="range"><span>{label}<output>{value}</output></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => resetValue !== undefined && onChange(resetValue)} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+ return <NumericRange parameter={`emitters.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} mapping={mapping} unit={unit} displayScale={displayScale} displayStep={displayStep} onChange={onChange} />;
 }

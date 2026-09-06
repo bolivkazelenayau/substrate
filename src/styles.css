@@ -87,6 +87,12 @@ textarea { font-family: "Archivo Black", sans-serif; font-size: 20px; text-trans
   border: 1px solid transparent;
 }
 .range output:hover { border-color: var(--line); color: var(--acid); }
+.range-value-button { min-height: 0; padding: 2px 4px; border: 1px solid transparent; background: transparent; color: var(--text); font-size: 10px; text-transform: none; font-variant-numeric: tabular-nums; }
+.range-value-button:hover { border-color: var(--line); color: var(--acid); background: transparent; }
+.range-reset { min-height: 0; padding: 1px 4px; border: 1px solid transparent; color: var(--acid); font-size: 12px; line-height: 1; text-transform: none; }
+.range-reset:hover { border-color: var(--acid); background: transparent; }
+.range.out-of-soft-range output { color: var(--warning); }
+.range-help { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .range-value-edit {
   width: 4.5em;
   min-height: 22px;

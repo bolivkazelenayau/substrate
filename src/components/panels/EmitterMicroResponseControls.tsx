@@ -1,6 +1,8 @@
 import { baseState } from "../../engine/presets";
+import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import { getControlActivity } from "../../engine/controlOwnership";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface EmitterMicroResponseControlsProps {
   state: ProjectState;
@@ -96,6 +98,7 @@ export function EmitterMicroResponseControls({
                   min={8}
                   max={720}
                   step={4}
+                  hardMax={SIZE_HARD_LIMITS.emitterRadius}
                   onChange={(responseRadius) => patch({ responseRadius })}
                 />
                 <label className="field compact-field">
@@ -206,6 +209,7 @@ function Range({
   value,
   min,
   max,
+  hardMax,
   step = 1,
   onChange,
 }: {
@@ -213,24 +217,10 @@ function Range({
   value: number;
   min: number;
   max: number;
+  hardMax?: number;
   step?: number;
   onChange: (value: number) => void;
 }) {
   const resetValue = defaults[label];
-  return (
-    <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input
-        aria-label={label}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        title="Double-click to reset"
-        onDoubleClick={() => onChange(resetValue)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`mark-response.emitter-micro.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} onChange={onChange} />;
 }

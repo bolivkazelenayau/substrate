@@ -18,6 +18,7 @@ import { GlyphDisplacementControls } from "./GlyphDisplacementControls";
 import { GlyphMicroWarpControls } from "./GlyphMicroWarpControls";
 import { GlyphInfluenceControls } from "./GlyphInfluenceControls";
 import { GlyphCalmWaterControls } from "./GlyphCalmWaterControls";
+import { NumericRange } from "./NumericRange";
 
 export interface FieldControlsProps {
   state: ProjectState;
@@ -293,24 +294,6 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
 
 function Range({ label, value, min, max, step = 1, disabled = false, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; defaultValue?: number; onChange: (value: number) => void }) {
   const resetValue = defaultValue ?? rangeDefaults[label];
-  return (
-    <label className={`range${disabled ? " disabled" : ""}`}>
-      <span>{label}<output>{disabled ? "N/A" : value}</output></span>
-      <input
-        aria-label={label}
-        disabled={disabled}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        title={resetValue === undefined ? undefined : "Double-click to reset"}
-        onDoubleClick={() => {
-          if (!disabled && resetValue !== undefined) onChange(resetValue);
-        }}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`field.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={resetValue ?? value} disabled={disabled} onChange={onChange} />;
 }
 

@@ -1,6 +1,7 @@
 import { baseState } from "../../engine/presets";
 import { getControlActivity } from "../../engine/controlOwnership";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface GlyphFalloffDisplacementControlsProps {
   state: ProjectState;
@@ -154,21 +155,5 @@ function Range({
   step: number;
   onChange: (value: number) => void;
 }) {
-  return (
-    <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input
-        aria-label={label}
-        data-testid={testId}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        title="Double-click to reset"
-        onDoubleClick={() => onChange(defaults[label])}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`mark-response.glyph-falloff.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={defaults[label] ?? value} testId={testId} onChange={onChange} />;
 }

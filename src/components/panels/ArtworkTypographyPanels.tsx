@@ -8,6 +8,7 @@ import {
 import type { TextGeometry } from "../../engine/glyphGeometry";
 import type { ProjectState } from "../../types";
 import type { SizeRangeHandlers } from "../../hooks/useSizeInteraction";
+import { NumericRange } from "./NumericRange";
 
 interface ArtworkTypographyPanelsProps {
   state: ProjectState;
@@ -321,17 +322,37 @@ function SizeRange({ label, value, min, max, step = 1, defaultValue, hardMin, ha
           testId="size-value"
           onCommit={commitTyped}
         />
+        {displayValue !== defaultValue && (
+          <button
+            type="button"
+            className="range-reset"
+            aria-label={`Reset ${label} to ${formatRangeValue(defaultValue, step)}`}
+            title={`Reset ${label} to ${formatRangeValue(defaultValue, step)}`}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              scrubbingRef.current = false;
+              setDisplayValue(defaultValue);
+              setInputEpoch((epoch) => epoch + 1);
+              handlers.onDoubleClickReset(displayValue, defaultValue);
+            }}
+          >
+            ↺
+          </button>
+        )}
       </span>
       <input
         key={inputEpoch}
         data-testid="size-control"
         aria-label="Type size"
+        aria-describedby="size-range-help"
+        aria-valuetext={formatRangeValue(displayValue, step)}
         type="range"
         value={sliderValue}
         min={sliderMin}
         max={sliderMax}
         step={step}
-        title="Double-click to reset"
         onPointerDown={(event) => {
           scrubbingRef.current = true;
           const next = Number(event.currentTarget.value);
@@ -340,6 +361,15 @@ function SizeRange({ label, value, min, max, step = 1, defaultValue, hardMin, ha
         }}
         onKeyDown={(event) => {
           scrubbingRef.current = true;
+          if ((event.shiftKey || event.altKey) && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+            const direction = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1;
+            const multiplier = event.shiftKey ? 5 : (step >= 1 ? 1 : 0.1);
+            const next = clampNumber(displayValue + direction * step * multiplier, hardMin, hardMax);
+            event.preventDefault();
+            setDisplayValue(next);
+            handlers.onInput(next, "input");
+            return;
+          }
           handlers.onKeyDown(Number(event.currentTarget.value));
         }}
         onKeyUp={(event) => {
@@ -379,6 +409,7 @@ function SizeRange({ label, value, min, max, step = 1, defaultValue, hardMin, ha
           handlers.onInput(next, "change");
         }}
       />
+      <small id="size-range-help" className="range-help">Arrow adjusts by one step; Shift+Arrow adjusts coarsely; Alt+Arrow adjusts finely. Type size keeps imported values visible outside the normal slider band.</small>
     </label>
   );
 }
@@ -408,35 +439,5 @@ function Range({
 }) {
   const clampMin = hardMin ?? min;
   const clampMax = hardMax ?? max;
-  // Expand the slider track when a typed value sits outside the soft band.
-  const sliderMin = Math.min(min, value, clampMax);
-  const sliderMax = Math.max(max, value, clampMin);
-  const sliderValue = clampNumber(value, sliderMin, sliderMax);
-
-  return (
-    <label className="range">
-      <span>
-        {label}
-        <RangeValueField
-          label={label}
-          value={value}
-          step={step}
-          hardMin={clampMin}
-          hardMax={clampMax}
-          onCommit={onChange}
-        />
-      </span>
-      <input
-        aria-label={label}
-        type="range"
-        value={sliderValue}
-        min={sliderMin}
-        max={sliderMax}
-        step={step}
-        title="Double-click to reset"
-        onDoubleClick={() => onChange(defaultValue)}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`typography.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={defaultValue} hardMin={clampMin} hardMax={clampMax} onChange={onChange} />;
 }

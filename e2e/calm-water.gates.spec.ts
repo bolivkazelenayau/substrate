@@ -105,7 +105,15 @@ async function waterSnapshot(page: Page) {
 }
 
 async function setEmitterRange(page: Page, label: string, value: number) {
-  await page.locator(".emitter-row label.range").filter({ hasText: label }).locator('input[type="range"]').fill(String(value));
+  const range = page.locator(".emitter-row label.range").filter({ hasText: label });
+  const slider = range.locator('input[type="range"]');
+  if (await slider.getAttribute("data-parameter") === "emitters.wave-frequency") {
+    await range.locator("output").dblclick();
+    await range.locator("input.range-value-edit").fill(String(value));
+    await range.locator("input.range-value-edit").press("Enter");
+  } else {
+    await slider.fill(String(value));
+  }
   await waitForReady(page);
 }
 

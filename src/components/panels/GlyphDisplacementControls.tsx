@@ -1,6 +1,8 @@
 import { baseState } from "../../engine/presets";
+import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import { getControlActivity } from "../../engine/controlOwnership";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface GlyphDisplacementControlsProps {
   state: ProjectState;
@@ -92,7 +94,7 @@ export function GlyphDisplacementControls({ state, setState, parsedFontPathsAvai
           </label>}
           <Range testId="glyph-displacement-strength" label="Strength" value={settings.strength} min={0} max={localizedSlice ? 80 : 220} step={2} onChange={(strength) => patchDisplacement({ strength })} />
           {!localizedSlice && <>
-            <Range label="Response radius" value={settings.responseRadius} min={40} max={1200} step={10} onChange={(responseRadius) => patchDisplacement({ responseRadius })} />
+        <Range label="Response radius" value={settings.responseRadius} min={40} max={1200} step={10} hardMax={SIZE_HARD_LIMITS.emitterRadius} onChange={(responseRadius) => patchDisplacement({ responseRadius })} />
             <label className="field compact-field"><span>Falloff</span><select value={settings.falloff} onChange={(event) => patchDisplacement({ falloff: event.target.value as ProjectState["glyphDisplacement"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
           </>}
           {localizedSlice && <small className={state.emitter.enabled ? "control-note" : "control-warning"}>{state.emitter.enabled ? "Radius and edge softness come from the shared Glyph Influence envelope." : "Enable an emitter to position the Slice influence envelope."}</small>}
@@ -177,7 +179,7 @@ export function RendererLocalControls({ state, setState, open, onToggle }: { sta
   );
 }
 
-function Range({ testId, label, value, min, max, step, onChange }: { testId?: string; label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void }) {
+function Range({ testId, label, value, min, max, hardMax, step, onChange }: { testId?: string; label: string; value: number; min: number; max: number; hardMax?: number; step: number; onChange: (value: number) => void }) {
   const resetValue = defaults[label];
- return <label className="range"><span>{label}<output>{value}</output></span><input aria-label={label} data-testid={testId} type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => resetValue !== undefined && onChange(resetValue)} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+ return <NumericRange parameter={`glyph-geometry.fragmentation.${label.toLowerCase().replaceAll(" ", "-").replaceAll("/", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }

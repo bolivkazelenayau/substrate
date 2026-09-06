@@ -1,6 +1,7 @@
 import { baseState } from "../../engine/presets";
 import { getRenderer } from "../../engine/renderers";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface FieldAdvancedPanelProps {
   state: ProjectState;
@@ -48,5 +49,5 @@ export function FieldAdvancedPanel({ state, setState, open, onToggle }: FieldAdv
 export const AdvancedFieldPanel = FieldAdvancedPanel;
 
 function Range({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
- return <label className="range"><span>{label}<output>{value}</output></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => onChange(defaults[label])} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+ return <NumericRange parameter={`field.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={defaults[label] ?? value} onChange={onChange} />;
 }

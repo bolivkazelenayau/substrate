@@ -1,7 +1,9 @@
 import { GLYPH_MICRO_WARP_PARSED_FONT_WARNING } from "../../engine/glyphMicroWarp";
 import { getControlActivity } from "../../engine/controlOwnership";
 import { baseState } from "../../engine/presets";
+import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
+import { NumericRange } from "./NumericRange";
 
 interface GlyphMicroWarpControlsProps {
   state: ProjectState;
@@ -71,7 +73,7 @@ export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailab
       <fieldset disabled={!activity.active}>
         <legend className="visually-hidden">Glyph Micro Warp parameters</legend>
         <Range testId="glyph-micro-warp-strength" label="Strength" value={settings.strength} min={0} max={100} step={1} onChange={(strength) => patch({ strength })} />
-        <Range testId="glyph-micro-warp-radius" label="Response radius" value={settings.responseRadius} min={8} max={640} step={2} onChange={(responseRadius) => patch({ responseRadius })} />
+        <Range testId="glyph-micro-warp-radius" label="Response radius" value={settings.responseRadius} min={8} max={640} step={2} hardMax={SIZE_HARD_LIMITS.emitterRadius} onChange={(responseRadius) => patch({ responseRadius })} />
         <label className="field compact-field">
           <span>Falloff</span>
           <select
@@ -107,30 +109,16 @@ export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailab
   );
 }
 
-function Range({ testId, label, value, min, max, step, onChange }: {
+function Range({ testId, label, value, min, max, hardMax, step, onChange }: {
   testId?: string;
   label: string;
   value: number;
   min: number;
   max: number;
+  hardMax?: number;
   step: number;
   onChange: (value: number) => void;
 }) {
   const resetValue = defaults[label];
-  return (
-    <label className="range">
-      <span>{label}<output>{value}</output></span>
-      <input
-        aria-label={label}
-        data-testid={testId}
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(Number(event.target.value))}
-        onDoubleClick={() => resetValue !== undefined && onChange(resetValue)}
-      />
-    </label>
-  );
+  return <NumericRange parameter={`glyph-geometry.micro-warp.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }
