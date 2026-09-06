@@ -628,6 +628,7 @@ snapshot = captureExportSnapshot({
             onToggleFpsMeter={import.meta.env.DEV ? () => setFpsMeterOpen((open) => !open) : undefined}
             sizeDisplayFontSize={sizeDisplayFontSize(sizeInteraction)}
             sizeHandlers={sizeHandlers}
+            maxNodesClipped={geometrySummary.maxNodesClipped}
           />
         </Profiler>
         <section className="viewport-shell">

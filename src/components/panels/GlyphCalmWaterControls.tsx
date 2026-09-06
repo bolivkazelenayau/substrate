@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { GLYPH_CALM_WATER_PARSED_FONT_WARNING } from "../../engine/glyphCalmWater";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import { baseState } from "../../engine/presets";
 import type { ProjectState } from "../../types";
 import { NumericRange } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { featureSummary, productStateLabel } from "./productSurfaceState";
 
 interface GlyphCalmWaterControlsProps {
   state: ProjectState;
@@ -24,11 +28,14 @@ const defaults: Record<string, number> = {
 export function GlyphCalmWaterControls({ state, setState, parsedFontPathsAvailable, open, onToggle }: GlyphCalmWaterControlsProps) {
   const settings = state.glyphCalmWater;
   const activity = getControlActivity(state, parsedFontPathsAvailable).glyphCalmWaterActivity;
+  const featureState = getProductFeatureState(state, "calm-water");
+  const [tuningOpen, setTuningOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const canToggle = activity.supported || settings.enabled;
   const summary = activity.retained
     ? "Calm Water · retained / inactive"
     : activity.supported
-      ? "Calm Water"
+      ? featureSummary("Calm Water", featureState)
       : "Calm Water · unavailable";
   const patch = (next: Partial<ProjectState["glyphCalmWater"]>) => setState({
     ...state,
@@ -82,23 +89,22 @@ export function GlyphCalmWaterControls({ state, setState, parsedFontPathsAvailab
           : <Range testId="glyph-calm-water-wavelength" label="Wavelength" value={settings.wavelength} min={40} max={520} step={5} onChange={(wavelength) => patch({ wavelength })} />}
         <Range testId="glyph-calm-water-variation" label="Surface variation" value={settings.surfaceVariation} min={0} max={100} step={2} onChange={(surfaceVariation) => patch({ surfaceVariation })} />
         <Range testId="glyph-calm-water-drift" label="Drift" value={settings.drift} min={0} max={40} step={1} onChange={(drift) => patch({ drift })} />
-        <Range testId="glyph-calm-water-detail" label="Detail" value={settings.detail} min={0} max={60} step={1} onChange={(detail) => patch({ detail })} />
+      </fieldset>
+      <ProductSurfaceDisclosure label="Custom tuning…" open={tuningOpen} onToggle={() => setTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="glyph-calm-water-tuning">
+        <Range testId="glyph-calm-water-detail" label="Detail" value={settings.detail} min={0} max={60} step={1} onChange={(detail) => patch({ detail })} controlId="glyphCalmWater.detail" />
+      </ProductSurfaceDisclosure>
+      <ProductSurfaceDisclosure label="Safety" surface="SAFETY" open={safetyOpen} onToggle={() => setSafetyOpen((value) => !value)} testId="glyph-calm-water-safety">
         <label className="debug-toggle">
-          <input
-            data-testid="glyph-calm-water-preserve-counters"
-            type="checkbox"
-            checked={settings.preserveCounters}
-            onChange={(event) => patch({ preserveCounters: event.target.checked })}
-          />
+          <input data-testid="glyph-calm-water-preserve-counters" type="checkbox" checked={settings.preserveCounters} onChange={(event) => patch({ preserveCounters: event.target.checked })} />
           <span>Preserve counters and topology</span>
         </label>
-      </fieldset>
+      </ProductSurfaceDisclosure>
       </div>}
     </div>
   );
 }
 
-function Range({ testId, label, value, min, max, step, onChange }: {
+function Range({ testId, label, value, min, max, step, onChange, controlId }: {
   testId: string;
   label: string;
   value: number;
@@ -106,7 +112,8 @@ function Range({ testId, label, value, min, max, step, onChange }: {
   max: number;
   step: number;
   onChange: (value: number) => void;
+  controlId?: string;
 }) {
   const resetValue = defaults[label];
-  return <NumericRange parameter={`glyph-geometry.calm-water.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
+  return <NumericRange parameter={`glyph-geometry.calm-water.${label.toLowerCase().replaceAll(" ", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }

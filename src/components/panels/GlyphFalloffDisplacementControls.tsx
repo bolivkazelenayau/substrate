@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { baseState } from "../../engine/presets";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import type { ProjectState } from "../../types";
 import { NumericRange } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { featureSummary, productStateLabel } from "./productSurfaceState";
 
 interface GlyphFalloffDisplacementControlsProps {
   state: ProjectState;
@@ -29,6 +33,8 @@ export function GlyphFalloffDisplacementControls({
 }: GlyphFalloffDisplacementControlsProps) {
   const settings = state.glyphFalloffDisplacement;
   const activity = getControlActivity(state, true).glyphFalloffDisplacementActivity;
+  const featureState = getProductFeatureState(state, "glyph-falloff");
+  const [tuningOpen, setTuningOpen] = useState(false);
   const patch = (next: Partial<ProjectState["glyphFalloffDisplacement"]>) => setState({
     ...state,
     glyphFalloffDisplacement: { ...settings, ...next },
@@ -38,7 +44,7 @@ export function GlyphFalloffDisplacementControls({
   const summary = activity.retained
     ? "Glyph Falloff Field · retained / inactive"
     : activity.supported
-      ? "Glyph Falloff Field"
+      ? featureSummary("Glyph Falloff Field", featureState)
       : "Glyph Falloff Field · unavailable";
 
   return (
@@ -117,21 +123,15 @@ export function GlyphFalloffDisplacementControls({
                   step={0.5}
                   onChange={(ringFrequency) => patch({ ringFrequency })}
                 />
-                <Range
-                  testId="glyph-falloff-ring-sharpness"
-                  label="Ring sharpness"
-                  value={settings.ringSharpness}
-                  min={0.5}
-                  max={8}
-                  step={0.1}
-                  onChange={(ringSharpness) => patch({ ringSharpness })}
-                />
                 <small className="control-note">
                   Frequency is the number of contour-following cycles across the field width; falloff controls their decay.
                 </small>
               </>
             )}
           </fieldset>}
+          <ProductSurfaceDisclosure label="Custom tuning…" open={tuningOpen} onToggle={() => setTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="glyph-falloff-tuning">
+            <Range testId="glyph-falloff-ring-sharpness" label="Ring sharpness" value={settings.ringSharpness} min={0.5} max={8} step={0.1} onChange={(ringSharpness) => patch({ ringSharpness })} controlId="glyphFalloffDisplacement.ringSharpness" />
+          </ProductSurfaceDisclosure>
         </div>
       )}
     </div>
@@ -146,6 +146,7 @@ function Range({
   max,
   step,
   onChange,
+  controlId,
 }: {
   testId: string;
   label: string;
@@ -154,6 +155,7 @@ function Range({
   max: number;
   step: number;
   onChange: (value: number) => void;
+  controlId?: string;
 }) {
-  return <NumericRange parameter={`mark-response.glyph-falloff.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} step={step} resetValue={defaults[label] ?? value} testId={testId} onChange={onChange} />;
+  return <NumericRange parameter={`mark-response.glyph-falloff.${label.toLowerCase().replaceAll(" ", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} step={step} resetValue={defaults[label] ?? value} testId={testId} onChange={onChange} />;
 }

@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { GLYPH_MICRO_WARP_PARSED_FONT_WARNING } from "../../engine/glyphMicroWarp";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import { baseState } from "../../engine/presets";
 import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
 import { NumericRange } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { featureSummary, productStateLabel } from "./productSurfaceState";
 
 interface GlyphMicroWarpControlsProps {
   state: ProjectState;
@@ -29,11 +33,14 @@ const defaults: Record<string, number> = {
 export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailable, open, onToggle }: GlyphMicroWarpControlsProps) {
   const settings = state.glyphMicroWarp;
   const activity = getControlActivity(state, parsedFontPathsAvailable).glyphMicroWarpActivity;
+  const featureState = getProductFeatureState(state, "micro-warp");
+  const [tuningOpen, setTuningOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const canToggle = activity.supported || settings.enabled;
   const summary = activity.retained
     ? "Glyph Micro Warp · retained / inactive"
     : activity.supported
-      ? "Glyph Micro Warp"
+      ? featureSummary("Glyph Micro Warp", featureState)
       : "Glyph Micro Warp · unavailable";
   const patch = (next: Partial<ProjectState["glyphMicroWarp"]>) => setState({
     ...state,
@@ -86,30 +93,29 @@ export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailab
             <option value="linear">Linear</option>
           </select>
         </label>
-        <Range testId="glyph-micro-warp-detail-scale" label="Detail scale" value={settings.detailScale} min={4} max={160} step={1} onChange={(detailScale) => patch({ detailScale })} />
-        <Range label="Detail octaves" value={settings.detailOctaves} min={1} max={3} step={1} onChange={(detailOctaves) => patch({ detailOctaves })} />
+        <Range testId="glyph-micro-warp-detail-scale" label="Detail scale" value={settings.detailScale} min={4} max={160} step={1} onChange={(detailScale) => patch({ detailScale })} controlId="glyphMicroWarp.detailScale" />
         <Range testId="glyph-micro-warp-normal" label="Normal displacement" value={settings.normalDisplacement} min={0} max={100} step={1} onChange={(normalDisplacement) => patch({ normalDisplacement })} />
         <Range testId="glyph-micro-warp-tangent" label="Tangential displacement" value={settings.tangentialDisplacement} min={0} max={100} step={1} onChange={(tangentialDisplacement) => patch({ tangentialDisplacement })} />
-        <Range label="Edge turbulence" value={settings.edgeTurbulence} min={0} max={100} step={1} onChange={(edgeTurbulence) => patch({ edgeTurbulence })} />
-        <Range label="Detail steps" value={settings.quantizationSteps} min={0} max={16} step={1} onChange={(quantizationSteps) => patch({ quantizationSteps })} />
-        <Range testId="glyph-micro-warp-max" label="Maximum displacement" value={settings.maxDisplacement} min={0} max={48} step={0.5} onChange={(maxDisplacement) => patch({ maxDisplacement })} />
+        <Range label="Edge turbulence" value={settings.edgeTurbulence} min={0} max={100} step={1} onChange={(edgeTurbulence) => patch({ edgeTurbulence })} controlId="glyphMicroWarp.edgeTurbulence" />
+      </fieldset>
+      <ProductSurfaceDisclosure label="Custom tuning…" open={tuningOpen} onToggle={() => setTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="glyph-micro-warp-tuning">
+        <Range label="Detail octaves" value={settings.detailOctaves} min={1} max={3} step={1} onChange={(detailOctaves) => patch({ detailOctaves })} controlId="glyphMicroWarp.detailOctaves" />
+        <Range label="Detail steps" value={settings.quantizationSteps} min={0} max={16} step={1} onChange={(quantizationSteps) => patch({ quantizationSteps })} controlId="glyphMicroWarp.quantizationSteps" />
+        <Range label="Seed influence" value={settings.seedInfluence} min={0} max={100} step={5} onChange={(seedInfluence) => patch({ seedInfluence })} controlId="glyphMicroWarp.seedInfluence" />
+      </ProductSurfaceDisclosure>
+      <ProductSurfaceDisclosure label="Safety" surface="SAFETY" open={safetyOpen} onToggle={() => setSafetyOpen((value) => !value)} testId="glyph-micro-warp-safety">
+        <Range testId="glyph-micro-warp-max" label="Maximum displacement" value={settings.maxDisplacement} min={0} max={48} step={0.5} onChange={(maxDisplacement) => patch({ maxDisplacement })} controlId="glyphMicroWarp.maxDisplacement" />
         <label className="debug-toggle">
-          <input
-            data-testid="glyph-micro-warp-preserve-counters"
-            type="checkbox"
-            checked={settings.preserveCounters}
-            onChange={(event) => patch({ preserveCounters: event.target.checked })}
-          />
+          <input data-testid="glyph-micro-warp-preserve-counters" type="checkbox" checked={settings.preserveCounters} onChange={(event) => patch({ preserveCounters: event.target.checked })} />
           <span>Preserve counters and topology</span>
         </label>
-        <Range label="Seed influence" value={settings.seedInfluence} min={0} max={100} step={5} onChange={(seedInfluence) => patch({ seedInfluence })} />
-      </fieldset>
+      </ProductSurfaceDisclosure>
       </div>}
     </div>
   );
 }
 
-function Range({ testId, label, value, min, max, hardMax, step, onChange }: {
+function Range({ testId, label, value, min, max, hardMax, step, onChange, controlId }: {
   testId?: string;
   label: string;
   value: number;
@@ -118,7 +124,8 @@ function Range({ testId, label, value, min, max, hardMax, step, onChange }: {
   hardMax?: number;
   step: number;
   onChange: (value: number) => void;
+  controlId?: string;
 }) {
   const resetValue = defaults[label];
-  return <NumericRange parameter={`glyph-geometry.micro-warp.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
+  return <NumericRange parameter={`glyph-geometry.micro-warp.${label.toLowerCase().replaceAll(" ", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }

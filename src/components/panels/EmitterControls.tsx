@@ -1,10 +1,13 @@
-import { useState } from "react";
 import { resolveEmitterRadiusBounds, SIZE_HARD_LIMITS } from "../../engine/numericBounds";
+import { useState } from "react";
 import { baseState } from "../../engine/presets";
 import { addEmitterRow, duplicateEmitterRow, MAX_EMITTER_ROWS, removeEmitterRow, updateEmitterRow } from "../../engine/emitterEditor";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import { getGlyphDisplayLabel, type GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
 import type { ProjectState } from "../../types";
 import { NumericRange, type NumericRangeMapping } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { featureSummary, productStateLabel } from "./productSurfaceState";
 
 interface EmitterControlsProps {
   state: ProjectState;
@@ -141,14 +144,23 @@ export function EmitterDisplayResponseControls({
   open: boolean;
   onToggle: () => void;
 }) {
+  const [tuningOpen, setTuningOpen] = useState(false);
   const display = state.emitterDisplay;
   const exterior = display.mode === "exclude" || display.mode === "orbit";
   const configured = display.mode !== "field";
   const active = supported && state.emitter.enabled && configured;
+  const featureState = getProductFeatureState(state, "emitter-display-response");
+  const legacyState = getProductFeatureState(state, "legacy-interior-suppression");
+  const surfaceStatus = legacyState.state === "legacy" ? productStateLabel(legacyState) : productStateLabel(featureState);
+  const summary = configured && !active
+    ? "Emitter Display Response · retained / inactive"
+    : supported
+      ? featureSummary("Emitter Display Response", legacyState.state === "legacy" ? legacyState : featureState)
+      : "Emitter Display Response · unavailable";
   return <div className={`control-group accordion-group emitter-display-response${configured && !active ? " retained-group" : ""}`} data-testid="emitter-display-response" data-owner="Emitter Display Response">
     <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}>
       <span aria-hidden="true">{open ? "▼" : "▶"}</span>
-      {configured && !active ? "Emitter Display Response · retained / inactive" : supported ? "Emitter Display Response" : "Emitter Display Response · unavailable"}
+      {summary}
     </button>
     {open && <div className="accordion-content">
     <small className={active || !configured ? "inactive-hint" : "control-warning"}>
@@ -171,14 +183,9 @@ export function EmitterDisplayResponseControls({
       </select>
       <small>Uses the authoritative glyph substrate; strongest near enabled emitter zones.</small>
     </label>
-    {display.mode !== "field" && <>
+      {display.mode !== "field" && <>
       <Range label="Micro distortion" value={display.distortionStrength} min={0} max={100} onChange={(distortionStrength) => patchDisplay({ distortionStrength })} />
       <Range label="Response radius" value={display.distortionRadius} min={8} max={720} step={4} onChange={(distortionRadius) => patchDisplay({ distortionRadius })} />
-      <Range label="Noise scale" value={display.noiseScale} min={2} max={160} step={2} onChange={(noiseScale) => patchDisplay({ noiseScale })} />
-      <Range label="Grid size" value={display.gridSize} min={0} max={96} onChange={(gridSize) => patchDisplay({ gridSize })} />
-      <Range label="Grid amount" value={display.gridAmount} min={0} max={100} onChange={(gridAmount) => patchDisplay({ gridAmount })} />
-      <Range label="Edge bias" value={display.edgeBias} min={0} max={100} onChange={(edgeBias) => patchDisplay({ edgeBias })} />
-      {exterior && <Range label="Interior suppression" value={display.interiorSuppression} min={0} max={100} onChange={(interiorSuppression) => patchDisplay({ interiorSuppression })} />}
       {display.mode === "orbit" && <>
         <Range label="Orbit amount" value={display.orbitAmount} min={0} max={100} onChange={(orbitAmount) => patchDisplay({ orbitAmount })} />
         <Range label="Settle / repel" value={display.divergence} min={-100} max={100} onChange={(divergence) => patchDisplay({ divergence })} />
@@ -186,6 +193,14 @@ export function EmitterDisplayResponseControls({
       <small className="inactive-hint">Grid size 0 disables quantization. Negative settle/repel values pull toward the contour; positive values push outward.</small>
     </>}
     </fieldset>
+    <ProductSurfaceDisclosure label="Custom tuning…" open={tuningOpen} onToggle={() => setTuningOpen((value) => !value)} status={surfaceStatus} testId="emitter-display-tuning">
+      <Range label="Noise scale" value={display.noiseScale} min={2} max={160} step={2} onChange={(noiseScale) => patchDisplay({ noiseScale })} controlId="emitterDisplay.noiseScale" />
+      <Range label="Grid size" value={display.gridSize} min={0} max={96} onChange={(gridSize) => patchDisplay({ gridSize })} controlId="emitterDisplay.gridSize" />
+      <Range label="Grid amount" value={display.gridAmount} min={0} max={100} onChange={(gridAmount) => patchDisplay({ gridAmount })} controlId="emitterDisplay.gridAmount" />
+      <Range label="Edge bias" value={display.edgeBias} min={0} max={100} onChange={(edgeBias) => patchDisplay({ edgeBias })} controlId="emitterDisplay.edgeBias" />
+      {exterior && <Range label="Interior suppression" value={display.interiorSuppression} min={0} max={100} onChange={(interiorSuppression) => patchDisplay({ interiorSuppression })} controlId="emitterDisplay.interiorSuppression" />}
+      {legacyState.state === "legacy" && <small className="control-warning">Legacy suppression active; this retained pipeline value is not Occupancy.</small>}
+    </ProductSurfaceDisclosure>
     </div>}
   </div>;
 }
@@ -241,7 +256,7 @@ function GlobalEmitter({ state, patchEmitter }: { state: ProjectState; patchEmit
   </div>;
 }
 
-function Range({ label, value, min, max, hardMax, step = 1, mapping, unit, displayScale, displayStep, onChange }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; mapping?: NumericRangeMapping; unit?: string; displayScale?: number; displayStep?: number; onChange: (value: number) => void }) {
+function Range({ label, value, min, max, hardMax, step = 1, mapping, unit, displayScale, displayStep, onChange, controlId }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; mapping?: NumericRangeMapping; unit?: string; displayScale?: number; displayStep?: number; onChange: (value: number) => void; controlId?: string }) {
   const resetValue = defaults[label];
- return <NumericRange parameter={`emitters.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} mapping={mapping} unit={unit} displayScale={displayScale} displayStep={displayStep} onChange={onChange} />;
+ return <NumericRange parameter={`emitters.${label.toLowerCase().replaceAll(" ", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} mapping={mapping} unit={unit} displayScale={displayScale} displayStep={displayStep} onChange={onChange} />;
 }

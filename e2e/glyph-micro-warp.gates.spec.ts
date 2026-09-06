@@ -17,6 +17,11 @@ async function openDisclosure(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: /Export SVG/ })).toBeEnabled({ timeout: 60_000 });
@@ -38,6 +43,8 @@ async function loadPrivateSonics(page: Page) {
   await waitForReady(page);
   await pinSvgPreview(page);
   await openDisclosure(page, "Glyph Micro Warp");
+  await openSurfaceDisclosure(page, "glyph-micro-warp-tuning");
+  await openSurfaceDisclosure(page, "glyph-micro-warp-safety");
 }
 
 async function authoritativePaths(page: Page) {
@@ -163,6 +170,8 @@ test("Glyph Micro Warp four-state outline, locality, parity, export, and legacy 
   await page.getByTestId("glyph-micro-warp-enabled").uncheck();
   await expect.poll(authoritativeSignature.bind(null, page)).toBe(baselineOutline);
   await openDisclosure(page, "Emitter Micro Response");
+  await openSurfaceDisclosure(page, "emitter-micro-tuning");
+  await openSurfaceDisclosure(page, "emitter-micro-safety");
   await page.getByTestId("emitter-micro-enabled").check();
   await setMarkRange(page, "Response radius", 300);
   await setMarkRange(page, "Position detail", 78);

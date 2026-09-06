@@ -39,6 +39,11 @@ async function openDisclosure(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function setPreviewBackend(page: Page, backend: "svg-dom" | "canvas-2d") {
   await openPreviewPanel(page);
   await page.getByLabel("Preview Mode").selectOption(backend);
@@ -91,6 +96,7 @@ async function loadFragmentMatrix(page: Page, scenario: GlyphDisplacementScenari
   await expect(size(page)).toBeVisible();
   await page.locator(".preset-renderer-section select").selectOption("Fragment Matrix");
   await openDisclosure(page, "Glyph Fragmentation");
+  await openSurfaceDisclosure(page, "glyph-displacement-tuning");
   await openDisclosure(page, "Renderer-local controls");
   const pause = page.getByRole("button", { name: "Pause animation" });
   if (await pause.count()) await pause.click();

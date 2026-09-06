@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { baseState } from "../../engine/presets";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import { resolveDisplacementBounds, resolveOutlineWidthBounds, SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import type { ProjectState } from "../../types";
 import { NumericRange } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { productStateLabel } from "./productSurfaceState";
 
 interface DiffuserAppearancePanelProps {
   state: ProjectState;
@@ -24,9 +28,13 @@ const defaults: Record<string, number> = {
 };
 
 export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvailable }: DiffuserAppearancePanelProps) {
+  const [erosionTuningOpen, setErosionTuningOpen] = useState(false);
+  const [warpTuningOpen, setWarpTuningOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   if (state.renderer !== "glyph-diffuser") return null;
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const activity = getControlActivity(state, parsedFontPathsAvailable);
+  const featureState = getProductFeatureState(state, "appearance");
   const boundsContext = {
     artboardWidth: state.artboard.width,
     artboardHeight: state.artboard.height,
@@ -37,7 +45,7 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
 
   return (
     <div className="control-group nested-group">
-      <div className="section-subheading">Overlay & Effects</div>
+      <div className="section-subheading">Overlay & Effects{productStateLabel(featureState) && <span className="surface-status"> · {productStateLabel(featureState)}</span>}</div>
       <label className="field compact-field">
         <span>Overlay mode</span>
         <select value={state.overlayMode} onChange={(event) => patchField({ overlayMode: event.target.value as ProjectState["overlayMode"] })}>
@@ -54,8 +62,10 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
         <div className="control-group nested-group" style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px dashed #2a2a26" }}>
           <div className="section-subheading">Edge Erosion</div>
           <Range label="Edge erosion" value={state.edgeErosionAmount} min={0} max={1} step={0.05} onChange={(edgeErosionAmount) => patchField({ edgeErosionAmount })} />
-          <Range label="Erosion width" value={state.edgeErosionWidth} min={0} max={64} onChange={(edgeErosionWidth) => patchField({ edgeErosionWidth })} />
-          <Range label="Interior protection" value={state.interiorProtection} min={0} max={1} step={0.05} onChange={(interiorProtection) => patchField({ interiorProtection })} />
+          <ProductSurfaceDisclosure label="Custom tuning…" open={erosionTuningOpen} onToggle={() => setErosionTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="edge-erosion-tuning">
+            <Range label="Erosion width" value={state.edgeErosionWidth} min={0} max={64} onChange={(edgeErosionWidth) => patchField({ edgeErosionWidth })} controlId="edgeErosionWidth" />
+            <Range label="Interior protection" value={state.interiorProtection} min={0} max={1} step={0.05} onChange={(interiorProtection) => patchField({ interiorProtection })} controlId="interiorProtection" />
+          </ProductSurfaceDisclosure>
         </div>
       )}
       {state.overlayMode === "warped-outline" && (
@@ -65,19 +75,23 @@ export function DiffuserAppearancePanel({ state, setState, parsedFontPathsAvaila
             <>
               <Range label="Warp amount" value={state.outlineWarpAmount} min={0} max={60} onChange={(outlineWarpAmount) => patchField({ outlineWarpAmount })} />
               <Range label="Warp scale" value={state.outlineWarpScale} min={0.25} max={3} step={0.05} onChange={(outlineWarpScale) => patchField({ outlineWarpScale })} />
-              <Range label="Warp smoothing" value={state.outlineWarpSmoothing} min={0} max={1} step={0.05} onChange={(outlineWarpSmoothing) => patchField({ outlineWarpSmoothing })} />
-              <Range label="Warp edge bias" value={state.outlineWarpEdgeBias} min={0} max={1} step={0.05} onChange={(outlineWarpEdgeBias) => patchField({ outlineWarpEdgeBias })} />
-               <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={displacementBounds.min} max={displacementBounds.softMax} hardMax={SIZE_HARD_LIMITS.displacement} step={displacementBounds.step} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} />
-              <label className="debug-toggle"><input type="checkbox" checked={state.preserveCounters} onChange={(event) => patchField({ preserveCounters: event.target.checked })} /><span>Preserve counters</span></label>
+              <ProductSurfaceDisclosure label="Custom tuning…" open={warpTuningOpen} onToggle={() => setWarpTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="outline-warp-tuning">
+                <Range label="Warp smoothing" value={state.outlineWarpSmoothing} min={0} max={1} step={0.05} onChange={(outlineWarpSmoothing) => patchField({ outlineWarpSmoothing })} controlId="outlineWarpSmoothing" />
+                <Range label="Warp edge bias" value={state.outlineWarpEdgeBias} min={0} max={1} step={0.05} onChange={(outlineWarpEdgeBias) => patchField({ outlineWarpEdgeBias })} controlId="outlineWarpEdgeBias" />
+              </ProductSurfaceDisclosure>
             </>
           )}
+          <ProductSurfaceDisclosure label="Safety" surface="SAFETY" open={safetyOpen} onToggle={() => setSafetyOpen((value) => !value)} testId="outline-warp-safety">
+            <Range label="Max displacement" value={state.outlineWarpMaxDisplacement} min={displacementBounds.min} max={displacementBounds.softMax} hardMax={SIZE_HARD_LIMITS.displacement} step={displacementBounds.step} onChange={(outlineWarpMaxDisplacement) => patchField({ outlineWarpMaxDisplacement })} controlId="outlineWarpMaxDisplacement" />
+            <label className="debug-toggle"><input type="checkbox" checked={state.preserveCounters} onChange={(event) => patchField({ preserveCounters: event.target.checked })} /><span>Preserve counters</span></label>
+          </ProductSurfaceDisclosure>
         </div>
       )}
     </div>
   );
 }
 
-function Range({ label, value, min, max, hardMax, step = 1, onChange }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; onChange: (value: number) => void }) {
+function Range({ label, value, min, max, hardMax, step = 1, onChange, controlId }: { label: string; value: number; min: number; max: number; hardMax?: number; step?: number; onChange: (value: number) => void; controlId?: string }) {
   const resetValue = defaults[label];
- return <NumericRange parameter={`appearance.${label.toLowerCase().replaceAll(" ", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} onChange={onChange} />;
+ return <NumericRange parameter={`appearance.${label.toLowerCase().replaceAll(" ", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} onChange={onChange} />;
 }

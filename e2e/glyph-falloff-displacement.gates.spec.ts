@@ -19,6 +19,11 @@ async function openAccordion(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(stage(page)).toHaveAttribute("data-text-geometry-key", /.+/, { timeout: 60_000 });
@@ -42,6 +47,7 @@ async function loadScenario(page: Page) {
   await waitForReady(page);
   await setPreviewBackend(page, "svg-dom");
   await openAccordion(page, "Glyph Falloff Field");
+  await openSurfaceDisclosure(page, "glyph-falloff-tuning");
   await openAccordion(page, "Emitter Micro Response");
 }
 

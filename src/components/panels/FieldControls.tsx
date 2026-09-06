@@ -42,6 +42,7 @@ export interface FieldControlsProps {
   onToggleFpsMeter?: () => void;
   sizeDisplayFontSize: number;
   sizeHandlers: SizeRangeHandlers;
+  maxNodesClipped?: boolean;
 }
 
 const fieldControls: Array<{ id: FieldControlId; label: string; min: number; max: number; step?: number }> = [
@@ -100,7 +101,7 @@ const rangeDefaults: Record<string, number> = {
   "Dot spacing": baseState.waveDotSpacing,
 };
 
-export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter, sizeDisplayFontSize, sizeHandlers }: FieldControlsProps) {
+export const FieldControls = memo(function FieldControls({ state, setState, fileRef, onImport, fontFileRef, onFontUpload, onClearFont, fontLoaded, parsedFontPathsAvailable, previewSettings, onPreviewSettingsChange, emitterGlyphs, textGeometry, diagnosticsMode, onDiagnosticsModeChange, webGpuOverlayOpen, fpsMeterOpen, onToggleWebGpuOverlay, onToggleFpsMeter, sizeDisplayFontSize, sizeHandlers, maxNodesClipped = false }: FieldControlsProps) {
   // Control commit coalescing (P0 perf). Slider/color drags fire `input` events
   // faster than the frame rate; committing each one synchronously re-runs the
   // whole document pipeline (geometry regen + SVG reconcile) several times per
@@ -260,7 +261,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
       </PipelineStage>
 
       <PipelineStage id="renderer" number="05" title="Renderer">
-        <RendererControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} localOpen={isOpen("rendererLocal")} onToggleLocal={() => toggleGroup("rendererLocal")} advancedOpen={isOpen("rendererAdvanced")} onToggleAdvanced={() => toggleGroup("rendererAdvanced")} />
+        <RendererControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} localOpen={isOpen("rendererLocal")} onToggleLocal={() => toggleGroup("rendererLocal")} advancedOpen={isOpen("rendererAdvanced")} onToggleAdvanced={() => toggleGroup("rendererAdvanced")} maxNodesClipped={maxNodesClipped} />
       </PipelineStage>
 
       <PipelineStage id="mark-response" number="06" title="Mark Response">
@@ -290,6 +291,7 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
   && previous.fpsMeterOpen === next.fpsMeterOpen
   && previous.sizeDisplayFontSize === next.sizeDisplayFontSize
   && previous.sizeHandlers === next.sizeHandlers
+  && previous.maxNodesClipped === next.maxNodesClipped
 ));
 
 function Range({ label, value, min, max, step = 1, disabled = false, defaultValue, onChange }: { label: string; value: number; min: number; max: number; step?: number; disabled?: boolean; defaultValue?: number; onChange: (value: number) => void }) {

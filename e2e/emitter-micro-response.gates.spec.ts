@@ -22,6 +22,11 @@ async function openDisclosure(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(stage(page)).toHaveAttribute("data-text-geometry-key", /.+/, { timeout: 60_000 });
@@ -45,7 +50,11 @@ async function loadPrivateSonics(page: Page) {
   await waitForReady(page);
   await pinSvgPreview(page);
   await openMicroResponse(page);
+  await openSurfaceDisclosure(page, "emitter-micro-tuning");
+  await openSurfaceDisclosure(page, "emitter-micro-safety");
   await openDisclosure(page, "Glyph Micro Warp");
+  await openSurfaceDisclosure(page, "glyph-micro-warp-tuning");
+  await openSurfaceDisclosure(page, "glyph-micro-warp-safety");
 }
 
 async function setMicroRange(page: Page, label: string, value: number) {
@@ -472,6 +481,8 @@ test("Display Dislocation retains coarse regions while microdetail composes and 
   await waitForReady(page);
   await pinSvgPreview(page);
   await openMicroResponse(page);
+  await openSurfaceDisclosure(page, "emitter-micro-tuning");
+  await openSurfaceDisclosure(page, "emitter-micro-safety");
   await expect(stage(page)).toHaveAttribute("data-display-dislocation-active", "true");
   const baselineSignature = await circleSignature(page);
   const baseline = await stage(page).evaluate((node) => ({

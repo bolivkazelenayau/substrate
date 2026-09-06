@@ -20,6 +20,12 @@ async function openDisclosure(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  await expect(button).toHaveCount(1);
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", /^(ready|not-required)$/, { timeout: 60_000 });
   await expect(page.getByRole("button", { name: /Export SVG/ })).toBeEnabled({ timeout: 60_000 });
@@ -67,6 +73,7 @@ test.describe("Semantic UI Alignment", () => {
     await expect(page.getByTestId("field-advanced-controls").locator("xpath=ancestor::section[@data-stage]")).toHaveAttribute("data-stage", "field");
     await expect(page.getByTestId("field-advanced-controls")).toContainText("Emitter blend");
     await openDisclosure(page, "Renderer detail");
+    await openSurfaceDisclosure(page, "renderer-performance-safety");
     await expect(page.getByTestId("renderer-advanced-controls")).toContainText("Renderer safety");
   });
 

@@ -16,6 +16,11 @@ async function openDisclosure(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openSurfaceDisclosure(page: Page, testId: string) {
+  const button = page.getByTestId(testId).locator("button.surface-disclosure-summary");
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(page.getByRole("button", { name: /Export SVG/ })).toBeEnabled({ timeout: 60_000 });
@@ -32,6 +37,7 @@ async function loadPreset(page: Page, preset: "Calm Current" | "Tidal Slice") {
   await waitForReady(page);
   await openDisclosure(page, "Glyph Influence");
   await openDisclosure(page, "Calm Water");
+  await openSurfaceDisclosure(page, "glyph-calm-water-tuning");
   await openDisclosure(page, "Glyph Fragmentation");
   await openDisclosure(page, "Emitter Micro Response");
 }
@@ -47,6 +53,7 @@ async function loadPrivateSonics(page: Page) {
   await waitForReady(page);
   await openDisclosure(page, "Glyph Influence");
   await openDisclosure(page, "Calm Water");
+  await openSurfaceDisclosure(page, "glyph-calm-water-tuning");
   await openDisclosure(page, "Glyph Fragmentation");
 }
 

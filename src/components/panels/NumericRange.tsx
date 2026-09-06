@@ -1,10 +1,13 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { getControlOwnership } from "../../engine/parameterOwnership";
 
 export type NumericRangeMapping = "linear" | "logarithmic";
 
 export interface NumericRangeProps {
   /** Stable semantic identity. Reset behavior must not depend on visible copy. */
   parameter: string;
+  /** Product-surface identity. Kept separate from the existing DOM parameter hook. */
+  controlId?: string;
   label: string;
   value: number;
   min: number;
@@ -64,6 +67,7 @@ function formatWithUnit(value: number, step: number, unit?: string) {
  */
 export function NumericRange({
   parameter,
+  controlId,
   label,
   value,
   min,
@@ -81,6 +85,7 @@ export function NumericRange({
   mapping = "linear",
   onChange,
 }: NumericRangeProps) {
+  const ownership = getControlOwnership(controlId ?? parameter);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(() => formatValue(value, step));
   const editRef = useRef<HTMLInputElement>(null);
@@ -158,7 +163,17 @@ export function NumericRange({
   const resetLabel = `Reset ${label} to ${formatWithUnit(shownResetValue, shownStep, unit)}`;
 
   return (
-    <label className={`range${disabled ? " disabled" : ""}${outOfSoftRange ? " out-of-soft-range" : ""}`} data-parameter={parameter} data-out-of-soft-range={outOfSoftRange ? "true" : "false"}>
+    <label
+      className={`range${disabled ? " disabled" : ""}${outOfSoftRange ? " out-of-soft-range" : ""}`}
+      data-parameter={parameter}
+      data-control-id={controlId}
+      data-product-surface={ownership?.productSurface}
+      data-surface-confidence={ownership?.confidence}
+      data-phase2-candidate={ownership?.phase2Candidate ? "true" : undefined}
+      data-owner={ownership?.owner}
+      data-stage={ownership?.stage}
+      data-out-of-soft-range={outOfSoftRange ? "true" : "false"}
+    >
       <span>
         {label}
         {editing ? (
@@ -208,6 +223,8 @@ export function NumericRange({
       <input
         data-testid={testId}
         data-parameter={parameter}
+        data-control-id={controlId}
+        data-product-surface={ownership?.productSurface}
         aria-label={label}
         aria-describedby={descriptionId}
         aria-valuetext={display}

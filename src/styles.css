@@ -181,6 +181,17 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .accordion-summary span { font-size: 9px; width: 12px; display: inline-block; text-align: center; color: var(--text); }
 .accordion-content { display: flex; flex-direction: column; }
 
+.surface-disclosure { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.surface-disclosure-summary { width: 100%; min-height: 32px; padding: 0; border: 0; background: transparent; color: var(--muted); text-align: left; justify-content: flex-start; gap: 7px; font-size: 9px; letter-spacing: 0.05em; }
+.surface-disclosure-summary:hover { color: var(--text); background: transparent; }
+.surface-disclosure-summary:active { transform: none; }
+.surface-disclosure-summary > span:first-child { width: 10px; color: var(--text); font-size: 8px; }
+.surface-status { color: var(--acid); font-size: 8px; font-weight: 600; letter-spacing: 0.06em; }
+.surface-disclosure-content { padding: 2px 0 4px 17px; }
+.surface-disclosure[data-product-surface="SAFETY"] .surface-disclosure-summary { color: var(--warning); }
+.surface-disclosure[data-product-surface="PERFORMANCE"] .surface-disclosure-summary { color: var(--muted); }
+.surface-disclosure[data-product-surface="LEGACY"] .surface-disclosure-summary { color: var(--warning); }
+
 .file-actions { margin-top: 24px; }
 .file-actions button { width: 100%; }
 

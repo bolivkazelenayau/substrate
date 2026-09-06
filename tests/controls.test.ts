@@ -155,6 +155,14 @@ describe("Safe Typography controls", () => {
     }
   };
 
+  const openSurfaceDisclosure = (testId: string) => {
+    const button = container.querySelector<HTMLButtonElement>(`[data-testid="${testId}"] button.surface-disclosure-summary`);
+    expect(button, `${testId} disclosure`).toBeTruthy();
+    if (button!.getAttribute("aria-expanded") !== "true") {
+      act(() => button!.click());
+    }
+  };
+
   it("shows field-study labels while preserving preset option values", () => {
     renderControls();
     const preset = field("Preset", "select") as HTMLSelectElement;
@@ -304,11 +312,12 @@ describe("Safe Typography controls", () => {
     ]);
     change(behavior, "orbit");
     expect(getUpdated()?.emitterDisplay.mode).toBe("orbit");
-    expect(container.textContent).toContain("Interior suppression");
     expect(container.textContent).toContain("Orbit amount");
     expect(container.textContent).toContain("Settle / repel");
 
     updated = null;
+    openSurfaceDisclosure("emitter-display-tuning");
+    expect(container.textContent).toContain("Interior suppression");
     change(field("Grid amount", "input"), "92");
     expect(getUpdated()?.emitterDisplay.gridAmount).toBe(92);
     updated = null;
@@ -337,6 +346,7 @@ describe("Safe Typography controls", () => {
 
     act(() => enabled.click());
     expect(getUpdated()?.emitterMicroResponse.enabled).toBe(true);
+    openSurfaceDisclosure("emitter-micro-tuning");
     expect(container.textContent).toContain("Position detail");
     expect(container.textContent).toContain("Density breakup");
     expect(container.textContent).not.toContain("Tangential flow");

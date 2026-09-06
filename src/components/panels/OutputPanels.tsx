@@ -3,6 +3,7 @@ import { previewBackends, recommendedPreviewBackends } from "../../engine/previe
 import type { SubstrateDebugMode } from "../../engine/substrate";
 import type { DebugSettings, DiagnosticsMode, PreviewSettings, ProjectState } from "../../types";
 import { DiagnosticsPanel, ExportPanel, PreviewPanel } from "./PanelSection";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
 
 type BooleanDebugKey = Exclude<keyof DebugSettings, "substrateMode">;
 
@@ -38,6 +39,7 @@ export function PreviewExportPanels(props: OutputPanelsProps) {
   const { state, setState, previewSettings, onPreviewSettingsChange, fileRef, onImport } = props;
   const patch = (next: Partial<ProjectState>) => setState({ ...state, ...next });
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [performanceOpen, setPerformanceOpen] = useState(true);
   const [exportOpen, setExportOpen] = useState(false);
   const recommendedPreviewBackend = recommendedPreviewBackends[state.preset];
 
@@ -48,10 +50,12 @@ export function PreviewExportPanels(props: OutputPanelsProps) {
           <h2>Preview</h2>
         </button>
         {previewOpen && <div className="accordion-content">
-          <label className="field compact-field"><span>Preview Mode</span><select value={previewSettings.backend} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, backend: event.target.value as PreviewSettings["backend"] })}><option value="canvas-2d">{previewBackends["canvas-2d"].label} · {previewBackends["canvas-2d"].detail}</option><option value="svg-dom">{previewBackends["svg-dom"].label} · {previewBackends["svg-dom"].detail}</option></select><small>Preview only — does not affect SVG export. Canvas: faster / SVG: crisper.{recommendedPreviewBackend === "canvas-2d" ? " Recommended for Edge Current." : ""}</small></label>
-          <label className="field compact-field"><span>Preview Quality</span><select value={previewSettings.quality} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, quality: event.target.value as PreviewSettings["quality"] })}><option value="full">Full · 24 opacity levels</option><option value="balanced">Balanced · 12 opacity levels</option><option value="performance">Performance · 8 opacity levels</option></select><small>Preview only · every path stays synchronized; SVG export remains full quality.</small></label>
-          <label className="field compact-field"><span>FPS cap</span><select value={previewSettings.fpsCap} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, fpsCap: Number(event.target.value) as PreviewSettings["fpsCap"] })}><option value={24}>24 FPS</option><option value={30}>30 FPS</option><option value={60}>60 FPS · experimental / high load</option></select></label>
-          <div className="toggle-grid preview-toggles"><Toggle checked={previewSettings.reducedMotion} label="Static preview" onChange={(checked) => onPreviewSettingsChange({ ...previewSettings, reducedMotion: checked })} /><Toggle checked={previewSettings.pauseWhenHidden} label="Pause when hidden" onChange={(checked) => onPreviewSettingsChange({ ...previewSettings, pauseWhenHidden: checked })} /></div>
+          <ProductSurfaceDisclosure label="Preview Performance" surface="PERFORMANCE" open={performanceOpen} onToggle={() => setPerformanceOpen((value) => !value)} testId="preview-performance">
+            <label className="field compact-field" data-control-id="preview.backend" data-product-surface="PERFORMANCE"><span>Preview Mode</span><select value={previewSettings.backend} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, backend: event.target.value as PreviewSettings["backend"] })}><option value="canvas-2d">{previewBackends["canvas-2d"].label} · {previewBackends["canvas-2d"].detail}</option><option value="svg-dom">{previewBackends["svg-dom"].label} · {previewBackends["svg-dom"].detail}</option></select><small>Preview only — does not affect SVG export. Canvas: faster / SVG: crisper.{recommendedPreviewBackend === "canvas-2d" ? " Recommended for Edge Current." : ""}</small></label>
+            <label className="field compact-field" data-control-id="preview.quality" data-product-surface="PERFORMANCE"><span>Preview Quality</span><select value={previewSettings.quality} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, quality: event.target.value as PreviewSettings["quality"] })}><option value="full">Full · 24 opacity levels</option><option value="balanced">Balanced · 12 opacity levels</option><option value="performance">Performance · 8 opacity levels</option></select><small>Preview only · every path stays synchronized; SVG export remains full quality.</small></label>
+            <label className="field compact-field" data-control-id="preview.fpsCap" data-product-surface="PERFORMANCE"><span>FPS cap</span><select value={previewSettings.fpsCap} onChange={(event) => onPreviewSettingsChange({ ...previewSettings, fpsCap: Number(event.target.value) as PreviewSettings["fpsCap"] })}><option value={24}>24 FPS</option><option value={30}>30 FPS</option><option value={60}>60 FPS · experimental / high load</option></select></label>
+            <div className="toggle-grid preview-toggles"><Toggle checked={previewSettings.reducedMotion} label="Static preview" onChange={(checked) => onPreviewSettingsChange({ ...previewSettings, reducedMotion: checked })} /><Toggle checked={previewSettings.pauseWhenHidden} label="Pause when hidden" onChange={(checked) => onPreviewSettingsChange({ ...previewSettings, pauseWhenHidden: checked })} /></div>
+          </ProductSurfaceDisclosure>
         </div>}
       </PreviewPanel>
       <ExportPanel>

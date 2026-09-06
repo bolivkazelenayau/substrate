@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { baseState } from "../../engine/presets";
 import { SIZE_HARD_LIMITS } from "../../engine/numericBounds";
 import { getControlActivity } from "../../engine/controlOwnership";
+import { getProductFeatureState } from "../../engine/parameterOwnership";
 import type { ProjectState } from "../../types";
 import { NumericRange } from "./NumericRange";
+import { ProductSurfaceDisclosure } from "./ProductSurfaceDisclosure";
+import { featureSummary, productStateLabel } from "./productSurfaceState";
 
 interface GlyphDisplacementControlsProps {
   state: ProjectState;
@@ -28,11 +32,13 @@ const defaults: Record<string, number> = {
 export function GlyphDisplacementControls({ state, setState, parsedFontPathsAvailable, open, onToggle }: GlyphDisplacementControlsProps) {
   const settings = state.glyphDisplacement;
   const activity = getControlActivity(state, parsedFontPathsAvailable).glyphDisplacement;
+  const featureState = getProductFeatureState(state, "fragmentation");
+  const [tuningOpen, setTuningOpen] = useState(false);
   const canToggle = activity.supported || settings.enabled;
   const summary = activity.retained
     ? "Glyph Fragmentation · retained / inactive"
     : activity.supported
-      ? "Glyph Fragmentation"
+      ? featureSummary("Glyph Fragmentation", featureState)
       : "Glyph Fragmentation · unavailable";
   const patchProject = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const patchDisplacement = (next: Partial<ProjectState["glyphDisplacement"]>) => {
@@ -100,22 +106,26 @@ export function GlyphDisplacementControls({ state, setState, parsedFontPathsAvai
           {localizedSlice && <small className={state.emitter.enabled ? "control-note" : "control-warning"}>{state.emitter.enabled ? "Radius and edge softness come from the shared Glyph Influence envelope." : "Enable an emitter to position the Slice influence envelope."}</small>}
           <Range label="Slice / cell size" value={settings.fragmentSize} min={8} max={180} step={2} onChange={(fragmentSize) => patchDisplacement({ fragmentSize })} />
           {fragmentMode && <Range label="Gap" value={settings.gap} min={0} max={64} step={1} onChange={(gap) => patchDisplacement({ gap })} />}
-          <Range label="Offset steps" value={settings.quantizationSteps} min={1} max={16} step={1} onChange={(quantizationSteps) => patchDisplacement({ quantizationSteps })} />
           <Range label="Direction" value={settings.direction} min={-180} max={180} step={5} onChange={(direction) => patchDisplacement({ direction })} />
           <Range label="Radial / tangential" value={settings.radialTangential} min={-100} max={100} step={5} onChange={(radialTangential) => patchDisplacement({ radialTangential })} />
           <Range label="Jitter" value={settings.jitter} min={0} max={100} step={2} onChange={(jitter) => patchDisplacement({ jitter })} />
           {fragmentMode && <Range label="Fragment rotation" value={settings.fragmentRotation} min={0} max={8} step={0.25} onChange={(fragmentRotation) => patchDisplacement({ fragmentRotation })} />}
-          <Range label="Seed influence" value={settings.seedInfluence} min={0} max={100} step={5} onChange={(seedInfluence) => patchDisplacement({ seedInfluence })} />
         </fieldset>}
+        <ProductSurfaceDisclosure label="Custom tuning…" open={tuningOpen} onToggle={() => setTuningOpen((value) => !value)} status={productStateLabel(featureState)} testId="glyph-displacement-tuning">
+          <Range label="Offset steps" value={settings.quantizationSteps} min={1} max={16} step={1} onChange={(quantizationSteps) => patchDisplacement({ quantizationSteps })} controlId="glyphDisplacement.quantizationSteps" />
+          <Range label="Seed influence" value={settings.seedInfluence} min={0} max={100} step={5} onChange={(seedInfluence) => patchDisplacement({ seedInfluence })} controlId="glyphDisplacement.seedInfluence" />
+        </ProductSurfaceDisclosure>
       </div>}
     </div>
   );
 }
 
 export function RendererLocalControls({ state, setState, open, onToggle }: { state: ProjectState; setState: (state: ProjectState) => void; open: boolean; onToggle: () => void }) {
+  const [displayTuningOpen, setDisplayTuningOpen] = useState(false);
   const activity = getControlActivity(state, true);
   const dotGridSupported = activity.dotGrid.supported;
   const displaySettings = state.displayDislocation;
+  const displayFeatureState = getProductFeatureState(state, "display-dislocation");
   const displayConfigured = displaySettings.enabled;
   const patchProject = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const patchDotGrid = (next: Partial<ProjectState["dotGrid"]>) => patchProject({ dotGrid: { ...state.dotGrid, ...next } });
@@ -135,12 +145,12 @@ export function RendererLocalControls({ state, setState, open, onToggle }: { sta
           <small className={activity.dotGrid.retained ? "control-warning" : "inactive-hint"}>{activity.dotGrid.retained ? `Retained but inactive: ${activity.dotGrid.reason}.` : dotGridSupported ? "Vector circles sampled against the active glyph domain." : "Available with SDF Halftone."}</small>
           {activity.dotGrid.active && <fieldset>
             <legend className="visually-hidden">Dot matrix parameters</legend>
-            <Range testId="dot-grid-spacing" label="Grid spacing" value={state.dotGrid.spacing} min={4} max={32} step={1} onChange={(spacing) => patchDotGrid({ spacing })} />
-            <Range label="Dot radius" value={state.dotGrid.radius} min={0.5} max={8} step={0.1} onChange={(radius) => patchDotGrid({ radius })} />
-            <Range label="Threshold" value={state.dotGrid.threshold} min={0.1} max={0.9} step={0.05} onChange={(threshold) => patchDotGrid({ threshold })} />
-            <Range label="Edge softness" value={state.dotGrid.edgeSoftness} min={0} max={1} step={0.05} onChange={(edgeSoftness) => patchDotGrid({ edgeSoftness })} />
-          </fieldset>}
-        </div>
+           <Range testId="dot-grid-spacing" label="Grid spacing" value={state.dotGrid.spacing} min={4} max={32} step={1} onChange={(spacing) => patchDotGrid({ spacing })} />
+           <Range label="Dot radius" value={state.dotGrid.radius} min={0.5} max={8} step={0.1} onChange={(radius) => patchDotGrid({ radius })} />
+           <Range label="Threshold" value={state.dotGrid.threshold} min={0.1} max={0.9} step={0.05} onChange={(threshold) => patchDotGrid({ threshold })} />
+           <Range label="Edge softness" value={state.dotGrid.edgeSoftness} min={0} max={1} step={0.05} onChange={(edgeSoftness) => patchDotGrid({ edgeSoftness })} controlId="dotGrid.edgeSoftness" />
+           </fieldset>}
+         </div>
         <div className={`control-group nested-group${!activity.displayDislocation.supported || (displayConfigured && !activity.displayDislocation.active) ? " retained-group" : ""}`} data-testid="display-dislocation-controls" data-owner="Display Dislocation">
           <div className="section-subheading">Display Dislocation{!activity.displayDislocation.supported ? " · unavailable" : ""}</div>
           <label className={`debug-toggle${!activity.displayDislocation.supported || (displayConfigured && !activity.displayDislocation.active) ? " disabled" : ""}`}>
@@ -167,19 +177,35 @@ export function RendererLocalControls({ state, setState, open, onToggle }: { sta
             <Range testId="display-dislocation-amount" label="Displacement amount" value={displaySettings.displacementAmount} min={0} max={160} step={2} onChange={(displacementAmount) => patchDisplay({ displacementAmount })} />
             <Range label="Band / cell size" value={displaySettings.regionSize} min={8} max={160} step={2} onChange={(regionSize) => patchDisplay({ regionSize })} />
             <Range label="Display gap" value={displaySettings.gap} min={0} max={48} step={1} onChange={(gap) => patchDisplay({ gap })} />
-            <Range label="Display offset steps" value={displaySettings.quantizationSteps} min={1} max={16} step={1} onChange={(quantizationSteps) => patchDisplay({ quantizationSteps })} />
             <Range label="Display direction" value={displaySettings.direction} min={-180} max={180} step={5} onChange={(direction) => patchDisplay({ direction })} />
             <Range label="Alternating offset" value={displaySettings.alternatingOffset} min={0} max={100} step={5} onChange={(alternatingOffset) => patchDisplay({ alternatingOffset })} />
             <Range label="Radial bias" value={displaySettings.radialBias} min={0} max={60} step={5} onChange={(radialBias) => patchDisplay({ radialBias })} />
-            <label className="field compact-field"><span>Seed</span><input data-testid="display-dislocation-seed" type="number" min={0} max={999999} step={1} value={displaySettings.seed} onChange={(event) => patchDisplay({ seed: Number(event.target.value) })} /></label>
           </fieldset>}
+          <ProductSurfaceDisclosure label="Custom tuning…" open={displayTuningOpen} onToggle={() => setDisplayTuningOpen((value) => !value)} status={productStateLabel(displayFeatureState)} testId="display-dislocation-tuning">
+            <Range label="Display offset steps" value={displaySettings.quantizationSteps} min={1} max={16} step={1} onChange={(quantizationSteps) => patchDisplay({ quantizationSteps })} controlId="displayDislocation.quantizationSteps" />
+            <NumericRange parameter="renderer.display-dislocation-seed" controlId="displayDislocation.seed" label="Seed" value={displaySettings.seed} min={0} max={999999} hardMax={999999} step={1} resetValue={baseState.displayDislocation.seed} testId="display-dislocation-seed" onChange={(seed) => patchDisplay({ seed })} />
+          </ProductSurfaceDisclosure>
         </div>
       </div>}
     </div>
   );
 }
 
-function Range({ testId, label, value, min, max, hardMax, step, onChange }: { testId?: string; label: string; value: number; min: number; max: number; hardMax?: number; step: number; onChange: (value: number) => void }) {
-  const resetValue = defaults[label];
- return <NumericRange parameter={`glyph-geometry.fragmentation.${label.toLowerCase().replaceAll(" ", "-").replaceAll("/", "-")}`} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
+function Range({ testId, label, value, min, max, hardMax, step, onChange, controlId }: { testId?: string; label: string; value: number; min: number; max: number; hardMax?: number; step: number; onChange: (value: number) => void; controlId?: string }) {
+  const resetValue = {
+    ...defaults,
+    "Grid spacing": baseState.dotGrid.spacing,
+    "Dot radius": baseState.dotGrid.radius,
+    Threshold: baseState.dotGrid.threshold,
+    "Edge softness": baseState.dotGrid.edgeSoftness,
+    "Display response radius": baseState.displayDislocation.responseRadius,
+    "Displacement amount": baseState.displayDislocation.displacementAmount,
+    "Band / cell size": baseState.displayDislocation.regionSize,
+    "Display gap": baseState.displayDislocation.gap,
+    "Display offset steps": baseState.displayDislocation.quantizationSteps,
+    "Display direction": baseState.displayDislocation.direction,
+    "Alternating offset": baseState.displayDislocation.alternatingOffset,
+    "Radial bias": baseState.displayDislocation.radialBias,
+  }[label];
+ return <NumericRange parameter={`glyph-geometry.fragmentation.${label.toLowerCase().replaceAll(" ", "-").replaceAll("/", "-")}`} controlId={controlId} label={label} value={value} min={min} max={max} hardMax={hardMax} step={step} resetValue={resetValue ?? value} testId={testId} onChange={onChange} />;
 }
