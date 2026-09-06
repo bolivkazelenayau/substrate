@@ -119,6 +119,7 @@ describe("Wave Contours renderer", () => {
       ...state,
       emitterMode: "multiple",
       emitters: [{
+        ...state.emitters[0],
         id: "unit",
         glyphId: legacy.sourceGlyph.glyphId,
         enabled: true,
@@ -135,6 +136,7 @@ describe("Wave Contours renderer", () => {
   it("composes multiple emitters and responds deterministically to phase, weight, and radius", () => {
     const glyphs = getGlyphEmitterMetadata(state, context.textGeometry!);
     const unit = {
+      ...state.emitters[0],
       id: "first",
       glyphId: glyphs[0].glyphId,
       enabled: true,
@@ -169,6 +171,7 @@ describe("Wave Contours renderer", () => {
   it("uses raw additive sums and ignores disabled or invalid rows", () => {
     const glyph = getGlyphEmitterMetadata(state, context.textGeometry!)[0];
     const unit = {
+      ...state.emitters[0],
       id: "unit-1",
       glyphId: glyph.glyphId,
       enabled: true,

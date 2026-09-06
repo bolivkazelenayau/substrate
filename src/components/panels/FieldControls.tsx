@@ -1,20 +1,23 @@
 import { memo, useCallback, useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
-import { applyPreset, baseState, getPresetDisplayLabel, presetIds } from "../../engine/presets";
-import { getRenderer, rendererList } from "../../engine/renderers";
+import { baseState } from "../../engine/presets";
+import { getRenderer } from "../../engine/renderers";
 import type { SizeRangeHandlers } from "../../hooks/useSizeInteraction";
 import type { DiagnosticsMode, FieldControlId, PreviewSettings, ProjectState } from "../../types";
 import type { GlyphEmitterMetadata } from "../../engine/field/glyphEmitters";
 import type { TextGeometry } from "../../engine/glyphGeometry";
 import { getControlActivity } from "../../engine/controlOwnership";
-import { FieldPanel } from "./PanelSection";
-import { OutputPanels } from "./OutputPanels";
+import { PipelineStage } from "./PanelSection";
 import { ArtworkTypographyPanels } from "./ArtworkTypographyPanels";
-import { AdvancedFieldPanel } from "./AdvancedFieldPanel";
+import { FieldAdvancedPanel } from "./AdvancedFieldPanel";
 import { EmitterControls } from "./EmitterControls";
+import { MarkResponseControls } from "./MarkResponseControls";
+import { RendererControls } from "./RendererControls";
+import { AppearanceControls } from "./AppearanceControls";
+import { DiagnosticsControls, PreviewExportPanels } from "./OutputPanels";
 import { GlyphDisplacementControls } from "./GlyphDisplacementControls";
-import { EmitterMicroResponseControls } from "./EmitterMicroResponseControls";
-import { GlyphFalloffDisplacementControls } from "./GlyphFalloffDisplacementControls";
 import { GlyphMicroWarpControls } from "./GlyphMicroWarpControls";
+import { GlyphInfluenceControls } from "./GlyphInfluenceControls";
+import { GlyphCalmWaterControls } from "./GlyphCalmWaterControls";
 
 export interface FieldControlsProps {
   state: ProjectState;
@@ -192,24 +195,27 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
     || controlActivity.emitterDisplay
     || controlActivity.emitterMicroResponse
     || controlActivity.glyphMicroWarp
+    || draft.glyphCalmWater.enabled
+    || (draft.glyphDisplacement.enabled
+      && draft.glyphDisplacement.sliceInfluence === "emitter-falloff"
+      && (draft.glyphDisplacement.mode === "horizontal-slices" || draft.glyphDisplacement.mode === "vertical-slices"))
     || (controlActivity.glyphModulation && draft.glyphFieldMode !== "off");
   const patchField = (next: Partial<ProjectState>) => forward({ ...draftRef.current, ...next, preset: "Custom" });
   const defaultOpen = {
-    advanced: false,
+    fieldAdvanced: false,
     emitters: false,
+    glyphInfluence: false,
+    glyphMicroWarp: false,
+    glyphCalmWater: false,
+    glyphDisplacement: false,
+    rendererAdvanced: false,
+    rendererLocal: false,
+    emitterDisplay: false,
     microResponse: false,
     glyphFalloff: false,
-    output: false,
-    debug: false,
   };
 
-  const [lastRenderer, setLastRenderer] = useState(draft.renderer);
   const [userToggles, setUserToggles] = useState<Record<string, boolean>>({});
-
-  if (draft.renderer !== lastRenderer) {
-    setLastRenderer(draft.renderer);
-    setUserToggles({});
-  }
 
   const isOpen = (id: keyof typeof defaultOpen) => 
     userToggles[id] !== undefined ? userToggles[id] : defaultOpen[id];
@@ -218,40 +224,11 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
     setUserToggles(prev => ({ ...prev, [id]: !isOpen(id) }));
   return (
     <aside className="controls" data-testid="controls-pane">
-      <ArtworkTypographyPanels
-        state={draft}
-        setState={forward}
-        fontFileRef={fontFileRef}
-        onFontUpload={onFontUpload}
-        onClearFont={onClearFont}
-        fontLoaded={fontLoaded}
-        textGeometry={textGeometry}
-        sizeDisplayFontSize={sizeDisplayFontSize}
-        sizeHandlers={sizeHandlers}
-      />
+      <PipelineStage id="typography" number="01" title="Typography">
+        <ArtworkTypographyPanels state={draft} setState={forward} fontFileRef={fontFileRef} onFontUpload={onFontUpload} onClearFont={onClearFont} fontLoaded={fontLoaded} textGeometry={textGeometry} sizeDisplayFontSize={sizeDisplayFontSize} sizeHandlers={sizeHandlers} />
+      </PipelineStage>
 
-      <FieldPanel className="preset-renderer-section">
-        <div className="section-heading">
-          <span>02</span>
-          <h2>Preset / Renderer</h2>
-        </div>
-        <label className="field">
-          <span>Preset</span>
-          <select value={draft.preset} onChange={(event) => forward(applyPreset(draftRef.current, event.target.value as ProjectState["preset"]))}>
-            {presetIds.map((name) => <option key={name} value={name}>{getPresetDisplayLabel(name)}</option>)}
-          </select>
-        </label>
-        <div className="segmented" aria-label="Renderer">
-          {rendererList.map((item) => (
-            <button key={item.id} className={draft.renderer === item.id ? "active" : ""} onClick={() => patchField({ renderer: item.id })}>
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </FieldPanel>
-
-      <FieldPanel>
-        <div className="section-heading"><span>03</span><h2>Core Field</h2></div>
+      <PipelineStage id="field" number="02" title="Field">
         <div>
           {fieldControls.filter(({ id }) => id === "density" || id === "amplitude").map((control) => (
             renderer.supportedControls.includes(control.id) && (
@@ -267,61 +244,37 @@ export const FieldControls = memo(function FieldControls({ state, setState, file
             )
           ))}
         </div>
+        <FieldAdvancedPanel state={draft} setState={forward} open={isOpen("fieldAdvanced")} onToggle={() => toggleGroup("fieldAdvanced")} />
+      </PipelineStage>
 
-        <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} displayBehaviorSupported={controlActivity.emitterDisplay} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
-        <EmitterMicroResponseControls
-          state={draft}
-          setState={forward}
-          supported={controlActivity.emitterMicroResponse}
-          capability={controlActivity.emitterMicroResponseCapability}
-          open={isOpen("microResponse")}
-          onToggle={() => toggleGroup("microResponse")}
-        />
-        <GlyphFalloffDisplacementControls
-          state={draft}
-          setState={forward}
-          supported={controlActivity.glyphFalloffDisplacement}
-          capability={controlActivity.glyphFalloffDisplacementCapability}
-          open={isOpen("glyphFalloff")}
-          onToggle={() => toggleGroup("glyphFalloff")}
-        />
-      </FieldPanel>
+      <PipelineStage id="emitters" number="03" title="Emitters">
+        <EmitterControls state={draft} setState={forward} emitterGlyphs={emitterGlyphs} consumerActive={emitterConsumerActive} open={isOpen("emitters")} onToggle={() => toggleGroup("emitters")} />
+      </PipelineStage>
 
-      <GlyphMicroWarpControls
-        state={draft}
-        setState={forward}
-        parsedFontPathsAvailable={parsedFontPathsAvailable}
-      />
+      <PipelineStage id="glyph-geometry" number="04" title="Glyph Geometry">
+        <GlyphInfluenceControls state={draft} setState={forward} open={isOpen("glyphInfluence")} onToggle={() => toggleGroup("glyphInfluence")} />
+        <GlyphMicroWarpControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} open={isOpen("glyphMicroWarp")} onToggle={() => toggleGroup("glyphMicroWarp")} />
+        <GlyphCalmWaterControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} open={isOpen("glyphCalmWater")} onToggle={() => toggleGroup("glyphCalmWater")} />
+        <GlyphDisplacementControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} open={isOpen("glyphDisplacement")} onToggle={() => toggleGroup("glyphDisplacement")} />
+      </PipelineStage>
 
-      <GlyphDisplacementControls
-        state={draft}
-        setState={forward}
-        parsedFontPathsAvailable={parsedFontPathsAvailable}
-      />
+      <PipelineStage id="renderer" number="05" title="Renderer">
+        <RendererControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} localOpen={isOpen("rendererLocal")} onToggleLocal={() => toggleGroup("rendererLocal")} advancedOpen={isOpen("rendererAdvanced")} onToggleAdvanced={() => toggleGroup("rendererAdvanced")} />
+      </PipelineStage>
 
-      <AdvancedFieldPanel
-        state={draft}
-        setState={forward}
-        parsedFontPathsAvailable={parsedFontPathsAvailable}
-        open={isOpen("advanced")}
-        onToggle={() => toggleGroup("advanced")}
-      />
+      <PipelineStage id="mark-response" number="06" title="Mark Response">
+        <MarkResponseControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} openState={{ ...userToggles, emitterDisplay: isOpen("emitterDisplay"), microResponse: isOpen("microResponse"), glyphFalloff: isOpen("glyphFalloff") }} toggle={(id) => toggleGroup(id as keyof typeof defaultOpen)} />
+      </PipelineStage>
 
-      <OutputPanels
-        key={draft.renderer}
-        state={draft}
-        setState={forward}
-        previewSettings={previewSettings}
-        onPreviewSettingsChange={onPreviewSettingsChange}
-        diagnosticsMode={diagnosticsMode}
-        onDiagnosticsModeChange={onDiagnosticsModeChange}
-        fileRef={fileRef}
-        onImport={onImport}
-        webGpuOverlayOpen={webGpuOverlayOpen}
-        fpsMeterOpen={fpsMeterOpen}
-        onToggleWebGpuOverlay={onToggleWebGpuOverlay}
-        onToggleFpsMeter={onToggleFpsMeter}
-      />
+      <PipelineStage id="appearance" number="07" title="Appearance">
+        <AppearanceControls state={draft} setState={forward} parsedFontPathsAvailable={parsedFontPathsAvailable} />
+      </PipelineStage>
+
+      <PipelineStage id="preview-export" number="08" title="Preview / Export">
+        <PreviewExportPanels state={draft} setState={forward} previewSettings={previewSettings} onPreviewSettingsChange={onPreviewSettingsChange} diagnosticsMode={diagnosticsMode} onDiagnosticsModeChange={onDiagnosticsModeChange} fileRef={fileRef} onImport={onImport} webGpuOverlayOpen={webGpuOverlayOpen} fpsMeterOpen={fpsMeterOpen} onToggleWebGpuOverlay={onToggleWebGpuOverlay} onToggleFpsMeter={onToggleFpsMeter} />
+      </PipelineStage>
+
+      <DiagnosticsControls state={draft} setState={forward} diagnosticsMode={diagnosticsMode} onDiagnosticsModeChange={onDiagnosticsModeChange} webGpuOverlayOpen={webGpuOverlayOpen} fpsMeterOpen={fpsMeterOpen} onToggleWebGpuOverlay={onToggleWebGpuOverlay} onToggleFpsMeter={onToggleFpsMeter} />
     </aside>
   );
 }, (previous, next) => (
@@ -344,6 +297,7 @@ function Range({ label, value, min, max, step = 1, disabled = false, defaultValu
     <label className={`range${disabled ? " disabled" : ""}`}>
       <span>{label}<output>{disabled ? "N/A" : value}</output></span>
       <input
+        aria-label={label}
         disabled={disabled}
         type="range"
         value={value}

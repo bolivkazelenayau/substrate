@@ -34,6 +34,11 @@ async function openPreviewPanel(page: Page) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openDisclosure(page: Page, name: string) {
+  const button = page.locator("button.accordion-summary").filter({ hasText: name });
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function setPreviewBackend(page: Page, backend: "svg-dom" | "canvas-2d") {
   await openPreviewPanel(page);
   await page.getByLabel("Preview Mode").selectOption(backend);
@@ -48,7 +53,8 @@ async function setSize(page: Page, value: number) {
 }
 
 function rangeControl(page: Page, label: string): Locator {
-  return displacementControls(page).locator("label.range").filter({ hasText: label }).locator('input[type="range"]').first();
+  const owner = label === "Grid spacing" ? page.getByTestId("renderer-local-controls") : displacementControls(page);
+  return owner.locator("label.range").filter({ hasText: label }).locator('input[type="range"]').first();
 }
 
 async function fillRange(page: Page, label: string, value: number) {
@@ -58,7 +64,11 @@ async function fillRange(page: Page, label: string, value: number) {
 }
 
 async function applyScenario(page: Page, scenario: GlyphDisplacementScenario, overrideSize?: number) {
+  await openDisclosure(page, "Renderer-local controls");
   await displacementControls(page).getByTestId("glyph-displacement-mode").selectOption(scenario.mode);
+  if (scenario.mode === "horizontal-slices" || scenario.mode === "vertical-slices") {
+    await displacementControls(page).getByTestId("glyph-slice-influence").selectOption("legacy");
+  }
   await fillRange(page, "Strength", scenario.strength);
   await fillRange(page, "Response radius", scenario.responseRadius);
   await fillRange(page, "Slice / cell size", scenario.fragmentSize);
@@ -68,7 +78,7 @@ async function applyScenario(page: Page, scenario: GlyphDisplacementScenario, ov
   await fillRange(page, "Radial / tangential", scenario.radialTangential);
   await fillRange(page, "Jitter", scenario.jitter);
   if (scenario.mode !== "warp") await fillRange(page, "Fragment rotation", scenario.fragmentRotation);
-  await displacementControls(page).getByTestId("dot-grid-enabled").setChecked(scenario.dotGrid);
+  await page.getByTestId("renderer-local-controls").getByTestId("dot-grid-enabled").setChecked(scenario.dotGrid);
   if (scenario.dotGrid) await fillRange(page, "Grid spacing", scenario.gridSpacing);
   await setSize(page, overrideSize ?? scenario.fontSize);
   await waitForReady(page);
@@ -80,6 +90,8 @@ async function loadFragmentMatrix(page: Page, scenario: GlyphDisplacementScenari
   await page.goto("/");
   await expect(size(page)).toBeVisible();
   await page.locator(".preset-renderer-section select").selectOption("Fragment Matrix");
+  await openDisclosure(page, "Glyph Fragmentation");
+  await openDisclosure(page, "Renderer-local controls");
   const pause = page.getByRole("button", { name: "Pause animation" });
   if (await pause.count()) await pause.click();
   await page.locator('input[type="file"][accept*=".ttf"]').setInputFiles(fixtureFont);
@@ -232,7 +244,8 @@ test("Gate 4 — glyph displacement and mark-space orbit remain separate active 
   const before = await metrics(page);
   const emitters = page.locator("button.accordion-summary").filter({ hasText: "Emitters" });
   if ((await emitters.getAttribute("aria-expanded")) !== "true") await emitters.click();
-  await page.getByLabel("Behavior").selectOption("orbit");
+  await openDisclosure(page, "Emitter Display Response");
+  await page.getByTestId("emitter-display-response").getByLabel("Behavior").selectOption("orbit");
   await waitForReady(page);
   await expect(stage(page)).toHaveAttribute("data-emitter-display-mode", "orbit");
   const combined = await metrics(page);

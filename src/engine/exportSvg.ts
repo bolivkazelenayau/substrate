@@ -81,8 +81,13 @@ export function createSvg(
   const timestamp = new Date().toISOString();
   const legacyEmitterDisplay = Object.entries(baseState.emitterDisplay)
     .every(([name, value]) => state.emitterDisplay[name as keyof ProjectState["emitterDisplay"]] === value);
-  const legacyGlyphDisplacement = Object.entries(baseState.glyphDisplacement)
-    .every(([name, value]) => state.glyphDisplacement[name as keyof ProjectState["glyphDisplacement"]] === value);
+  const { sliceInfluence: _baseSliceInfluence, ...baseLegacyGlyphDisplacement } = baseState.glyphDisplacement;
+  const { sliceInfluence, ...candidateLegacyGlyphDisplacement } = state.glyphDisplacement;
+  const sliceInfluenceAffectsGeometry = state.glyphDisplacement.enabled
+    && (state.glyphDisplacement.mode === "horizontal-slices" || state.glyphDisplacement.mode === "vertical-slices");
+  const v14GlyphDisplacementCompatible = !sliceInfluenceAffectsGeometry || sliceInfluence === "legacy";
+  const legacyGlyphDisplacement = Object.entries(baseLegacyGlyphDisplacement)
+    .every(([name, value]) => candidateLegacyGlyphDisplacement[name as keyof typeof candidateLegacyGlyphDisplacement] === value);
   const legacyDotGrid = Object.entries(baseState.dotGrid)
     .every(([name, value]) => state.dotGrid[name as keyof ProjectState["dotGrid"]] === value);
   const legacyDisplayDislocation = Object.entries(baseState.displayDislocation)
@@ -91,18 +96,56 @@ export function createSvg(
     .every(([name, value]) => state.emitterMicroResponse[name as keyof ProjectState["emitterMicroResponse"]] === value);
   const legacyGlyphMicroWarp = Object.entries(baseState.glyphMicroWarp)
     .every(([name, value]) => state.glyphMicroWarp[name as keyof ProjectState["glyphMicroWarp"]] === value);
+  const legacyGlyphInfluence = Object.entries(baseState.glyphInfluence)
+    .every(([name, value]) => state.glyphInfluence[name as keyof ProjectState["glyphInfluence"]] === value);
+  const legacyGlyphCalmWater = Object.entries(baseState.glyphCalmWater)
+    .every(([name, value]) => state.glyphCalmWater[name as keyof ProjectState["glyphCalmWater"]] === value);
   const legacyGlyphFalloffDisplacement = Object.entries(baseState.glyphFalloffDisplacement)
     .every(([name, value]) => state.glyphFalloffDisplacement[name as keyof ProjectState["glyphFalloffDisplacement"]] === value);
   // Sequential default-state elision keeps pre-feature SVG metadata byte-stable
   // after timestamp normalization. An active stage retains its introducing
   // schema and cannot be mislabeled as an older project.
-  const v12CompatibilityMetadataState = legacyGlyphFalloffDisplacement
+  const semanticInfluenceAffectsGeometry = state.glyphCalmWater.enabled
+    || (sliceInfluenceAffectsGeometry && sliceInfluence === "emitter-falloff");
+  const v15Compatible = !semanticInfluenceAffectsGeometry;
+  const v14CompatibilityMetadataState = v15Compatible
     ? (() => {
-        const { glyphFalloffDisplacement: _glyphFalloffDisplacement, ...v13WithoutGlyphFalloff } = state;
-        return { ...v13WithoutGlyphFalloff, version: 12 as const };
+        const {
+          influenceScope: _emitterInfluenceScope,
+          neighborhoodSize: _emitterNeighborhoodSize,
+          ...v14Emitter
+        } = state.emitter;
+        const v14Emitters = state.emitters.map((row) => {
+          const {
+            influenceScope: _rowInfluenceScope,
+            neighborhoodSize: _rowNeighborhoodSize,
+            ...v14Row
+          } = row;
+          return v14Row;
+        });
+        return { ...state, emitter: v14Emitter, emitters: v14Emitters, version: 14 as const };
       })()
     : state;
-  const compatibilityMetadataState = legacyGlyphFalloffDisplacement && legacyGlyphMicroWarp
+  const v14Compatible = v15Compatible && legacyGlyphInfluence && legacyGlyphCalmWater && v14GlyphDisplacementCompatible;
+  const v13CompatibilityMetadataState = v14Compatible
+    ? (() => {
+        const {
+          glyphInfluence: _glyphInfluence,
+          glyphCalmWater: _glyphCalmWater,
+          glyphDisplacement,
+          ...v14WithoutWater
+        } = v14CompatibilityMetadataState;
+        const { sliceInfluence: _sliceInfluence, ...v13GlyphDisplacement } = glyphDisplacement;
+        return { ...v14WithoutWater, glyphDisplacement: v13GlyphDisplacement, version: 13 as const };
+      })()
+    : v14CompatibilityMetadataState;
+  const v12CompatibilityMetadataState = legacyGlyphFalloffDisplacement && v14Compatible
+    ? (() => {
+        const { glyphFalloffDisplacement: _glyphFalloffDisplacement, ...v13WithoutGlyphFalloff } = v13CompatibilityMetadataState;
+        return { ...v13WithoutGlyphFalloff, version: 12 as const };
+      })()
+    : v13CompatibilityMetadataState;
+  const compatibilityMetadataState = v14Compatible && legacyGlyphFalloffDisplacement && legacyGlyphMicroWarp
     ? (() => {
         const { glyphMicroWarp: _glyphMicroWarp, ...v12WithoutMicroWarp } = v12CompatibilityMetadataState;
         const v11Project = { ...v12WithoutMicroWarp, version: 11 as const };
@@ -114,7 +157,7 @@ export function createSvg(
         return { ...v10WithoutDisplayDislocation, version: 9 as const };
       })()
     : v12CompatibilityMetadataState;
-  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation && legacyEmitterMicroResponse && legacyGlyphMicroWarp && legacyGlyphFalloffDisplacement
+  const metadataProject = isAuthoredDefault && legacyEmitterDisplay && legacyGlyphDisplacement && legacyDotGrid && legacyDisplayDislocation && legacyEmitterMicroResponse && legacyGlyphMicroWarp && legacyGlyphFalloffDisplacement && legacyGlyphInfluence && legacyGlyphCalmWater
     ? (() => {
         const {
           artboard: _artboard,
@@ -149,9 +192,10 @@ export function createSvg(
     effectiveArtboard: { x: rectX, y: rectY, width, height },
     outlineWarp: state.overlayMode === "warped-outline" ? warpedOutline.diagnostics : undefined,
     glyphMicroWarp: textGeometry?.microWarp ?? undefined,
+    glyphCalmWater: textGeometry?.calmWater ?? undefined,
     glyphDisplacement: textGeometry?.displacement ?? undefined,
-    glyphDomainAuthority: textGeometry?.displacement || textGeometry?.microWarp ? {
-      typographyKey: authority?.typographyKey ?? textGeometry.displacement?.geometryKey ?? textGeometry.microWarp!.geometryKey,
+    glyphDomainAuthority: textGeometry?.displacement || textGeometry?.calmWater || textGeometry?.microWarp ? {
+      typographyKey: authority?.typographyKey ?? textGeometry.displacement?.geometryKey ?? textGeometry.calmWater?.geometryKey ?? textGeometry.microWarp!.geometryKey,
       sceneKey: authority?.sceneKey,
       rendererKey: authority?.rendererKey,
       rendererElementCount: geometry.geometries.length,
@@ -166,7 +210,7 @@ export function createSvg(
   const background = state.transparentBackground
     ? ""
     : `<g id="${SVG_IDS.background}"><rect ${rectArgs} fill="${state.backgroundColor}"/></g>`;
-  const editable = textGeometry?.displacement || textGeometry?.microWarp
+  const editable = textGeometry?.displacement || textGeometry?.calmWater || textGeometry?.microWarp
     ? `<g id="${SVG_IDS.artwork}" fill="${state.primaryColor}" fill-rule="nonzero">${serializeGlyphPaths(textGeometry)}</g>`
     : `<g id="${SVG_IDS.artwork}">${serializeText(state, state.primaryColor, undefined, Boolean(textGeometry?.hasOutlines))}</g>`;
   const substrate = textGeometry?.hasOutlines

@@ -18,6 +18,8 @@ function emitter(
     weight: 1,
     phaseOffset: 0,
     radiusMultiplier: 1,
+    influenceScope: "source-glyph",
+    neighborhoodSize: 1,
     label: id,
     ...overrides,
   };

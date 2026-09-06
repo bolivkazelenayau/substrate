@@ -169,12 +169,12 @@ describe("renderer quality contracts", () => {
     clearRendererGeometryCache();
     const glyphs = getGlyphEmitterMetadata(baseState, context.textGeometry ?? null);
     const active = {
+      ...baseState.emitters[0],
       id: "active",
       glyphId: "auto-first",
       enabled: true,
       weight: 1,
       phaseOffset: 0,
-      radiusMultiplier: 1,
       label: "Active",
     };
     const state = {

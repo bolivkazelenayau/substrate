@@ -31,7 +31,7 @@ async function saveProject(page: Page) {
 }
 
 test.describe("legacy project compatibility browser gates", () => {
-  test("imports v8, renders, exports, saves as v12, and reloads normalized state", async ({ page }) => {
+  test("imports v8, renders, exports, saves as v15, and reloads normalized state", async ({ page }) => {
     await page.goto("/");
     await openExportPanel(page);
     await projectInput(page).setInputFiles(legacyV8);
@@ -44,7 +44,7 @@ test.describe("legacy project compatibility browser gates", () => {
     await expect(stage(page)).toHaveAttribute("data-glyph-displacement-mode", "disabled");
     await expect(stage(page)).toHaveAttribute("data-dot-grid-regular", "false");
     await expect(stage(page)).toHaveAttribute("data-emitter-display-mode", "field");
-    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 13");
+    await expect(page.getByTestId("project-message")).toContainText("migrated to schema version 15");
     await waitForExactPreview(page);
 
     const svgDownloadPromise = page.waitForEvent("download");
@@ -59,7 +59,7 @@ test.describe("legacy project compatibility browser gates", () => {
 
     const firstSave = await saveProject(page);
     expect(firstSave.document).toMatchObject({
-      version: 13,
+      version: 15,
       text: "LEGACY EIGHT",
       renderer: "glyph-diffuser",
       seed: 80808,

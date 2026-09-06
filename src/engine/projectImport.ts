@@ -7,7 +7,7 @@ import {
 } from "./projectSchema";
 
 type UnknownRecord = Record<string, unknown>;
-type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
+type HistoricalProjectVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 
 export type ProjectImportErrorCode =
   | "invalid-json"
@@ -32,16 +32,66 @@ export interface HistoricalProjectCandidate extends UnknownRecord {
 
 export type ProjectStateCandidate = ProjectState;
 
-type ProjectStateV12Candidate = Omit<ProjectState, "version" | "glyphFalloffDisplacement"> & { version: 12 };
+type ProjectStateV14Candidate = Omit<ProjectState, "version" | "emitter" | "emitters"> & {
+  version: 14;
+  emitter: Omit<ProjectState["emitter"], "influenceScope" | "neighborhoodSize">;
+  emitters: Array<Omit<ProjectState["emitters"][number], "influenceScope" | "neighborhoodSize">>;
+};
+type ProjectStateV13Candidate = Omit<ProjectStateV14Candidate, "version" | "glyphInfluence" | "glyphCalmWater" | "glyphDisplacement"> & {
+  version: 13;
+  glyphDisplacement: Omit<ProjectState["glyphDisplacement"], "sliceInfluence">;
+};
+type ProjectStateV12Candidate = Omit<ProjectStateV13Candidate, "version" | "glyphFalloffDisplacement"> & { version: 12 };
 type ProjectStateV11Candidate = Omit<ProjectStateV12Candidate, "version" | "glyphMicroWarp"> & { version: 11 };
 type ProjectStateV10Candidate = Omit<ProjectStateV11Candidate, "version" | "emitterMicroResponse"> & { version: 10 };
 type ProjectStateV9Candidate = Omit<ProjectStateV10Candidate, "version" | "displayDislocation"> & { version: 9 };
 
 const {
   version: _baseStateVersion,
+  emitter: baseStateEmitter,
+  emitters: baseStateEmitters,
+  ...baseStateV14Fields
+} = baseState;
+const {
+  influenceScope: _baseEmitterInfluenceScope,
+  neighborhoodSize: _baseEmitterNeighborhoodSize,
+  ...baseStateV14Emitter
+} = baseStateEmitter;
+const baseStateV14Emitters = baseStateEmitters.map((row) => {
+  const {
+    influenceScope: _rowInfluenceScope,
+    neighborhoodSize: _rowNeighborhoodSize,
+    ...legacyRow
+  } = row;
+  return legacyRow;
+});
+const baseStateV14Template: ProjectStateV14Candidate = {
+  ...baseStateV14Fields,
+  emitter: baseStateV14Emitter,
+  emitters: baseStateV14Emitters,
+  version: 14,
+};
+const {
+  version: _baseStateV14Version,
+  glyphInfluence: _glyphInfluence,
+  glyphCalmWater: _glyphCalmWater,
+  glyphDisplacement: baseStateGlyphDisplacement,
+  ...baseStateV13Fields
+} = baseStateV14Template;
+const {
+  sliceInfluence: _sliceInfluence,
+  ...baseStateV13GlyphDisplacement
+} = baseStateGlyphDisplacement;
+const baseStateV13Template: ProjectStateV13Candidate = {
+  ...baseStateV13Fields,
+  glyphDisplacement: baseStateV13GlyphDisplacement,
+  version: 13,
+};
+const {
+  version: _baseStateV13Version,
   glyphFalloffDisplacement: _glyphFalloffDisplacement,
   ...baseStateV12Fields
-} = baseState;
+} = baseStateV13Template;
 const baseStateV12Template: ProjectStateV12Candidate = {
   ...baseStateV12Fields,
   version: 12,
@@ -207,6 +257,12 @@ function validateHistoricalMinimum(
   if (version === 12) {
     requireTemplateKeys(input, baseStateV12Template as unknown as UnknownRecord, version);
   }
+  if (version === 13) {
+    requireTemplateKeys(input, baseStateV13Template as unknown as UnknownRecord, version);
+  }
+  if (version === 14) {
+    requireTemplateKeys(input, baseStateV14Template as unknown as UnknownRecord, version);
+  }
   if (version === CURRENT_PROJECT_VERSION) {
     requireTemplateKeys(input, baseState as unknown as UnknownRecord, version);
   }
@@ -254,10 +310,22 @@ export function parseImportedProjectJson(input: unknown): UnknownRecord {
   return input;
 }
 
-export function validateProjectV13Shape(input: unknown): ProjectStateCandidate {
+export function validateProjectV15Shape(input: unknown): ProjectStateCandidate {
+  const parsed = parseImportedProjectJson(input);
+  validateHistoricalMinimum(parsed, 15);
+  return validateLatestProjectState(parsed);
+}
+
+export function validateProjectV14Shape(input: unknown): ProjectStateV14Candidate {
+  const parsed = parseImportedProjectJson(input);
+  validateHistoricalMinimum(parsed, 14);
+  return parsed as unknown as ProjectStateV14Candidate;
+}
+
+export function validateProjectV13Shape(input: unknown): ProjectStateV13Candidate {
   const parsed = parseImportedProjectJson(input);
   validateHistoricalMinimum(parsed, 13);
-  return validateLatestProjectState(parsed);
+  return parsed as unknown as ProjectStateV13Candidate;
 }
 
 export function validateProjectV12Shape(input: unknown): ProjectStateV12Candidate {

@@ -101,6 +101,8 @@ export function rendererGeometryStateKey(state: ProjectState) {
     // authored controls here would duplicate invalidation and would rebuild
     // renderers when parsed-outline displacement is unavailable.
     glyphMicroWarp: _glyphMicroWarp,
+    glyphInfluence: _glyphInfluence,
+    glyphCalmWater: _glyphCalmWater,
     glyphDisplacement: _glyphDisplacement,
     // Dot-grid controls are owned only by SDF Halftone below.
     dotGrid: _dotGrid,

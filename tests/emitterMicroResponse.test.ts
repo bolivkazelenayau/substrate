@@ -371,4 +371,19 @@ describe("Emitter Micro Response sampler", () => {
     expect(emitterMicroResponseGeometryKey(dispersed, { ...firstContext, substrateKey: "other-sdf" }))
       .not.toBe(emitterMicroResponseGeometryKey(dispersed, firstContext));
   });
+
+  it.each([
+    ["legacy", false, false],
+    ["exclude-interior", true, true],
+    ["disperse-exterior", true, true],
+  ] as const)("maps the UI occupancy mode %s to one deterministic sampler state", (occupancy, active, exterior) => {
+    const state = responseState({ enabled: false, occupancy });
+    const sampler = createEmitterMicroResponseSampler(state, context());
+    const repeat = createEmitterMicroResponseSampler(state, context());
+
+    expect(sampler.occupancyActive).toBe(active);
+    expect(sampler.exterior).toBe(exterior);
+    expect(emitterMicroResponseStateKey(state)).toBe(emitterMicroResponseStateKey({ ...state }));
+    expect(sampler.sampleCircle(mark(20, 50), 1)).toEqual(repeat.sampleCircle(mark(20, 50), 1));
+  });
 });

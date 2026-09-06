@@ -1,4 +1,5 @@
 import { GLYPH_MICRO_WARP_PARSED_FONT_WARNING } from "../../engine/glyphMicroWarp";
+import { getControlActivity } from "../../engine/controlOwnership";
 import { baseState } from "../../engine/presets";
 import type { ProjectState } from "../../types";
 
@@ -6,6 +7,8 @@ interface GlyphMicroWarpControlsProps {
   state: ProjectState;
   setState: (state: ProjectState) => void;
   parsedFontPathsAvailable: boolean;
+  open: boolean;
+  onToggle: () => void;
 }
 
 const defaults: Record<string, number> = {
@@ -21,9 +24,15 @@ const defaults: Record<string, number> = {
   "Seed influence": baseState.glyphMicroWarp.seedInfluence,
 };
 
-export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailable }: GlyphMicroWarpControlsProps) {
+export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailable, open, onToggle }: GlyphMicroWarpControlsProps) {
   const settings = state.glyphMicroWarp;
-  const canToggle = parsedFontPathsAvailable || settings.enabled;
+  const activity = getControlActivity(state, parsedFontPathsAvailable).glyphMicroWarpActivity;
+  const canToggle = activity.supported || settings.enabled;
+  const summary = activity.retained
+    ? "Glyph Micro Warp · retained / inactive"
+    : activity.supported
+      ? "Glyph Micro Warp"
+      : "Glyph Micro Warp · unavailable";
   const patch = (next: Partial<ProjectState["glyphMicroWarp"]>) => setState({
     ...state,
     glyphMicroWarp: { ...settings, ...next },
@@ -31,28 +40,35 @@ export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailab
   });
 
   return (
-    <section className="control-section glyph-micro-warp-section" data-testid="glyph-micro-warp-controls">
-      <div className="section-subheading">Glyph Micro Warp</div>
-      <label className={`debug-toggle${!canToggle ? " disabled" : ""}`}>
-        <input
-          data-testid="glyph-micro-warp-enabled"
-          type="checkbox"
-          checked={settings.enabled}
-          disabled={!canToggle}
-          onChange={(event) => patch({ enabled: event.target.checked })}
-        />
-        <span>Warp parsed glyph outlines</span>
-      </label>
-      <small className={parsedFontPathsAvailable ? "control-note" : "control-warning"}>
-        {parsedFontPathsAvailable
-          ? "Authoritative parsed-outline stage · before Fragmentation, mask, SDF, preview, and export."
-          : GLYPH_MICRO_WARP_PARSED_FONT_WARNING}
-      </small>
-      {parsedFontPathsAvailable && !state.emitter.enabled && (
-        <small className="emitter-inline-warning">Enable an emitter to define the local warp region.</small>
-      )}
+    <div className={`control-group accordion-group glyph-micro-warp-section${activity.retained ? " retained-group" : ""}`} data-testid="glyph-micro-warp-controls" data-owner="Glyph Micro Warp">
+      <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}>
+        <span aria-hidden="true">{open ? "▼" : "▶"}</span> {summary}
+      </button>
+      {open && <div className="accordion-content">
+        <label className={`debug-toggle${!canToggle || activity.retained ? " disabled" : ""}`}>
+          <input
+            data-testid="glyph-micro-warp-enabled"
+            type="checkbox"
+            data-project-enabled={settings.enabled ? "true" : "false"}
+            data-pipeline-active={activity.active ? "true" : "false"}
+            checked={activity.active}
+            disabled={!canToggle || activity.retained}
+            onChange={(event) => patch({ enabled: event.target.checked })}
+          />
+          <span>{activity.retained ? "Warp parsed glyph outlines · retained / inactive" : "Warp parsed glyph outlines"}</span>
+        </label>
+        <small className={activity.active || activity.supported ? "control-note" : "control-warning"}>
+          {activity.retained
+            ? `Retained but inactive: ${activity.reason}.`
+            : parsedFontPathsAvailable
+              ? "Authoritative parsed-outline stage · before Fragmentation, mask, SDF, preview, and export."
+              : GLYPH_MICRO_WARP_PARSED_FONT_WARNING}
+        </small>
+        {parsedFontPathsAvailable && !state.emitter.enabled && (
+          <small className="emitter-inline-warning">Enable an emitter to define the local warp region.</small>
+        )}
 
-      <fieldset disabled={!settings.enabled || !parsedFontPathsAvailable}>
+      <fieldset disabled={!activity.active}>
         <legend className="visually-hidden">Glyph Micro Warp parameters</legend>
         <Range testId="glyph-micro-warp-strength" label="Strength" value={settings.strength} min={0} max={100} step={1} onChange={(strength) => patch({ strength })} />
         <Range testId="glyph-micro-warp-radius" label="Response radius" value={settings.responseRadius} min={8} max={640} step={2} onChange={(responseRadius) => patch({ responseRadius })} />
@@ -86,7 +102,8 @@ export function GlyphMicroWarpControls({ state, setState, parsedFontPathsAvailab
         </label>
         <Range label="Seed influence" value={settings.seedInfluence} min={0} max={100} step={5} onChange={(seedInfluence) => patch({ seedInfluence })} />
       </fieldset>
-    </section>
+      </div>}
+    </div>
   );
 }
 
@@ -104,6 +121,7 @@ function Range({ testId, label, value, min, max, step, onChange }: {
     <label className="range">
       <span>{label}<output>{value}</output></span>
       <input
+        aria-label={label}
         data-testid={testId}
         type="range"
         value={value}

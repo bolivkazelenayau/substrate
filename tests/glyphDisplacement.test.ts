@@ -50,6 +50,7 @@ function stateFor(mode: GlyphDisplacementMode, overrides: Partial<ProjectState["
       ...baseState.glyphDisplacement,
       enabled: true,
       mode,
+      sliceInfluence: "legacy",
       strength: 72,
       responseRadius: 520,
       fragmentSize: 34,
@@ -59,6 +60,24 @@ function stateFor(mode: GlyphDisplacementMode, overrides: Partial<ProjectState["
       fragmentRotation: 2,
       ...overrides,
     },
+  };
+}
+
+function localizedSliceState(
+  mode: "horizontal-slices" | "vertical-slices" = "horizontal-slices",
+  overrides: Partial<ProjectState["glyphDisplacement"]> = {},
+): ProjectState {
+  const state = stateFor(mode, { sliceInfluence: "emitter-falloff", ...overrides });
+  return {
+    ...state,
+    emitter: {
+      ...state.emitter,
+      enabled: true,
+      sourceMode: "custom",
+      customX: 600,
+      customY: 360,
+    },
+    glyphInfluence: { ...state.glyphInfluence, radius: 70, edgeSoftness: 30 },
   };
 }
 
@@ -98,6 +117,27 @@ describe("glyph-domain displacement", () => {
     expect(zero.geometryKey).toBe("source:key");
   });
 
+  it("retains but does not consume Fragmentation while Display Dislocation is active", () => {
+    const state = {
+      ...stateFor("grid"),
+      emitter: { ...baseState.emitter, enabled: true },
+      dotGrid: { ...baseState.dotGrid, enabled: true },
+      displayDislocation: { ...baseState.displayDislocation, enabled: true, displacementAmount: 48 },
+    };
+    const source = layoutGlyphs(state, loaded);
+    const identity = glyphDisplacementIdentity(state, "source:key", source);
+    const derived = deriveDisplacedTypographyGeometry(state, source, "source:key");
+
+    expect(identity).toMatchObject({
+      active: false,
+      displacementKey: "glyph-displacement:incompatible-display-dislocation",
+      geometryKey: "source:key",
+      reason: "incompatible-display-dislocation",
+    });
+    expect(derived.geometry).toBe(source);
+    expect(derived.diagnostics.inactiveReason).toBe("incompatible-display-dislocation");
+  });
+
   it.each(["warp", "horizontal-slices", "vertical-slices", "grid", "radial-sectors"] as const)(
     "%s produces deterministic displaced vector authority",
     (mode) => {
@@ -122,6 +162,90 @@ describe("glyph-domain displacement", () => {
     const movedB = applyDisplacementTransform(b, fragment.transform);
     expect(movedB.x - movedA.x).toBeCloseTo(b.x - a.x, 5);
     expect(movedB.y - movedA.y).toBeCloseTo(b.y - a.y, 5);
+  });
+
+  it.each(["horizontal-slices", "vertical-slices"] as const)(
+    "keeps each emitter-local %s fragment affine-coherent while distant fragments are exact identity",
+    (mode) => {
+      const { result } = derive(localizedSliceState(mode, { fragmentRotation: 0, strength: 48 }));
+      expect(result.active).toBe(true);
+      expect(result.diagnostics.affectedFragmentCount).toBeGreaterThan(0);
+      expect(result.diagnostics.affectedFragmentCount).toBeLessThan(result.diagnostics.fragmentCount);
+      const near = result.fragments.reduce((best, fragment) => (
+        fragment.responseWeight > best.responseWeight ? fragment : best
+      ));
+      const far = result.fragments.find((fragment) => fragment.responseWeight === 0)!;
+      expect(near.responseWeight).toBeGreaterThan(0.5);
+      const a = { x: near.sourceBounds.x + 2, y: near.sourceBounds.y + 2 };
+      const b = { x: a.x + 9, y: a.y + 4 };
+      const movedA = applyDisplacementTransform(a, near.transform);
+      const movedB = applyDisplacementTransform(b, near.transform);
+      expect(movedB.x - movedA.x).toBeCloseTo(b.x - a.x, 5);
+      expect(movedB.y - movedA.y).toBeCloseTo(b.y - a.y, 5);
+      expect(far.transform).toEqual({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 });
+      expect(far.translation).toEqual({ x: 0, y: 0 });
+    },
+  );
+
+  it("expands Slice coverage with radius without changing base strength", () => {
+    const smallState = localizedSliceState("horizontal-slices", { strength: 48, fragmentRotation: 0 });
+    const small = derive({ ...smallState, glyphInfluence: { ...smallState.glyphInfluence, radius: 70, edgeSoftness: 30 } }).result;
+    const large = derive({ ...smallState, glyphInfluence: { ...smallState.glyphInfluence, radius: 140, edgeSoftness: 30 } }).result;
+    expect(large.diagnostics.affectedFragmentCount).toBeGreaterThan(small.diagnostics.affectedFragmentCount);
+    const strongestSmall = small.fragments.reduce((best, fragment) => (
+      fragment.responseWeight > best.responseWeight ? fragment : best
+    ));
+    const sameLarge = large.fragments.find((fragment) => fragment.id === strongestSmall.id)!;
+    const normalizedMagnitude = (fragment: typeof strongestSmall) => (
+      Math.hypot(fragment.translation.x, fragment.translation.y) / fragment.responseWeight
+    );
+    expect(sameLarge.responseWeight).toBeGreaterThanOrEqual(strongestSmall.responseWeight);
+    expect(normalizedMagnitude(sameLarge)).toBeCloseTo(normalizedMagnitude(strongestSmall), 5);
+  });
+
+  it("widens the Slice transition with edge softness", () => {
+    const state = localizedSliceState("horizontal-slices", { strength: 48, fragmentRotation: 0 });
+    const firm = derive({ ...state, glyphInfluence: { ...state.glyphInfluence, radius: 35, edgeSoftness: 35 } }).result;
+    const soft = derive({ ...state, glyphInfluence: { ...state.glyphInfluence, radius: 35, edgeSoftness: 220 } }).result;
+    expect(soft.diagnostics.affectedFragmentCount).toBeGreaterThan(firm.diagnostics.affectedFragmentCount);
+    expect(Math.max(...firm.fragments.map((fragment) => fragment.responseWeight))).toBe(1);
+    expect(Math.max(...soft.fragments.map((fragment) => fragment.responseWeight))).toBe(1);
+  });
+
+  it("moves the center of localized Slice composition with the emitter", () => {
+    const state = localizedSliceState("horizontal-slices", { strength: 42, fragmentRotation: 0 });
+    const left = derive({ ...state, emitter: { ...state.emitter, customX: 450 } }).result;
+    const right = derive({ ...state, emitter: { ...state.emitter, customX: 750 } }).result;
+    const stronglyAffected = (result: typeof left) => new Set(
+      result.fragments.filter((fragment) => fragment.responseWeight > 0.6).flatMap((fragment) => fragment.glyphIds),
+    );
+    expect(stronglyAffected(left)).not.toEqual(stronglyAffected(right));
+    expect(left.geometryKey).not.toBe(right.geometryKey);
+  });
+
+  it("does not consume emitter frequency in localized Slice identity", () => {
+    const state = localizedSliceState();
+    const source = layoutGlyphs(state, loaded);
+    const key = glyphDisplacementIdentity(state, "source", source).geometryKey;
+    const changed = glyphDisplacementIdentity({
+      ...state,
+      emitter: { ...state.emitter, frequency: state.emitter.frequency * 1.5 },
+    }, "source", source).geometryKey;
+    expect(changed).toBe(key);
+  });
+
+  it("preserves the explicit Legacy / Global Slice path", () => {
+    const legacy = stateFor("horizontal-slices", { sliceInfluence: "legacy" });
+    const localized = {
+      ...legacy,
+      emitter: { ...legacy.emitter, enabled: true },
+      glyphDisplacement: { ...legacy.glyphDisplacement, sliceInfluence: "emitter-falloff" as const },
+    };
+    const legacyResult = derive(legacy).result;
+    const localizedResult = derive(localized).result;
+    expect(legacyResult.fragments.every((fragment) => fragment.glyphIds.length > 1)).toBe(true);
+    expect(localizedResult.fragments.every((fragment) => fragment.glyphIds.length === 1)).toBe(true);
+    expect(localizedResult.geometryKey).not.toBe(legacyResult.geometryKey);
   });
 
   it("keeps grid-cell motion coherent and opens source-domain gaps", () => {

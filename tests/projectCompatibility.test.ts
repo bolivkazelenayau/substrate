@@ -11,6 +11,8 @@ import {
   validateProjectV11Shape,
   validateProjectV12Shape,
   validateProjectV13Shape,
+  validateProjectV14Shape,
+  validateProjectV15Shape,
 } from "../src/engine/projectImport";
 import { applyPreset, baseState } from "../src/engine/presets";
 import { serializeProjectDocument } from "../src/hooks/useProjectDocument";
@@ -19,6 +21,7 @@ import { currentFragmentationFixtures, protectedFragmentationModes } from "./fix
 type UnknownRecord = Record<string, unknown>;
 
 const legacyVersions = [1, 2, 3, 4, 5, 6, 7, 8] as const;
+const legacyGlyphDisplacement = { ...baseState.glyphDisplacement, sliceInfluence: "legacy" as const };
 
 const expectedCore = {
   1: { text: "LEGACY ONE", renderer: "dots", preset: "Signal Dust", seed: 10101 },
@@ -61,9 +64,9 @@ describe("historical project compatibility matrix", () => {
       const raw = readLegacy(version);
       const first = migrateAndRepairProject(raw);
 
-      expect(first.project).toMatchObject({ version: 13, ...expectedCore[version] });
+      expect(first.project).toMatchObject({ version: 15, ...expectedCore[version] });
       expect(first.project.emitterDisplay.mode).toBe("field");
-      expect(first.project.glyphDisplacement).toEqual(baseState.glyphDisplacement);
+      expect(first.project.glyphDisplacement).toEqual(legacyGlyphDisplacement);
       expect(first.project.glyphDisplacement.enabled).toBe(false);
       expect(first.project.dotGrid).toEqual(baseState.dotGrid);
       expect(first.project.dotGrid.enabled).toBe(false);
@@ -75,11 +78,16 @@ describe("historical project compatibility matrix", () => {
       expect(first.project.glyphMicroWarp.enabled).toBe(false);
       expect(first.project.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
       expect(first.project.glyphFalloffDisplacement.mode).toBe("off");
-      expect(first.warnings).toContain("Project was migrated to schema version 13.");
+      expect(first.project.glyphInfluence).toEqual(baseState.glyphInfluence);
+      expect(first.project.glyphCalmWater).toEqual(baseState.glyphCalmWater);
+      expect(first.project.glyphCalmWater.enabled).toBe(false);
+      expect(first.project.emitter.influenceScope).toBe("all-typography");
+      expect(first.project.emitters.every((emitter) => emitter.influenceScope === "all-typography")).toBe(true);
+      expect(first.warnings).toContain("Project was migrated to schema version 15.");
 
       const saved = serializeProjectDocument(first.project);
       const savedObject = parseProjectDocumentText(saved);
-      expect(validateProjectV13Shape(savedObject).version).toBe(13);
+      expect(validateProjectV15Shape(savedObject).version).toBe(15);
       const reloaded = migrateAndRepairProject(savedObject);
       expect(reloaded.project).toEqual(first.project);
     });
@@ -137,13 +145,57 @@ describe("historical project compatibility matrix", () => {
     });
   });
 
+  it("migrates exact v13 projects without reinterpreting global Slice", () => {
+    const {
+      glyphInfluence: _glyphInfluence,
+      glyphCalmWater: _glyphCalmWater,
+      glyphDisplacement,
+      ...v14WithoutNewGlyphStages
+    } = baseState;
+    const { sliceInfluence: _sliceInfluence, ...v13GlyphDisplacement } = glyphDisplacement;
+    const v13 = {
+      ...v14WithoutNewGlyphStages,
+      version: 13 as const,
+      glyphDisplacement: { ...v13GlyphDisplacement, enabled: true, mode: "horizontal-slices" as const },
+    };
+    expect(validateProjectV13Shape(v13).version).toBe(13);
+    const migrated = migrateAndRepairProject(v13).project;
+    expect(migrated.version).toBe(15);
+    expect(migrated.glyphDisplacement.sliceInfluence).toBe("legacy");
+    expect(migrated.glyphInfluence).toEqual(baseState.glyphInfluence);
+    expect(migrated.glyphCalmWater).toEqual(baseState.glyphCalmWater);
+  });
+
+  it("migrates exact v14 spatial targeting to explicit All typography scope", () => {
+    const { version: _version, emitter, emitters, ...v14Fields } = baseState;
+    const {
+      influenceScope: _singleScope,
+      neighborhoodSize: _singleNeighborhood,
+      ...v14Emitter
+    } = emitter;
+    const v14Emitters = emitters.map((row) => {
+      const {
+        influenceScope: _rowScope,
+        neighborhoodSize: _rowNeighborhood,
+        ...v14Row
+      } = row;
+      return v14Row;
+    });
+    const v14 = { ...v14Fields, version: 14, emitter: v14Emitter, emitters: v14Emitters };
+    expect(validateProjectV14Shape(v14).version).toBe(14);
+    const migrated = migrateAndRepairProject(v14).project;
+    expect(migrated.version).toBe(15);
+    expect(migrated.emitter.influenceScope).toBe("all-typography");
+    expect(migrated.emitters.every((row) => row.influenceScope === "all-typography")).toBe(true);
+  });
+
   it("migrates and round-trips the Private / Sonics v8 authored configuration additively", () => {
     const raw = readPrivateSonicsV8();
     expect(validateProjectV8Shape(raw).version).toBe(8);
 
     const first = migrateAndRepairProject(raw).project;
     expect(first).toMatchObject({
-      version: 13,
+      version: 15,
       artboard: { width: 1200, height: 720 },
       text: "Private\nSonics",
       fontSize: 540,
@@ -161,14 +213,14 @@ describe("historical project compatibility matrix", () => {
       },
     });
     expect(first.font?.family).toBe("Garamond Display");
-    expect(first.glyphDisplacement).toEqual(baseState.glyphDisplacement);
+    expect(first.glyphDisplacement).toEqual(legacyGlyphDisplacement);
     expect(first.displayDislocation).toEqual(baseState.displayDislocation);
     expect(first.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
     expect(first.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
     expect(first.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
 
     const saved = parseProjectDocumentText(serializeProjectDocument(first));
-    expect(validateProjectV13Shape(saved).version).toBe(13);
+    expect(validateProjectV15Shape(saved).version).toBe(15);
     expect(migrateAndRepairProject(saved).project).toEqual(first);
   });
 
@@ -196,16 +248,19 @@ describe("protected current glyph fragmentation documents", () => {
         emitterMicroResponse: _emitterMicroResponse,
         glyphMicroWarp: _glyphMicroWarp,
         glyphFalloffDisplacement: _glyphFalloffDisplacement,
+        glyphInfluence: _glyphInfluence,
+        glyphCalmWater: _glyphCalmWater,
         ...v10Fields
       } = source;
-      const v9 = { ...v10Fields, version: 9 };
+      const { sliceInfluence: _sliceInfluence, ...v9GlyphDisplacement } = source.glyphDisplacement;
+      const v9 = { ...v10Fields, glyphDisplacement: v9GlyphDisplacement, version: 9 };
 
       expect(validateProjectV9Shape(v9).version).toBe(9);
       const migrated = migrateAndRepairProject(v9).project;
-      expect(migrated.version).toBe(13);
+      expect(migrated.version).toBe(15);
       expect(migrated.glyphDisplacement).toEqual(source.glyphDisplacement);
       expect(migrated.dotGrid).toEqual(source.dotGrid);
-      expect(migrated.emitter).toEqual(source.emitter);
+      expect(migrated.emitter).toEqual({ ...source.emitter, influenceScope: "all-typography" });
       expect(migrated.seed).toBe(source.seed);
       expect(migrated.displayDislocation).toEqual(baseState.displayDislocation);
       expect(migrated.displayDislocation.enabled).toBe(false);
@@ -221,16 +276,19 @@ describe("protected current glyph fragmentation documents", () => {
       emitterMicroResponse: _emitterMicroResponse,
       glyphMicroWarp: _glyphMicroWarp,
       glyphFalloffDisplacement: _glyphFalloffDisplacement,
+      glyphInfluence: _glyphInfluence,
+      glyphCalmWater: _glyphCalmWater,
       ...v11Fields
     } = source;
-    const v10 = { ...v11Fields, version: 10 as const };
+    const { sliceInfluence: _sliceInfluence, ...v10GlyphDisplacement } = source.glyphDisplacement;
+    const v10 = { ...v11Fields, glyphDisplacement: v10GlyphDisplacement, version: 10 as const };
 
     expect(validateProjectV10Shape(v10).version).toBe(10);
     const migrated = migrateAndRepairProject(v10).project;
-    expect(migrated.version).toBe(13);
+    expect(migrated.version).toBe(15);
     expect(migrated.displayDislocation).toEqual(source.displayDislocation);
     expect(migrated.displayDislocation.enabled).toBe(true);
-    expect(migrated.glyphDisplacement).toEqual(source.glyphDisplacement);
+    expect(migrated.glyphDisplacement).toEqual({ ...source.glyphDisplacement, sliceInfluence: "legacy" });
     expect(migrated.emitterMicroResponse).toEqual(baseState.emitterMicroResponse);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
     expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
@@ -248,13 +306,16 @@ describe("protected current glyph fragmentation documents", () => {
     const {
       glyphMicroWarp: _glyphMicroWarp,
       glyphFalloffDisplacement: _glyphFalloffDisplacement,
+      glyphInfluence: _glyphInfluence,
+      glyphCalmWater: _glyphCalmWater,
       ...v12WithoutWarp
     } = source;
-    const v11 = { ...v12WithoutWarp, version: 11 as const };
+    const { sliceInfluence: _sliceInfluence, ...v11GlyphDisplacement } = source.glyphDisplacement;
+    const v11 = { ...v12WithoutWarp, glyphDisplacement: v11GlyphDisplacement, version: 11 as const };
 
     expect(validateProjectV11Shape(v11).version).toBe(11);
     const migrated = migrateAndRepairProject(v11).project;
-    expect(migrated.version).toBe(13);
+    expect(migrated.version).toBe(15);
     expect(migrated.emitterMicroResponse).toEqual(source.emitterMicroResponse);
     expect(migrated.glyphMicroWarp).toEqual(baseState.glyphMicroWarp);
     expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
@@ -265,12 +326,18 @@ describe("protected current glyph fragmentation documents", () => {
       ...baseState,
       glyphMicroWarp: { ...baseState.glyphMicroWarp, enabled: true, strength: 73 },
     };
-    const { glyphFalloffDisplacement: _glyphFalloffDisplacement, ...v13WithoutFalloff } = source;
-    const v12 = { ...v13WithoutFalloff, version: 12 as const };
+    const {
+      glyphFalloffDisplacement: _glyphFalloffDisplacement,
+      glyphInfluence: _glyphInfluence,
+      glyphCalmWater: _glyphCalmWater,
+      ...v13WithoutFalloff
+    } = source;
+    const { sliceInfluence: _sliceInfluence, ...v12GlyphDisplacement } = source.glyphDisplacement;
+    const v12 = { ...v13WithoutFalloff, glyphDisplacement: v12GlyphDisplacement, version: 12 as const };
 
     expect(validateProjectV12Shape(v12).version).toBe(12);
     const migrated = migrateAndRepairProject(v12).project;
-    expect(migrated.version).toBe(13);
+    expect(migrated.version).toBe(15);
     expect(migrated.glyphMicroWarp).toEqual(source.glyphMicroWarp);
     expect(migrated.glyphFalloffDisplacement).toEqual(baseState.glyphFalloffDisplacement);
   });
@@ -291,17 +358,19 @@ describe("project import errors and repair reporting", () => {
   it("repairs sparse historical documents before latest-shape validation", () => {
     const repaired = migrateAndRepairProject({ version: 8, renderer: "flow", seed: 1 }).project;
     expect(repaired).toMatchObject({
-      version: 13,
+      version: 15,
       text: baseState.text,
       renderer: "flow",
       seed: 1,
       artboard: baseState.artboard,
       emitterDisplay: baseState.emitterDisplay,
-      glyphDisplacement: baseState.glyphDisplacement,
+      glyphDisplacement: legacyGlyphDisplacement,
       dotGrid: baseState.dotGrid,
       displayDislocation: baseState.displayDislocation,
       emitterMicroResponse: baseState.emitterMicroResponse,
       glyphMicroWarp: baseState.glyphMicroWarp,
+      glyphInfluence: baseState.glyphInfluence,
+      glyphCalmWater: baseState.glyphCalmWater,
     });
   });
 

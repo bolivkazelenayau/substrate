@@ -25,6 +25,8 @@ export const presetExportKinds: Record<PresetId, PresetExportKind> = {
   "Split Field": "vector",
   "Fragment Matrix": "vector",
   "Display Dislocation": "vector",
+  "Calm Current": "vector",
+  "Tidal Slice": "vector",
   Custom: "vector",
 };
 

@@ -12,15 +12,18 @@ export function nextEmitterId(rows: GlyphEmitterInstance[]) {
 export function addEmitterRow(rows: GlyphEmitterInstance[]) {
   if (rows.length >= MAX_EMITTER_ROWS) return rows;
   const id = nextEmitterId(rows);
-  return [...rows, {
+  const emitter: GlyphEmitterInstance = {
     id,
     glyphId: "auto-first",
     enabled: true,
     weight: 1,
     phaseOffset: 0,
     radiusMultiplier: 1,
+    influenceScope: "source-glyph",
+    neighborhoodSize: 1,
     label: `Emitter ${rows.length + 1}`,
-  }];
+  };
+  return [...rows, emitter];
 }
 
 export function duplicateEmitterRow(rows: GlyphEmitterInstance[], id: string) {

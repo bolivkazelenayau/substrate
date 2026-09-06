@@ -10,7 +10,6 @@ interface EmitterControlsProps {
   setState: (state: ProjectState) => void;
   emitterGlyphs: GlyphEmitterMetadata[];
   consumerActive: boolean;
-  displayBehaviorSupported: boolean;
   open: boolean;
   onToggle: () => void;
 }
@@ -26,6 +25,7 @@ const defaults: Record<string, number> = {
   "Emitter Y": baseState.emitter.customY,
   Weight: baseState.emitters[0].weight,
   "Radius ×": baseState.emitters[0].radiusMultiplier,
+  Neighborhood: baseState.emitters[0].neighborhoodSize,
   "Global strength": baseState.emitter.amplitude,
   "Global wave frequency": baseState.emitter.frequency,
   "Global phase": baseState.emitter.phase,
@@ -45,18 +45,17 @@ const defaults: Record<string, number> = {
   "Settle / repel": baseState.emitterDisplay.divergence,
 };
 
-export function EmitterControls({ state, setState, emitterGlyphs, consumerActive, displayBehaviorSupported, open, onToggle }: EmitterControlsProps) {
+export function EmitterControls({ state, setState, emitterGlyphs, consumerActive, open, onToggle }: EmitterControlsProps) {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const eligibleGlyphs = emitterGlyphs.filter((glyph) => glyph.emitterEligible);
   const patchField = (next: Partial<ProjectState>) => setState({ ...state, ...next, preset: "Custom" });
   const patchEmitter = (next: Partial<ProjectState["emitter"]>) => patchField({ emitter: { ...state.emitter, ...next } });
-  const patchDisplay = (next: Partial<ProjectState["emitterDisplay"]>) => patchField({ emitterDisplay: { ...state.emitterDisplay, ...next } });
   const patchRow = (id: string, next: Partial<ProjectState["emitters"][number]>) => patchField({ emitters: updateEmitterRow(state.emitters, id, next) });
   const invalidGlyph = (glyphId: string | null) => Boolean(glyphId && !glyphId.startsWith("auto-") && !eligibleGlyphs.some((glyph) => glyph.glyphId === glyphId));
   const title = `Emitters · ${state.emitterMode === "single" ? "single" : `${state.emitters.filter((row) => row.enabled).length}/${state.emitters.length}`}`;
 
   return (
-    <div className="control-group accordion-group emitter-editor">
+    <div className="control-group accordion-group emitter-editor" data-owner="Emitter source and field definition">
       <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}><span>{open ? "▼" : "▶"}</span> {title}</button>
       {open && <div className="accordion-content">
         {!state.emitter.enabled && consumerActive && <div className="control-warning"><strong>⚠️ This renderer requires an active emitter field.</strong>{eligibleGlyphs.length > 0 ? <button type="button" onClick={() => patchEmitter({ enabled: true })}>Enable field</button> : <span>No eligible glyph found for current text/font.</span>}</div>}
@@ -89,6 +88,29 @@ export function EmitterControls({ state, setState, emitterGlyphs, consumerActive
                       <Range label="Weight" value={row.weight} min={0} max={2} step={0.05} onChange={(weight) => patchRow(row.id, { weight })} />
                       <Range label="Phase" value={row.phaseOffset} min={-6.3} max={6.3} step={0.1} onChange={(phaseOffset) => patchRow(row.id, { phaseOffset })} />
                       <Range label="Radius ×" value={row.radiusMultiplier} min={0.25} max={2} step={0.05} onChange={(radiusMultiplier) => patchRow(row.id, { radiusMultiplier })} />
+                      <label className="field compact-field">
+                        <span>Influence scope</span>
+                        <select
+                          data-testid={`emitter-${row.id}-scope`}
+                          value={state.emitter.sourceMode === "custom" ? "all-typography" : row.influenceScope}
+                          disabled={state.emitter.sourceMode === "custom"}
+                          onChange={(event) => patchRow(row.id, {
+                            influenceScope: event.target.value as ProjectState["emitters"][number]["influenceScope"],
+                          })}
+                        >
+                          <option value="source-glyph">Source glyph</option>
+                          <option value="glyph-neighborhood">Glyph + neighbors</option>
+                          <option value="source-line">Text line</option>
+                          <option value="all-typography">All typography</option>
+                        </select>
+                      </label>
+                      {state.emitter.sourceMode !== "custom" && row.influenceScope === "glyph-neighborhood" && <Range
+                        label="Neighborhood"
+                        value={row.neighborhoodSize}
+                        min={0}
+                        max={8}
+                        onChange={(neighborhoodSize) => patchRow(row.id, { neighborhoodSize })}
+                      />}
                       <div className="emitter-row-actions">
                         <button type="button" disabled={state.emitters.length >= MAX_EMITTER_ROWS} onClick={() => patchField({ emitters: duplicateEmitterRow(state.emitters, row.id) })}>Duplicate</button>
                         <button type="button" disabled={state.emitters.length <= 1} onClick={() => patchField({ emitters: removeEmitterRow(state.emitters, row.id) })}>Remove</button>
@@ -98,31 +120,46 @@ export function EmitterControls({ state, setState, emitterGlyphs, consumerActive
                 })}
               </div>
               <button type="button" className="emitter-add" disabled={state.emitters.length >= MAX_EMITTER_ROWS || eligibleGlyphs.length === 0} onClick={() => patchField({ emitters: addEmitterRow(state.emitters) })}>Add emitter · {state.emitters.length}/{MAX_EMITTER_ROWS}</button>
-              <GlobalEmitter state={state} patchField={patchField} patchEmitter={patchEmitter} />
+              <GlobalEmitter state={state} patchEmitter={patchEmitter} />
             </>}
-        <DisplayBehaviorControls
-          state={state}
-          supported={displayBehaviorSupported}
-          patchDisplay={patchDisplay}
-        />
       </div>}
     </div>
   );
 }
 
-function DisplayBehaviorControls({
+export function EmitterDisplayResponseControls({
   state,
   supported,
   patchDisplay,
+  open,
+  onToggle,
 }: {
   state: ProjectState;
   supported: boolean;
   patchDisplay: (next: Partial<ProjectState["emitterDisplay"]>) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const display = state.emitterDisplay;
   const exterior = display.mode === "exclude" || display.mode === "orbit";
-  return <div className="control-group nested-group emitter-display-controls">
-    <div className="section-subheading">Display response</div>
+  const configured = display.mode !== "field";
+  const active = supported && state.emitter.enabled && configured;
+  return <div className={`control-group accordion-group emitter-display-response${configured && !active ? " retained-group" : ""}`} data-testid="emitter-display-response" data-owner="Emitter Display Response">
+    <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}>
+      <span aria-hidden="true">{open ? "▼" : "▶"}</span>
+      {configured && !active ? "Emitter Display Response · retained / inactive" : supported ? "Emitter Display Response" : "Emitter Display Response · unavailable"}
+    </button>
+    {open && <div className="accordion-content">
+    <small className={active || !configured ? "inactive-hint" : "control-warning"}>
+      {!supported
+        ? "Retained but inactive: this renderer keeps its existing output."
+        : !state.emitter.enabled
+          ? "Enable an emitter to activate this mark-response system."
+          : !configured
+            ? "Legacy field placement leaves this response stage off."
+            : "Renderer-supported response on generated marks around emitter zones."}
+    </small>
+    <fieldset disabled={!supported || !state.emitter.enabled}>
     <label className="field compact-field">
       <span>Behavior</span>
       <select value={display.mode} onChange={(event) => patchDisplay({ mode: event.target.value as ProjectState["emitterDisplay"]["mode"] })}>
@@ -131,9 +168,7 @@ function DisplayBehaviorControls({
         <option value="exclude">No emit inside glyph</option>
         <option value="orbit">Orbit / disperse</option>
       </select>
-      <small>{supported
-        ? "Uses the authoritative glyph substrate; strongest near enabled emitter zones."
-        : "Available in Glyph Diffuser and SDF Halftone; this renderer keeps its existing output."}</small>
+      <small>Uses the authoritative glyph substrate; strongest near enabled emitter zones.</small>
     </label>
     {display.mode !== "field" && <>
       <Range label="Micro distortion" value={display.distortionStrength} min={0} max={100} onChange={(distortionStrength) => patchDisplay({ distortionStrength })} />
@@ -149,6 +184,8 @@ function DisplayBehaviorControls({
       </>}
       <small className="inactive-hint">Grid size 0 disables quantization. Negative settle/repel values pull toward the contour; positive values push outward.</small>
     </>}
+    </fieldset>
+    </div>}
   </div>;
 }
 
@@ -160,7 +197,7 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
     currentValue: state.emitter.radius,
   });
   return <div className="emitter-row">
-    <div className="section-subheading">Single emitter</div>
+    <div className="section-subheading">Source + field definition</div>
     <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Emitter enabled</span></label>
     <label className="field compact-field"><span>Source glyph</span><select value={state.emitter.glyphId ?? ""} onChange={(event) => patchEmitter({ glyphId: event.target.value || null })}><option value="">First eligible glyph</option><option value="auto-o-middle">Auto · O/o/0 or middle glyph</option>{eligibleGlyphs.map((glyph) => <option key={glyph.glyphId} value={glyph.glyphId}>{getGlyphDisplayLabel(glyph)}</option>)}</select></label>
     <label className="field compact-field"><span>Source mode</span><select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}><option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option></select></label>
@@ -178,33 +215,32 @@ function SingleEmitter({ state, eligibleGlyphs, patchEmitter }: { state: Project
   </div>;
 }
 
-function GlobalEmitter({ state, patchField, patchEmitter }: { state: ProjectState; patchField: (next: Partial<ProjectState>) => void; patchEmitter: (next: Partial<ProjectState["emitter"]>) => void }) {
+function GlobalEmitter({ state, patchEmitter }: { state: ProjectState; patchEmitter: (next: Partial<ProjectState["emitter"]>) => void }) {
   const radiusBounds = resolveEmitterRadiusBounds({
     artboardWidth: state.artboard.width,
     artboardHeight: state.artboard.height,
     typographySize: state.fontSize,
     currentValue: state.emitter.radius,
   });
-  return <div className="control-group nested-group">
-    <div className="section-subheading">Global field shaping · all emitters</div><small className="inactive-hint">These shared controls intentionally affect every enabled emitter row.</small>
-    <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Global field enabled</span></label>
+  return <div className="control-group nested-group" data-owner="Emitter shared field definition">
+    <div className="section-subheading">Shared field definition</div><small className="inactive-hint">Applies to every enabled source row.</small>
+    <label className="debug-toggle"><input type="checkbox" checked={state.emitter.enabled} onChange={(event) => patchEmitter({ enabled: event.target.checked })} /><span>Field enabled</span></label>
     <label className="field compact-field"><span>Shared source mode</span><select value={state.emitter.sourceMode} onChange={(event) => patchEmitter({ sourceMode: event.target.value as ProjectState["emitter"]["sourceMode"] })}><option value="center">Center</option><option value="centroid">Centroid (approx.)</option><option value="counter-center">Counter center (heuristic)</option><option value="custom">Custom</option></select></label>
     {state.emitter.sourceMode === "custom" && <>
-      <Range label="Global emitter X" value={state.emitter.customX} min={0} max={state.artboard.width} step={10} onChange={(customX) => patchEmitter({ customX })} />
-      <Range label="Global emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
+      <Range label="Emitter X" value={state.emitter.customX} min={0} max={state.artboard.width} step={10} onChange={(customX) => patchEmitter({ customX })} />
+      <Range label="Emitter Y" value={state.emitter.customY} min={0} max={state.artboard.height} step={10} onChange={(customY) => patchEmitter({ customY })} />
     </>}
-    <Range label="Global strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
-    <Range label="Global wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
-    <Range label="Global phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
-    <Range label="Global base radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
-    <label className="field compact-field"><span>Global falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
-    <Range label="Global self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
-    <Range label="Global neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
-    <label className="field compact-field"><span>Blend</span><select value={state.fieldBlendMode} onChange={(event) => patchField({ fieldBlendMode: event.target.value as ProjectState["fieldBlendMode"] })}><option value="add">Add</option><option value="max">Max</option></select><small>Combines overlapping emitter contributions.</small></label>
+    <Range label="Strength" value={state.emitter.amplitude} min={0} max={4} step={0.1} onChange={(amplitude) => patchEmitter({ amplitude })} />
+    <Range label="Wave frequency" value={state.emitter.frequency} min={0.005} max={0.5} step={0.005} onChange={(frequency) => patchEmitter({ frequency })} />
+    <Range label="Phase" value={state.emitter.phase} min={-6.28} max={6.28} step={0.1} onChange={(phase) => patchEmitter({ phase })} />
+    <Range label="Radius" value={state.emitter.radius} min={radiusBounds.min} max={radiusBounds.softMax} step={radiusBounds.step} onChange={(radius) => patchEmitter({ radius })} />
+    <label className="field compact-field"><span>Falloff</span><select value={state.emitter.falloff} onChange={(event) => patchEmitter({ falloff: event.target.value as ProjectState["emitter"]["falloff"] })}><option value="smoothstep">Smoothstep</option><option value="gaussian">Gaussian</option><option value="linear">Linear</option></select></label>
+    <Range label="Self influence" value={state.emitter.selfInfluence} min={0} max={3} step={0.1} onChange={(selfInfluence) => patchEmitter({ selfInfluence })} />
+    <Range label="Neighbor influence" value={state.emitter.neighborInfluence} min={0} max={3} step={0.1} onChange={(neighborInfluence) => patchEmitter({ neighborInfluence })} />
   </div>;
 }
 
 function Range({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (value: number) => void }) {
   const resetValue = defaults[label];
-  return <label className="range"><span>{label}<output>{value}</output></span><input type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => resetValue !== undefined && onChange(resetValue)} onChange={(event) => onChange(Number(event.target.value))} /></label>;
+ return <label className="range"><span>{label}<output>{value}</output></span><input aria-label={label} type="range" value={value} min={min} max={max} step={step} title="Double-click to reset" onDoubleClick={() => resetValue !== undefined && onChange(resetValue)} onChange={(event) => onChange(Number(event.target.value))} /></label>;
 }

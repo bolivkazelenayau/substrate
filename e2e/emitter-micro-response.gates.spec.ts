@@ -17,6 +17,11 @@ async function openMicroResponse(page: Page) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openDisclosure(page: Page, name: string) {
+  const button = page.locator("button.accordion-summary").filter({ hasText: name });
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForReady(page: Page) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(stage(page)).toHaveAttribute("data-text-geometry-key", /.+/, { timeout: 60_000 });
@@ -40,6 +45,7 @@ async function loadPrivateSonics(page: Page) {
   await waitForReady(page);
   await pinSvgPreview(page);
   await openMicroResponse(page);
+  await openDisclosure(page, "Glyph Micro Warp");
 }
 
 async function setMicroRange(page: Page, label: string, value: number) {
@@ -263,12 +269,11 @@ test("Emitter Micro Response legacy, locality, occupancy, parity, and disable ga
 
   await page.getByTestId("emitter-micro-occupancy").selectOption("exclude-interior");
   await expect(stage(page)).toHaveAttribute("data-emitter-micro-mode", "micro/exclude-interior");
-  const occupancyEnabled = page.getByTestId("emitter-micro-occupancy-enabled");
-  await expect(occupancyEnabled).toBeChecked();
-  await occupancyEnabled.uncheck();
+  await expect(page.getByTestId("emitter-micro-occupancy-enabled")).toHaveCount(0);
+  await page.getByTestId("emitter-micro-occupancy").selectOption("legacy");
   await expect(stage(page)).toHaveAttribute("data-emitter-micro-occupancy-domain", "legacy-glyph-ink");
   await expect.poll(async () => (await counterProbe(page)).counterMarks).toBeGreaterThan(0);
-  await occupancyEnabled.check();
+  await page.getByTestId("emitter-micro-occupancy").selectOption("exclude-interior");
   await expect(stage(page)).toHaveAttribute("data-emitter-micro-mode", "micro/exclude-interior");
   await expect(stage(page)).toHaveAttribute("data-emitter-micro-occupancy-domain", "sealed-glyph-silhouette");
   await expect.poll(async () => (await counterProbe(page)).counterMarks).toBe(0);
@@ -443,7 +448,7 @@ test("Emitter Micro Response legacy, locality, occupancy, parity, and disable ga
 
   const firstSave = await saveProject(page);
   expect(firstSave.document).toMatchObject({
-    version: 13,
+    version: 15,
     text: "Private\nSonics",
     renderer: "glyph-diffuser",
     artboard: { width: 1200, height: 720 },
@@ -466,6 +471,7 @@ test("Display Dislocation retains coarse regions while microdetail composes and 
   await page.getByLabel("Preset").selectOption("Display Dislocation");
   await waitForReady(page);
   await pinSvgPreview(page);
+  await openMicroResponse(page);
   await expect(stage(page)).toHaveAttribute("data-display-dislocation-active", "true");
   const baselineSignature = await circleSignature(page);
   const baseline = await stage(page).evaluate((node) => ({

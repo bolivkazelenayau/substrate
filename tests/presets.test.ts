@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { PresetId } from "../src/types";
 import { resolveGlyphEmitterSources } from "../src/engine/field/glyphEmitters";
-import { applyPreset, baseState, getPresetDisplayLabel, presetIds, presetMetadata, presets } from "../src/engine/presets";
+import { applyPreset, baseState, getPresetDisplayLabel, getPresetScopeLabel, presetIds, presetMetadata, presetScopes, presets } from "../src/engine/presets";
 
 const expectedPresetIds: PresetId[] = [
   "Edge Current", "Sonic Ripple", "Signal Dust", "SDF Current", "Contour Thread",
   "Topographic Type", "Halftone Press", "Glyph Ripple", "Dotted Diffuser",
   "Sonic Halftone", "Sonic Contours", "Sonic Stream", "Sonic Diffuser",
-  "Sonic Warp", "Sonic Interference", "Counter Resonance", "Split Field", "Fragment Matrix", "Display Dislocation", "Custom",
+  "Sonic Warp", "Sonic Interference", "Counter Resonance", "Split Field", "Fragment Matrix", "Display Dislocation",
+  "Calm Current", "Tidal Slice", "Custom",
 ];
 
 const multiEmitterPresetIds = ["Sonic Interference", "Counter Resonance", "Split Field"] as const;
@@ -34,7 +35,7 @@ describe("presets", () => {
     const builtInMetadata = builtInIds.map((preset) => presetMetadata[preset]);
     const studyCodes = builtInMetadata.map((metadata) => metadata.studyCode);
 
-    expect(studyCodes).toHaveLength(19);
+    expect(studyCodes).toHaveLength(21);
     expect(new Set(studyCodes).size).toBe(studyCodes.length);
     studyCodes.forEach((studyCode) => expect(studyCode).toMatch(/^[A-Z]+ \/ \d{2}$/));
     builtInMetadata.forEach((metadata, index) => {
@@ -43,6 +44,15 @@ describe("presets", () => {
       expect(metadata.family).not.toBe("custom");
       expect(metadata.description).not.toBe("");
     });
+  });
+
+  it("declares an explicit semantic scope for every preset", () => {
+    const builtInIds = presetIds.slice(0, -1) as Exclude<PresetId, "Custom">[];
+    expect(Object.keys(presetScopes)).toEqual(builtInIds);
+    builtInIds.forEach((preset) => expect(presetScopes[preset].length).toBeGreaterThan(0));
+    expect(presetScopes["Display Dislocation"]).toEqual(["full-project"]);
+    expect(getPresetScopeLabel("Display Dislocation")).toBe("Full project snapshot");
+    expect(getPresetScopeLabel("Edge Current")).toBe("Renderer · Core field · Emitter");
   });
 
   it("keeps Custom unnumbered and formats presentation labels without changing values", () => {
@@ -73,26 +83,77 @@ describe("presets", () => {
     expect(presets[preset]).toHaveProperty("emitterMode", "single");
   });
 
-  it("existing presets reset the additive display response to legacy placement", () => {
+  it("scoped presets preserve unrelated authored response and deformation state", () => {
     const configured = {
       ...baseState,
       emitterDisplay: { ...baseState.emitterDisplay, mode: "orbit" as const, gridAmount: 100 },
+      emitterMicroResponse: { ...baseState.emitterMicroResponse, enabled: true, occupancy: "disperse-exterior" as const },
+      glyphMicroWarp: { ...baseState.glyphMicroWarp, enabled: true, strength: 88 },
+      glyphCalmWater: { ...baseState.glyphCalmWater, enabled: true, strength: 19 },
+      glyphDisplacement: { ...baseState.glyphDisplacement, enabled: true, mode: "grid" as const, strength: 47 },
+      displayDislocation: { ...baseState.displayDislocation, enabled: true },
     };
-    expect(applyPreset(configured, "Signal Dust").emitterDisplay).toEqual(baseState.emitterDisplay);
+    const applied = applyPreset(configured, "Signal Dust");
+    expect(applied.emitterDisplay).toEqual(configured.emitterDisplay);
+    expect(applied.emitterMicroResponse).toEqual(configured.emitterMicroResponse);
+    expect(applied.glyphMicroWarp).toEqual(configured.glyphMicroWarp);
+    expect(applied.glyphCalmWater).toEqual(configured.glyphCalmWater);
+    expect(applied.glyphDisplacement).toEqual(configured.glyphDisplacement);
+    expect(applied.displayDislocation).toEqual(configured.displayDislocation);
+    expect(applied.renderer).toBe("dots");
   });
 
-  it("keeps Display Dislocation opt-in and isolated from legacy presets", () => {
-    const display = applyPreset(baseState, "Display Dislocation");
+  it("makes Display Dislocation's full-project replacement explicit", () => {
+    const loadedFont = { family: "Basic", fullName: "Basic Regular", fileName: "Basic-Regular.ttf", unitsPerEm: 1000, ascender: 800, descender: -200 };
+    const configured = {
+      ...baseState,
+      text: "AUTHORED",
+      font: loadedFont,
+      glyphMicroWarp: { ...baseState.glyphMicroWarp, enabled: true, strength: 88 },
+      emitterMicroResponse: { ...baseState.emitterMicroResponse, enabled: true, occupancy: "disperse-exterior" as const },
+      backgroundColor: "#123456",
+    };
+    const display = applyPreset(configured, "Display Dislocation");
     expect(display).toMatchObject({
+      text: "DISPLAY",
       renderer: "sdf-halftone",
+      font: loadedFont,
+      glyphMicroWarp: baseState.glyphMicroWarp,
+      emitterMicroResponse: baseState.emitterMicroResponse,
       glyphDisplacement: { enabled: false },
       dotGrid: { enabled: true },
       displayDislocation: { enabled: true, mode: "horizontal-bands" },
       overlayMode: "hidden",
     });
+    expect(display.backgroundColor).toBe(baseState.backgroundColor);
+  });
+
+  it("makes competing effect recipes hand the domain authority to their selected effect", () => {
+    const display = applyPreset(baseState, "Display Dislocation");
     const fragmentation = applyPreset(display, "Fragment Matrix");
     expect(fragmentation.displayDislocation).toEqual(baseState.displayDislocation);
     expect(fragmentation.glyphDisplacement.enabled).toBe(true);
+  });
+
+  it.each(presetIds.slice(0, -1) as Exclude<PresetId, "Custom">[])("%s is deterministic when applied repeatedly", (preset) => {
+    const configured = { ...baseState, text: "AUTHORED", seed: 777 };
+    expect(applyPreset(configured, preset)).toEqual(applyPreset(configured, preset));
+  });
+
+  it("adds discoverable water presets without changing the existing experimental systems", () => {
+    const calm = applyPreset(baseState, "Calm Current");
+    expect(calm).toMatchObject({
+      glyphCalmWater: { enabled: true, frequencyLinked: true },
+      glyphDisplacement: { enabled: false },
+      emitter: { enabled: true },
+    });
+    const tidal = applyPreset(baseState, "Tidal Slice");
+    expect(tidal).toMatchObject({
+      glyphCalmWater: { enabled: true },
+      glyphDisplacement: { enabled: true, mode: "horizontal-slices", sliceInfluence: "emitter-falloff" },
+      emitter: { enabled: true },
+    });
+    expect(presets["Fragment Matrix"].glyphDisplacement?.mode).toBe("grid");
   });
 
   it("Sonic Interference creates multiple enabled sources when text permits", () => {

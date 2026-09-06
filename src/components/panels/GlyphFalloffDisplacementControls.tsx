@@ -1,4 +1,5 @@
 import { baseState } from "../../engine/presets";
+import { getControlActivity } from "../../engine/controlOwnership";
 import type { ProjectState } from "../../types";
 
 interface GlyphFalloffDisplacementControlsProps {
@@ -26,30 +27,38 @@ export function GlyphFalloffDisplacementControls({
   onToggle,
 }: GlyphFalloffDisplacementControlsProps) {
   const settings = state.glyphFalloffDisplacement;
+  const activity = getControlActivity(state, true).glyphFalloffDisplacementActivity;
   const patch = (next: Partial<ProjectState["glyphFalloffDisplacement"]>) => setState({
     ...state,
     glyphFalloffDisplacement: { ...settings, ...next },
     preset: "Custom",
   });
-  const active = settings.mode !== "off";
-  const unsupportedMessage = capability === "unaffected"
-    ? "This renderer is intentionally unaffected; its existing geometry remains unchanged."
-    : "This renderer has no compatible final-circle and authoritative-SDF contract.";
+  const active = activity.active;
+  const summary = activity.retained
+    ? "Glyph Falloff Field · retained / inactive"
+    : activity.supported
+      ? "Glyph Falloff Field"
+      : "Glyph Falloff Field · unavailable";
 
   return (
-    <div className={`control-group accordion-group glyph-falloff-displacement${supported ? "" : " disabled-group"}`}>
+    <div className={`control-group accordion-group glyph-falloff-displacement${activity.retained ? " retained-group" : !supported ? " disabled-group" : ""}`} data-testid="glyph-falloff-displacement" data-owner="Glyph Falloff Field">
       <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}>
         <span aria-hidden="true">{open ? "▼" : "▶"}</span>
-        Glyph Falloff Field{supported ? "" : " · unavailable"}
+        {summary}
       </button>
       {open && (
         <div className="accordion-content">
-          <small className="inactive-hint">
-            {supported
-              ? "Contour-following SDF displacement applied to final marks before Micro Response occupancy."
-              : unsupportedMessage}
+          <small className={activity.retained || !supported ? "control-warning" : "inactive-hint"}>
+            {activity.retained
+              ? `Retained but inactive: ${activity.reason}.`
+              : supported
+                ? "Contour-following SDF displacement applied to final marks before Micro Response occupancy."
+                : capability === "unaffected"
+                  ? "This renderer is intentionally unaffected; its existing geometry remains unchanged."
+                  : "This renderer has no compatible final-circle and authoritative-SDF contract."}
           </small>
-          <fieldset disabled={!supported}>
+          {activity.retained && <small className="retained-state-summary">Retained settings: {settings.mode === "contour-rings" ? "Contour rings" : "Off"}.</small>}
+          {supported && <fieldset>
             <legend className="visually-hidden">Glyph Falloff Field parameters</legend>
             <label className="field compact-field">
               <span>Mode</span>
@@ -121,7 +130,7 @@ export function GlyphFalloffDisplacementControls({
                 </small>
               </>
             )}
-          </fieldset>
+          </fieldset>}
         </div>
       )}
     </div>
@@ -149,6 +158,7 @@ function Range({
     <label className="range">
       <span>{label}<output>{value}</output></span>
       <input
+        aria-label={label}
         data-testid={testId}
         type="range"
         value={value}

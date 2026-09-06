@@ -8,6 +8,11 @@ async function loadApp(page: Page, preset = "Edge Current") {
   await expect(page.locator("button.export")).toBeEnabled({ timeout: 30_000 });
 }
 
+async function openPanel(page: Page, name: string) {
+  const button = page.locator("button.panel-heading-button").filter({ hasText: name });
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function dragSize(page: Page, value: number) {
   const control = page.getByTestId("size-control");
   const box = await control.boundingBox();
@@ -99,7 +104,7 @@ test("Gate C: renderer switch Halftone → Flow → Halftone", async ({ page }) 
 test("Gate E: preview backend switch schedules zero authoritative builds", async ({ page }) => {
   await loadApp(page, "Edge Current");
   await beginScenario(page, "gate-e-backend");
-  await page.getByRole("button", { name: "05 Preview" }).click();
+  await openPanel(page, "Preview");
   const backend = page.locator("label.field.compact-field").filter({ hasText: "Preview Mode" }).locator("select");
   await backend.selectOption("svg-dom");
   await backend.selectOption("canvas-2d");
@@ -113,7 +118,7 @@ test("Gate E: preview backend switch schedules zero authoritative builds", async
 test("Gate D: diagnostics toggle schedules zero authoritative builds", async ({ page }) => {
   await loadApp(page, "Edge Current");
   await beginScenario(page, "gate-d-diagnostics");
-  await page.getByRole("button", { name: "07 Diagnostics" }).click();
+  await openPanel(page, "Diagnostics / Developer");
   const diagnostics = page.locator("label.field.compact-field").filter({ hasText: "Diagnostics visibility" }).locator("select");
   await diagnostics.selectOption("full");
   await diagnostics.selectOption("compact");

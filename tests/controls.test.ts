@@ -150,7 +150,9 @@ describe("Safe Typography controls", () => {
     const button = [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find((candidate) => candidate.textContent?.includes(label));
     expect(button, `${label} disclosure`).toBeTruthy();
-    act(() => button!.click());
+    if (button!.getAttribute("aria-expanded") !== "true") {
+      act(() => button!.click());
+    }
   };
 
   it("shows field-study labels while preserving preset option values", () => {
@@ -271,7 +273,7 @@ describe("Safe Typography controls", () => {
     const sourceGlyph = field("Source glyph", "select");
     const emitterEditor = sourceGlyph.closest(".emitter-editor");
     expect(emitterEditor).not.toBeNull();
-    expect(emitterEditor?.textContent).toContain("Single emitter");
+    expect(emitterEditor?.textContent).toContain("Source + field definition");
     expect([...container.querySelectorAll(".accordion-summary")]
       .some((summary) => summary.textContent?.includes("Emitters"))).toBe(true);
 
@@ -283,11 +285,9 @@ describe("Safe Typography controls", () => {
     updated = null;
     change(field("Strength", "input"), "2.2");
     expect(getUpdated()?.emitter.amplitude).toBe(2.2);
-    expect(container.textContent).not.toContain("Blend");
-
-    const advanced = [...container.querySelectorAll(".accordion-group")]
-      .find((group) => group.querySelector(".accordion-summary")?.textContent?.includes("Advanced Parameters"));
-    expect(advanced?.textContent).not.toContain("Emitter Settings");
+    expect(emitterEditor?.textContent).not.toContain("Blend");
+    openDisclosure("Field detail");
+    expect(container.textContent).toContain("Emitter blend");
   });
 
   it("exposes art-directable display, exclusion, and orbit behavior controls", () => {
@@ -296,7 +296,7 @@ describe("Safe Typography controls", () => {
       renderer: "sdf-halftone",
       emitter: { ...baseState.emitter, enabled: true },
     });
-    openDisclosure("Emitters");
+    openDisclosure("Emitter Display Response");
 
     const behavior = field("Behavior", "select") as HTMLSelectElement;
     expect([...behavior.options].map((option) => option.value)).toEqual([
@@ -328,11 +328,9 @@ describe("Safe Typography controls", () => {
     expect(group).not.toBeNull();
     expect(group?.closest(".glyph-displacement-section")).toBeNull();
     const enabled = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')!;
-    const occupancyEnabled = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-occupancy-enabled"]')!;
     const occupancy = container.querySelector<HTMLSelectElement>('[data-testid="emitter-micro-occupancy"]')!;
     expect(enabled.disabled).toBe(false);
-    expect(occupancyEnabled.checked).toBe(false);
-    expect(container.textContent).toContain("Keep particles outside glyph");
+    expect(container.querySelector('[data-testid="emitter-micro-occupancy-enabled"]')).toBeNull();
     expect([...occupancy.options].map((option) => option.value)).toEqual([
       "legacy", "exclude-interior", "disperse-exterior",
     ]);
@@ -349,10 +347,7 @@ describe("Safe Typography controls", () => {
     expect(container.textContent).toContain("Exterior push");
     expect(container.textContent).toContain("Tangential flow");
     expect(container.textContent).toContain("Exterior shell");
-    const activeOccupancy = container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-occupancy-enabled"]')!;
-    expect(activeOccupancy.checked).toBe(true);
-    updated = null;
-    act(() => activeOccupancy.click());
+    change(occupancy, "legacy");
     expect(getUpdated()?.emitterMicroResponse.occupancy).toBe("legacy");
 
     updated = null;
@@ -361,7 +356,7 @@ describe("Safe Typography controls", () => {
 
     renderControls({ ...baseState, renderer: "flow" });
     openDisclosure("Emitter Micro Response");
-    expect(container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')?.matches(":disabled")).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('[data-testid="emitter-micro-enabled"]')).toBeNull();
     expect(container.textContent).toContain("intentionally unaffected");
     expect(container.textContent).toContain("unavailable");
   });
@@ -387,7 +382,7 @@ describe("Safe Typography controls", () => {
 
     renderControls({ ...baseState, renderer: "flow" });
     openDisclosure("Glyph Falloff Field");
-    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-falloff-mode"]')?.matches(":disabled")).toBe(true);
+    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-falloff-mode"]')).toBeNull();
     expect(container.textContent).toContain("intentionally unaffected");
   });
 
@@ -442,11 +437,10 @@ describe("Safe Typography controls", () => {
     });
     openDisclosure("Emitters");
 
-    expect(container.textContent).toContain("Global field shaping · all emitters");
-    expect(container.textContent).toContain("Global base radius");
-    expect(container.textContent).not.toContain("Single emitter");
-    expect([...container.querySelectorAll("label")]
-      .some((label) => label.querySelector("span")?.textContent?.startsWith("Radius"))).toBe(false);
+    expect(container.textContent).toContain("Shared field definition");
+    expect(container.textContent).toContain("Radius");
+    expect(container.textContent).not.toContain("Source + field definition");
+    expect(container.querySelector(".emitter-row-details")).toBeNull();
 
     const expandSecond = container.querySelector<HTMLButtonElement>(
       "button[aria-label='Expand emitter 2 controls']",
@@ -458,12 +452,17 @@ describe("Safe Typography controls", () => {
       expect.arrayContaining([expect.stringContaining("Weight"), expect.stringContaining("Phase"), expect.stringContaining("Radius ×")]),
     );
 
-    change(field("Global base radius", "input"), "700");
-    expect(getUpdated()?.emitter.radius).toBe(700);
+    const sharedRadius = [...container.querySelectorAll<HTMLLabelElement>('[data-owner="Emitter shared field definition"] label.range')]
+      .find((label) => label.querySelector("span")?.textContent?.startsWith("Radius"))
+      ?.querySelector<HTMLInputElement>("input[type='range']");
+    expect(sharedRadius).not.toBeNull();
+    change(sharedRadius!, "400");
+    expect(getUpdated()?.emitter.radius).toBe(400);
     updated = null;
-    change(field("Blend", "select"), "max");
+    openDisclosure("Field detail");
+    change(field("Emitter blend", "select"), "max");
     expect(getUpdated()?.fieldBlendMode).toBe("max");
-    expect(container.textContent).toContain("Combines overlapping emitter contributions.");
+    expect(container.textContent).toContain("Combines overlapping emitter contributions in the shared field.");
     expect(getUpdated()?.emitters).toEqual([
       expect.objectContaining({ id: "first", radiusMultiplier: 1 }),
       expect.objectContaining({ id: "second", radiusMultiplier: 1 }),
@@ -493,11 +492,13 @@ describe("Safe Typography controls", () => {
 
   it("states the parsed-font boundary honestly and exposes art-direction displacement controls", () => {
     renderControls();
+    openDisclosure("Glyph Fragmentation");
     const enabled = container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]');
     expect(enabled?.disabled).toBe(true);
     expect(container.textContent).toContain("Native fallback stays undisplaced");
 
     renderControls(applyPreset(baseState, "Fragment Matrix"), true);
+    openDisclosure("Glyph Fragmentation");
     const exactEnabled = container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]');
     expect(exactEnabled?.disabled).toBe(false);
     expect(container.textContent).toContain("shared by mask, SDF, preview, and export");
@@ -510,6 +511,7 @@ describe("Safe Typography controls", () => {
 
   it("exposes Glyph Micro Warp as a separate parsed-outline control group", () => {
     renderControls();
+    openDisclosure("Glyph Micro Warp");
     const unsupported = container.querySelector<HTMLInputElement>('[data-testid="glyph-micro-warp-enabled"]');
     expect(unsupported?.disabled).toBe(true);
     expect(container.textContent).toContain("native fallback remains exactly unwarped");
@@ -531,8 +533,55 @@ describe("Safe Typography controls", () => {
     expect(getUpdated()?.glyphMicroWarp.normalDisplacement).toBe(57);
   });
 
+  it("uses design-oriented shared influence and Calm Water controls without merging existing stages", () => {
+    renderControls();
+    openDisclosure("Calm Water");
+    expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-calm-water-enabled"]')?.disabled).toBe(true);
+    expect(container.textContent).toContain("native fallback remains exactly undeformed");
+
+    const calm = applyPreset(baseState, "Calm Current");
+    renderControls(calm, true);
+    openDisclosure("Glyph Influence");
+    const influence = container.querySelector(".glyph-influence-section");
+    const water = container.querySelector(".glyph-calm-water-section");
+    expect(influence).not.toBeNull();
+    expect(water).not.toBeNull();
+    expect(water?.closest(".glyph-displacement-section")).toBeNull();
+    expect(container.textContent).toContain("Choose which typography belongs to the emitter");
+    expect(container.textContent).toContain("Broad contour-normal waves");
+    expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-calm-water-frequency-linked"]')?.checked).toBe(true);
+
+    change(container.querySelector<HTMLInputElement>('[data-testid="glyph-calm-water-strength"]')!, "15");
+    expect(getUpdated()?.glyphCalmWater.strength).toBe(15);
+    change(container.querySelector<HTMLInputElement>('[data-testid="glyph-influence-radius"]')!, "140");
+    expect(getUpdated()?.glyphInfluence.radius).toBe(140);
+    change(container.querySelector<HTMLSelectElement>('[data-testid="glyph-influence-falloff"]')!, "gaussian");
+    expect(getUpdated()?.glyphInfluence.falloff).toBe("gaussian");
+    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-influence-scope"]')?.value).toBe("source-glyph");
+    change(container.querySelector<HTMLSelectElement>('[data-testid="glyph-influence-scope"]')!, "source-line");
+    expect(getUpdated()?.emitter.influenceScope).toBe("source-line");
+  });
+
+  it("keeps emitter-local Slice explicit and retains the Global / Legacy control path", () => {
+    const tidal = applyPreset(baseState, "Tidal Slice");
+    renderControls(tidal, true);
+    openDisclosure("Glyph Fragmentation");
+    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-slice-influence"]')?.value).toBe("emitter-falloff");
+    expect(container.querySelector(".glyph-displacement-section")?.textContent).toContain("shared Glyph Influence envelope");
+    expect(container.querySelector(".glyph-displacement-section")?.textContent).not.toContain("Response radius");
+
+    renderControls({
+      ...tidal,
+      glyphDisplacement: { ...tidal.glyphDisplacement, sliceInfluence: "legacy" },
+    }, true);
+    expect(container.querySelector<HTMLSelectElement>('[data-testid="glyph-slice-influence"]')?.value).toBe("legacy");
+    expect(container.querySelector(".glyph-displacement-section")?.textContent).toContain("Response radius");
+    expect(container.querySelector(".glyph-displacement-section")?.textContent).toContain("Global / Legacy");
+  });
+
   it("keeps regular dot-grid and static Canvas Performance controls available for SDF Halftone", () => {
     renderControls(applyPreset(baseState, "Fragment Matrix"), true);
+    openDisclosure("Renderer-local controls");
     expect(container.querySelector<HTMLInputElement>('[data-testid="dot-grid-enabled"]')?.checked).toBe(true);
     expect(container.querySelector<HTMLInputElement>('[data-testid="dot-grid-spacing"]')?.disabled).toBe(false);
     openDisclosure("Preview");
@@ -543,10 +592,12 @@ describe("Safe Typography controls", () => {
   it("exposes Display Dislocation as a separate renderer-local control group", () => {
     const preset = applyPreset(baseState, "Display Dislocation");
     renderControls(preset, false);
+    openDisclosure("Glyph Fragmentation");
+    openDisclosure("Renderer-local controls");
 
     expect(container.textContent).toContain("Glyph Fragmentation");
     expect(container.textContent).toContain("Display Dislocation");
-    expect(container.textContent).toContain("Inverse-domain sampling keeps the world lattice fixed");
+    expect(container.textContent).toContain("Renderer-local inverse-domain response");
     expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-enabled"]')?.checked).toBe(true);
     expect(container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]')?.checked).toBe(false);
     expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-amount"]')?.disabled).toBe(false);
@@ -558,27 +609,55 @@ describe("Safe Typography controls", () => {
     expect(getUpdated()?.glyphDisplacement).toEqual(preset.glyphDisplacement);
   });
 
+  it("shows a retained glyph-displacement state as inactive while Display Dislocation owns the pipeline", () => {
+    const state = {
+      ...applyPreset(baseState, "Display Dislocation"),
+      font: { family: "Basic", fullName: "Basic Regular", fileName: "Basic-Regular.ttf", unitsPerEm: 1000, ascender: 800, descender: -200 },
+      glyphDisplacement: { ...baseState.glyphDisplacement, enabled: true },
+    };
+    renderControls(state, true);
+    openDisclosure("Glyph Fragmentation");
+
+    const fragmentation = container.querySelector<HTMLInputElement>('[data-testid="glyph-displacement-enabled"]')!;
+    expect(fragmentation.checked).toBe(false);
+    expect(fragmentation.disabled).toBe(true);
+    expect(fragmentation.dataset.projectEnabled).toBe("true");
+    expect(fragmentation.dataset.pipelineActive).toBe("false");
+    expect(container.textContent).toContain("retained / inactive");
+    expect(container.textContent).toContain("Display Dislocation is active and owns the SDF Halftone dot-domain stage");
+  });
+
+  it("exposes preset scope and contract text", () => {
+    renderControls();
+    expect(container.querySelector('[data-testid="preset-contract"]')?.textContent).toContain("Scope: Renderer · Core field · Emitter");
+    const preset = field("Preset", "select") as HTMLSelectElement;
+    change(preset, "Display Dislocation");
+    expect(container.querySelector('[data-testid="preset-contract"]')?.textContent).toContain("Scope: Full project snapshot");
+  });
+
   it("keeps Display Dislocation unavailable until SDF Halftone regular-grid support is active", () => {
     renderControls(baseState);
+    openDisclosure("Renderer-local controls");
     expect(container.querySelector<HTMLInputElement>('[data-testid="display-dislocation-enabled"]')?.disabled).toBe(true);
     expect(container.textContent).toContain("Available with SDF Halftone");
   });
 
   it("uses one sequential number for each normal-path section", () => {
     renderControls();
-    const sections = [...container.querySelectorAll(".section-heading")]
+    const sections = [...container.querySelectorAll("[data-stage-heading='true']")]
       .map((heading) => ({
         number: heading.querySelector(":scope > span")?.textContent,
         label: heading.querySelector("h2")?.textContent,
       }));
     expect(sections).toEqual([
-      { number: "01", label: "Artwork" },
-      { number: "02", label: "Preset / Renderer" },
-      { number: "03", label: "Core Field" },
-      { number: "04", label: "Appearance" },
-      { number: "05", label: "Preview" },
-      { number: "06", label: "Export" },
-      { number: "07", label: "Diagnostics" },
+      { number: "01", label: "Typography" },
+      { number: "02", label: "Field" },
+      { number: "03", label: "Emitters" },
+      { number: "04", label: "Glyph Geometry" },
+      { number: "05", label: "Renderer" },
+      { number: "06", label: "Mark Response" },
+      { number: "07", label: "Appearance" },
+      { number: "08", label: "Preview / Export" },
     ]);
     expect(new Set(sections.map(({ number }) => number)).size).toBe(sections.length);
   });
@@ -587,7 +666,8 @@ describe("Safe Typography controls", () => {
     renderControls();
     openDisclosure("Advanced typography");
     openDisclosure("Emitters");
-    openDisclosure("Advanced Parameters");
+    openDisclosure("Field detail");
+    openDisclosure("Renderer detail");
     openDisclosure("Preview");
     openDisclosure("Export");
     openDisclosure("Diagnostics");
@@ -607,7 +687,7 @@ describe("Safe Typography controls", () => {
 
   it("shows contour thickness only for continuous contour renderers", () => {
     renderControls({ ...baseState, renderer: "sdf-contours" });
-    openDisclosure("Advanced Parameters");
+    openDisclosure("Renderer detail");
     expect(field("Contour thickness", "input").value).toBe("1.4");
     expect(container.textContent).toContain("Normalized contour weight; scales with typography size.");
 
@@ -615,10 +695,35 @@ describe("Safe Typography controls", () => {
     expect(container.textContent).not.toContain("Contour thickness");
 
     renderControls({ ...baseState, renderer: "wave-contours", waveContourMode: "continuous" });
-    openDisclosure("Advanced Parameters");
+    openDisclosure("Renderer detail");
     expect(field("Contour thickness", "input").value).toBe("1.4");
 
     renderControls({ ...baseState, renderer: "wave-contours", waveContourMode: "dotted" });
     expect(container.textContent).not.toContain("Contour thickness");
+  });
+
+  it("gives every rendered range a stable accessible name", () => {
+    renderControls({
+      ...applyPreset(baseState, "Sonic Halftone"),
+      emitter: { ...baseState.emitter, enabled: true },
+    }, true);
+    ["Field detail", "Emitters", "Glyph Influence", "Glyph Micro Warp", "Calm Water", "Glyph Fragmentation", "Renderer detail", "Renderer-local controls", "Emitter Display Response", "Emitter Micro Response", "Glyph Falloff Field"].forEach(openDisclosure);
+
+    const ranges = [...container.querySelectorAll<HTMLInputElement>('input[type="range"]')];
+    expect(ranges.length).toBeGreaterThan(0);
+    ranges.forEach((range) => expect(range.getAttribute("aria-label")).toBeTruthy());
+  });
+
+  it("keeps occupancy as one product control and does not duplicate its legacy boolean", () => {
+    renderControls({
+      ...baseState,
+      renderer: "sdf-halftone",
+      emitter: { ...baseState.emitter, enabled: true },
+    });
+    openDisclosure("Emitter Micro Response");
+
+    expect(container.querySelectorAll('[data-testid="emitter-micro-occupancy"]')).toHaveLength(1);
+    expect(container.querySelector('[data-testid="emitter-micro-occupancy-enabled"]')).toBeNull();
+    expect(container.querySelector('[data-testid="emitter-micro-occupancy"]')?.parentElement?.textContent).toContain("Occupancy");
   });
 });

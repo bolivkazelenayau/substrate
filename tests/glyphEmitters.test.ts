@@ -16,12 +16,12 @@ beforeAll(async () => {
 });
 
 describe("glyph emitter schema and metadata", () => {
-  it("migrates schema v3 to v13 with safe default emitter state", () => {
+  it("migrates schema v3 to v15 with explicit legacy targeting", () => {
     const { project, warnings } = validateProject({ version: 3, text: "OLD" });
-    expect(project.version).toBe(13);
-    expect(project.emitter).toEqual(baseState.emitter);
+    expect(project.version).toBe(15);
+    expect(project.emitter).toEqual({ ...baseState.emitter, influenceScope: "all-typography" });
     expect(project.emitter.enabled).toBe(false);
-    expect(warnings).toContain("Project was migrated to schema version 13.");
+    expect(warnings).toContain("Project was migrated to schema version 15.");
   });
 
   it("preserves emitter settings through JSON save/load validation", () => {
@@ -94,6 +94,8 @@ describe("multi-emitter resolver", () => {
     weight: 1,
     phaseOffset: 0,
     radiusMultiplier: 1,
+    influenceScope: "source-glyph" as const,
+    neighborhoodSize: 1,
     label: id,
   });
 
@@ -205,6 +207,8 @@ describe("emitter editor state operations", () => {
     weight: 1,
     phaseOffset: 0,
     radiusMultiplier: 1,
+    influenceScope: "source-glyph" as const,
+    neighborhoodSize: 1,
     label: id,
   });
 

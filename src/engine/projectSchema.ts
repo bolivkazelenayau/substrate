@@ -6,7 +6,7 @@ import { CONTOUR_STROKE_WIDTH_LIMITS } from "./contourStroke";
 
 type UnknownRecord = Record<string, unknown>;
 
-export const CURRENT_PROJECT_VERSION = 13 as const;
+export const CURRENT_PROJECT_VERSION = 15 as const;
 
 const rendererIds: RendererId[] = ["flow", "ripple", "dots", "sdf-flow", "sdf-streamlines", "sdf-contours", "sdf-halftone", "wave-contours", "glyph-diffuser"];
 const exportModes: ExportMode[] = ["artwork", "editable"];
@@ -140,6 +140,49 @@ export function migrateProject(input: unknown): UnknownRecord {
       glyphFalloffDisplacement: migrated.glyphFalloffDisplacement ?? { ...baseState.glyphFalloffDisplacement },
     };
   }
+  if (version <= 13) {
+    const legacyDisplacement = isRecord(migrated.glyphDisplacement) ? migrated.glyphDisplacement : {};
+    migrated = {
+      ...migrated,
+      version: 14,
+      glyphInfluence: migrated.glyphInfluence ?? { ...baseState.glyphInfluence },
+      glyphCalmWater: migrated.glyphCalmWater ?? { ...baseState.glyphCalmWater },
+      glyphDisplacement: {
+        ...baseState.glyphDisplacement,
+        ...legacyDisplacement,
+        // v13 and earlier Slice geometry was global. Persist that meaning
+        // explicitly instead of silently changing existing documents.
+        sliceInfluence: "legacy",
+      },
+    };
+  }
+  if (version <= 14) {
+    const legacyEmitter = isRecord(migrated.emitter) ? migrated.emitter : {};
+    const legacyEmitters = Array.isArray(migrated.emitters)
+      ? migrated.emitters.map((row) => isRecord(row) ? {
+          ...row,
+          influenceScope: "all-typography",
+          neighborhoodSize: 1,
+        } : row)
+      : baseState.emitters.map((row) => ({
+          ...row,
+          influenceScope: "all-typography" as const,
+          neighborhoodSize: 1,
+        }));
+    migrated = {
+      ...migrated,
+      version: 15,
+      // v14 and earlier glyph-domain effects used global spatial eligibility.
+      // Persist that behavior explicitly while new documents default locally.
+      emitter: {
+        ...baseState.emitter,
+        ...legacyEmitter,
+        influenceScope: "all-typography",
+        neighborhoodSize: 1,
+      },
+      emitters: legacyEmitters,
+    };
+  }
   return migrated;
 }
 
@@ -162,6 +205,18 @@ function validateEmitterInstances(value: unknown) {
       weight: clamp(instance.weight, 1, 0, 2),
       phaseOffset: clamp(instance.phaseOffset, 0, -Math.PI * 4, Math.PI * 4),
       radiusMultiplier: clamp(instance.radiusMultiplier, 1, 0.25, 2),
+      influenceScope: enumValue(
+        instance.influenceScope,
+        ["source-glyph", "glyph-neighborhood", "source-line", "all-typography"],
+        baseState.emitters[0].influenceScope,
+      ),
+      neighborhoodSize: clamp(
+        instance.neighborhoodSize,
+        baseState.emitters[0].neighborhoodSize,
+        0,
+        8,
+        true,
+      ),
       label: typeof instance.label === "string" ? instance.label.slice(0, 32) : `Emitter ${index + 1}`,
     };
   });
@@ -185,6 +240,8 @@ export function validateProject(input: unknown): ProjectValidationResult {
   const emitterMicroResponseSource = isRecord(source.emitterMicroResponse) ? source.emitterMicroResponse : {};
   const glyphFalloffDisplacementSource = isRecord(source.glyphFalloffDisplacement) ? source.glyphFalloffDisplacement : {};
   const glyphMicroWarpSource = isRecord(source.glyphMicroWarp) ? source.glyphMicroWarp : {};
+  const glyphInfluenceSource = isRecord(source.glyphInfluence) ? source.glyphInfluence : {};
+  const glyphCalmWaterSource = isRecord(source.glyphCalmWater) ? source.glyphCalmWater : {};
   const glyphDisplacementSource = isRecord(source.glyphDisplacement) ? source.glyphDisplacement : {};
   const dotGridSource = isRecord(source.dotGrid) ? source.dotGrid : {};
   const displayDislocationSource = isRecord(source.displayDislocation) ? source.displayDislocation : {};
@@ -206,7 +263,7 @@ export function validateProject(input: unknown): ProjectValidationResult {
     ? baseState.preset
     : enumValue(source.preset, presetIds, "Custom");
   const project: ProjectState = {
-    version: 13,
+    version: 15,
     artboard: {
       width: clamp(isRecord(source.artboard) ? source.artboard.width : undefined, DEFAULT_ARTBOARD.width, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
       height: clamp(isRecord(source.artboard) ? source.artboard.height : undefined, DEFAULT_ARTBOARD.height, ARTBOARD_LIMITS.min, ARTBOARD_LIMITS.max, true),
@@ -245,6 +302,18 @@ export function validateProject(input: unknown): ProjectValidationResult {
       glyphId: typeof emitterSource.glyphId === "string" ? emitterSource.glyphId.slice(0, 128) : null,
       enabled: typeof emitterSource.enabled === "boolean" ? emitterSource.enabled : baseState.emitter.enabled,
       sourceMode: enumValue(emitterSource.sourceMode, ["center", "centroid", "counter-center", "custom"], baseState.emitter.sourceMode),
+      influenceScope: enumValue(
+        emitterSource.influenceScope,
+        ["source-glyph", "glyph-neighborhood", "source-line", "all-typography"],
+        baseState.emitter.influenceScope,
+      ),
+      neighborhoodSize: clamp(
+        emitterSource.neighborhoodSize,
+        baseState.emitter.neighborhoodSize,
+        0,
+        8,
+        true,
+      ),
       fieldType: "radial-wave",
       amplitude: clamp(emitterSource.amplitude, baseState.emitter.amplitude, 0, 4),
       frequency: clamp(emitterSource.frequency, baseState.emitter.frequency, 0.005, 0.5),
@@ -425,9 +494,60 @@ export function validateProject(input: unknown): ProjectValidationResult {
         : baseState.glyphMicroWarp.preserveCounters,
       seedInfluence: clamp(glyphMicroWarpSource.seedInfluence, baseState.glyphMicroWarp.seedInfluence, 0, 100),
     },
+    glyphInfluence: {
+      radius: clamp(
+        glyphInfluenceSource.radius,
+        baseState.glyphInfluence.radius,
+        0,
+        SIZE_HARD_LIMITS.emitterRadius,
+      ),
+      edgeSoftness: clamp(
+        glyphInfluenceSource.edgeSoftness,
+        baseState.glyphInfluence.edgeSoftness,
+        0,
+        SIZE_HARD_LIMITS.emitterRadius,
+      ),
+      falloff: enumValue(
+        glyphInfluenceSource.falloff,
+        ["smoothstep", "gaussian", "linear"],
+        baseState.glyphInfluence.falloff,
+      ),
+    },
+    glyphCalmWater: {
+      enabled: typeof glyphCalmWaterSource.enabled === "boolean"
+        ? glyphCalmWaterSource.enabled
+        : baseState.glyphCalmWater.enabled,
+      strength: clamp(glyphCalmWaterSource.strength, baseState.glyphCalmWater.strength, 0, 64),
+      frequencyLinked: typeof glyphCalmWaterSource.frequencyLinked === "boolean"
+        ? glyphCalmWaterSource.frequencyLinked
+        : baseState.glyphCalmWater.frequencyLinked,
+      frequencyMultiplier: clamp(
+        glyphCalmWaterSource.frequencyMultiplier,
+        baseState.glyphCalmWater.frequencyMultiplier,
+        0.25,
+        2,
+      ),
+      wavelength: clamp(glyphCalmWaterSource.wavelength, baseState.glyphCalmWater.wavelength, 30, 800),
+      surfaceVariation: clamp(
+        glyphCalmWaterSource.surfaceVariation,
+        baseState.glyphCalmWater.surfaceVariation,
+        0,
+        100,
+      ),
+      drift: clamp(glyphCalmWaterSource.drift, baseState.glyphCalmWater.drift, 0, 100),
+      detail: clamp(glyphCalmWaterSource.detail, baseState.glyphCalmWater.detail, 0, 100),
+      preserveCounters: typeof glyphCalmWaterSource.preserveCounters === "boolean"
+        ? glyphCalmWaterSource.preserveCounters
+        : baseState.glyphCalmWater.preserveCounters,
+    },
     glyphDisplacement: {
       enabled: typeof glyphDisplacementSource.enabled === "boolean" ? glyphDisplacementSource.enabled : baseState.glyphDisplacement.enabled,
       mode: enumValue(glyphDisplacementSource.mode, ["warp", "horizontal-slices", "vertical-slices", "grid", "radial-sectors"], baseState.glyphDisplacement.mode),
+      sliceInfluence: enumValue(
+        glyphDisplacementSource.sliceInfluence,
+        ["legacy", "emitter-falloff"],
+        baseState.glyphDisplacement.sliceInfluence,
+      ),
       strength: clamp(glyphDisplacementSource.strength, baseState.glyphDisplacement.strength, 0, 320),
       responseRadius: clamp(glyphDisplacementSource.responseRadius, baseState.glyphDisplacement.responseRadius, 8, SIZE_HARD_LIMITS.emitterRadius),
       falloff: enumValue(glyphDisplacementSource.falloff, ["smoothstep", "gaussian", "linear"], baseState.glyphDisplacement.falloff),

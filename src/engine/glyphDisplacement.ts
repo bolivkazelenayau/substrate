@@ -14,6 +14,14 @@ import {
   resolveGlyphEmitterSources,
 } from "./field/glyphEmitters";
 import { getFalloffWeight } from "./field/compositeWaveField";
+import {
+  eligibleEmitterInfluenceSources,
+  emitterInfluenceSourceIdentity,
+  resolveEmitterInfluenceSources,
+  sampleEmitterInfluence,
+  type EmitterInfluenceSource,
+} from "./field/emitterInfluence";
+import { isDisplayDislocationActive } from "./displayDislocation";
 
 export const GLYPH_DISPLACEMENT_BUDGETS = {
   sourceContourPoints: 30_000,
@@ -54,13 +62,15 @@ export interface DisplacedTypographyFragment {
 export interface GlyphDisplacementDiagnostics {
   sourceContourPoints: number;
   fragmentCount: number;
+  affectedFragmentCount: number;
   clippingOperations: number;
   buildDurationMs: number;
   peakTemporaryArrays: number;
   clippingStatus: "complete" | "budget-limited" | "triangulation-fallback";
   effectiveRegionSize: number;
   anchorCount: number;
-  inactiveReason?: "disabled" | "zero-strength" | "native-fallback" | "empty-geometry";
+  maxDisplacement: number;
+  inactiveReason?: "disabled" | "zero-strength" | "incompatible-display-dislocation" | "emitter-disabled" | "no-emitter" | "native-fallback" | "empty-geometry";
 }
 
 export interface DisplacedTypographyGeometry {
@@ -314,7 +324,14 @@ function pointInTriangle(point: Point, a: Point, b: Point, c: Point, orientation
   return ab >= -EPSILON && bc >= -EPSILON && ca >= -EPSILON;
 }
 
-function triangulateContour(contour: Contour): { pieces: Point[][]; fallback: boolean } {
+function pointStrictlyInTriangle(point: Point, a: Point, b: Point, c: Point, orientation: number) {
+  const ab = cross(a, b, point) * orientation;
+  const bc = cross(b, c, point) * orientation;
+  const ca = cross(c, a, point) * orientation;
+  return ab > EPSILON && bc > EPSILON && ca > EPSILON;
+}
+
+function triangulateContour(contour: Contour, tolerateBoundaryPoints = false): { pieces: Point[][]; fallback: boolean } {
   const points = contour.points;
   if (points.length === 3) return { pieces: [[...points]], fallback: false };
   const orientation = signedArea(points) >= 0 ? 1 : -1;
@@ -335,7 +352,10 @@ function triangulateContour(contour: Contour): { pieces: Point[][]; fallback: bo
       let contains = false;
       for (const candidateIndex of remaining) {
         if (candidateIndex === previousIndex || candidateIndex === currentIndex || candidateIndex === nextIndex) continue;
-        if (pointInTriangle(points[candidateIndex], a, b, c, orientation)) {
+        const inside = tolerateBoundaryPoints
+          ? pointStrictlyInTriangle(points[candidateIndex], a, b, c, orientation)
+          : pointInTriangle(points[candidateIndex], a, b, c, orientation);
+        if (inside) {
           contains = true;
           break;
         }
@@ -357,7 +377,11 @@ function prepareGlyphs(source: TextGeometry, counters: BuildCounters): PreparedG
   for (const glyph of source.glyphs) {
     if (counters.budgetLimited) break;
     const contours = flattenCommands(glyph.path.commands, counters).map((contour) => {
-      const triangulated = triangulateContour(contour);
+      // Calm Water intentionally smooths neighboring displacement vectors and
+      // can leave harmless collinear samples on a broad curve. Treat points on
+      // an ear boundary as redundant only for that new source authority; the
+      // historical Fragmentation triangulation path remains byte-for-byte.
+      const triangulated = triangulateContour(contour, Boolean(source.calmWater));
       if (triangulated.fallback) counters.triangulationFallback = true;
       return { source: contour, pieces: triangulated.pieces };
     });
@@ -413,6 +437,17 @@ export function glyphDisplacementIdentity(
   if (state.glyphDisplacement.strength <= 0) {
     return { displacementKey: "glyph-displacement:zero-strength", geometryKey: sourceTypographyKey, active: false as const, reason: "zero-strength" as const };
   }
+  // Display Dislocation is the renderer-local inverse-domain authority for the
+  // same SDF Halftone dot display. Keep authored Fragmentation state intact for
+  // restoration, but never let both stages claim the same glyph-domain input.
+  if (isDisplayDislocationActive(state)) {
+    return {
+      displacementKey: "glyph-displacement:incompatible-display-dislocation",
+      geometryKey: sourceTypographyKey,
+      active: false as const,
+      reason: "incompatible-display-dislocation" as const,
+    };
+  }
   if (!source?.hasOutlines) {
     return { displacementKey: "glyph-displacement:native-fallback", geometryKey: sourceTypographyKey, active: false as const, reason: "native-fallback" as const };
   }
@@ -420,13 +455,24 @@ export function glyphDisplacementIdentity(
     return { displacementKey: "glyph-displacement:empty-geometry", geometryKey: sourceTypographyKey, active: false as const, reason: "empty-geometry" as const };
   }
   const settings = state.glyphDisplacement;
-  const anchors = resolveAnchors(state, source);
+  const localizedSlice = (settings.mode === "horizontal-slices" || settings.mode === "vertical-slices")
+    && settings.sliceInfluence === "emitter-falloff";
+  if (localizedSlice && !state.emitter.enabled) {
+    return { displacementKey: "glyph-displacement:emitter-disabled", geometryKey: sourceTypographyKey, active: false as const, reason: "emitter-disabled" as const };
+  }
+  const influenceSources = localizedSlice ? resolveEmitterInfluenceSources(state, source) : [];
+  if (localizedSlice && influenceSources.length === 0) {
+    return { displacementKey: "glyph-displacement:no-emitter", geometryKey: sourceTypographyKey, active: false as const, reason: "no-emitter" as const };
+  }
+  const anchors = localizedSlice ? [] : resolveAnchors(state, source);
   const semantic = JSON.stringify({
     sourceTypographyKey,
     mode: settings.mode,
+    sliceInfluence: localizedSlice ? settings.sliceInfluence : undefined,
     strength: clamp(settings.strength, 0, GLYPH_DISPLACEMENT_BUDGETS.boundsGrowth),
-    responseRadius: settings.responseRadius,
-    falloff: settings.falloff,
+    responseRadius: localizedSlice ? undefined : settings.responseRadius,
+    falloff: localizedSlice ? undefined : settings.falloff,
+    influence: localizedSlice ? state.glyphInfluence : undefined,
     fragmentSize: settings.fragmentSize,
     gap: settings.gap,
     quantizationSteps: settings.quantizationSteps,
@@ -436,9 +482,11 @@ export function glyphDisplacementIdentity(
     fragmentRotation: settings.fragmentRotation,
     seedInfluence: settings.seedInfluence,
     seed: settings.seedInfluence > 0 ? state.seed : "inactive",
-    emitterMode: state.emitterMode,
-    sourceMode: state.emitter.sourceMode,
-    anchors: anchorIdentity(anchors),
+    emitterMode: localizedSlice ? undefined : state.emitterMode,
+    sourceMode: localizedSlice ? undefined : state.emitter.sourceMode,
+    anchors: localizedSlice
+      ? emitterInfluenceSourceIdentity(influenceSources)
+      : anchorIdentity(anchors),
   });
   const displacementKey = `glyph-displacement:${hashString(semantic)}`;
   return {
@@ -549,6 +597,49 @@ function resolveRegionMotion(
     0,
     GLYPH_DISPLACEMENT_BUDGETS.boundsGrowth,
   ) * sign;
+  const translation = { x: direction.x * magnitude, y: direction.y * magnitude };
+  const rotationNoise = settings.seedInfluence > 0 ? rawNoise : sign * 0.5;
+  const rotation = settings.fragmentRotation * Math.PI / 180 * rotationNoise * weight;
+  return { transform: affineAround(region.center, translation, rotation), translation, weight, anchor };
+}
+
+/**
+ * Local Slice keeps the authored slice motion coherent, then applies the
+ * normalized envelope to that single fragment transform. Quantization happens
+ * before envelope modulation so the exterior decay cannot snap between large
+ * displacement steps.
+ */
+function resolveLocalizedSliceMotion(
+  state: ProjectState,
+  region: Region,
+  anchor: DisplacementAnchor,
+  response: number,
+): RegionMotion {
+  const settings = state.glyphDisplacement;
+  const weight = clamp(response, 0, 1);
+  if (weight <= EPSILON) {
+    return {
+      transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+      translation: { x: 0, y: 0 },
+      weight: 0,
+      anchor,
+    };
+  }
+  const seeded = settings.seedInfluence > 0 ? state.seed : 0;
+  const rawNoise = scalarHash(region.row * 4099 + region.index, region.column * 8191 - region.index, seeded) * 2 - 1;
+  const noise = rawNoise * clamp(settings.seedInfluence / 100, 0, 1);
+  const sign = settings.mode === "horizontal-slices"
+    ? (Math.abs(region.row) % 2 === 0 ? 1 : -1)
+    : (Math.abs(region.column) % 2 === 0 ? 1 : -1);
+  const direction = mixedDirection(region.center, anchor, settings, noise);
+  const jitterScale = 1 + noise * clamp(settings.jitter / 100, 0, 1) * 0.32;
+  const boundedStrength = clamp(settings.strength, 0, GLYPH_DISPLACEMENT_BUDGETS.boundsGrowth);
+  const coherentMagnitude = clamp(
+    quantizeMagnitude(boundedStrength * jitterScale, settings),
+    0,
+    GLYPH_DISPLACEMENT_BUDGETS.boundsGrowth,
+  );
+  const magnitude = coherentMagnitude * weight * sign;
   const translation = { x: direction.x * magnitude, y: direction.y * magnitude };
   const rotationNoise = settings.seedInfluence > 0 ? rawNoise : sign * 0.5;
   const rotation = settings.fragmentRotation * Math.PI / 180 * rotationNoise * weight;
@@ -790,6 +881,85 @@ function clipPolygonConvex(subject: Point[], clip: Point[]): Point[] {
     if (Math.abs(first.x - last.x) <= EPSILON && Math.abs(first.y - last.y) <= EPSILON) cleaned.pop();
   }
   return cleaned.length >= 3 && Math.abs(signedArea(cleaned)) > EPSILON ? cleaned : [];
+}
+
+function clipPreparedGlyph(
+  preparedGlyph: PreparedGlyph,
+  clipPolygon: Point[],
+  counters: BuildCounters,
+): Point[][] | null {
+  const clipBounds = pointBounds(clipPolygon);
+  if (!clipBounds) return [];
+  const output: Point[][] = [];
+  for (const contour of preparedGlyph.contours) {
+    const clippedPieces: Point[][] = [];
+    for (const piece of contour.pieces) {
+      const pieceBounds = pointBounds(piece);
+      if (!pieceBounds || !boundsOverlap(pieceBounds, clipBounds)) continue;
+      counters.clippingOperations += 1;
+      if (counters.clippingOperations > GLYPH_DISPLACEMENT_BUDGETS.clippingOperations) {
+        counters.budgetLimited = true;
+        return null;
+      }
+      const clipped = clipPolygonConvex(piece, clipPolygon);
+      if (clipped.length >= 3) clippedPieces.push(clipped);
+    }
+    if (clippedPieces.length === 0) continue;
+    let loops = extractBoundaryLoops(clippedPieces);
+    if (loops.length === 0) {
+      loops = clippedPieces;
+      counters.triangulationFallback = true;
+    }
+    output.push(...loops);
+    counters.peakTemporaryArrays = Math.max(
+      counters.peakTemporaryArrays,
+      clippedPieces.length + loops.length + output.length,
+    );
+  }
+  return output;
+}
+
+function sampleFragmentEnvelope(
+  polygons: Point[][],
+  sources: EmitterInfluenceSource[],
+  state: ProjectState,
+  targetGlyph: PositionedGlyph,
+) {
+  const samples: Point[] = [];
+  const centroidLimit = Math.min(8, polygons.length);
+  for (let index = 0; index < centroidLimit; index += 1) {
+    const polygon = polygons[Math.floor(index * polygons.length / centroidLimit)];
+    samples.push({
+      x: polygon.reduce((sum, point) => sum + point.x, 0) / polygon.length,
+      y: polygon.reduce((sum, point) => sum + point.y, 0) / polygon.length,
+    });
+  }
+  const boundaryPoints = polygons.flat();
+  const boundaryBudget = Math.max(1, 24 - samples.length);
+  const boundaryCount = Math.min(boundaryBudget, boundaryPoints.length);
+  for (let index = 0; index < boundaryCount; index += 1) {
+    samples.push(boundaryPoints[Math.floor(index * boundaryPoints.length / boundaryCount)]);
+  }
+  if (samples.length === 0) return { influence: 0, anchor: null as Point | null };
+  let influenceSum = 0;
+  let weightedAnchorX = 0;
+  let weightedAnchorY = 0;
+  let anchorWeight = 0;
+  for (const samplePoint of samples) {
+    const sample = sampleEmitterInfluence(samplePoint, sources, state.glyphInfluence, targetGlyph);
+    influenceSum += sample.influence;
+    if (sample.anchor && sample.influence > EPSILON) {
+      weightedAnchorX += sample.anchor.x * sample.influence;
+      weightedAnchorY += sample.anchor.y * sample.influence;
+      anchorWeight += sample.influence;
+    }
+  }
+  return {
+    influence: clamp(influenceSum / samples.length, 0, 1),
+    anchor: anchorWeight > EPSILON
+      ? { x: weightedAnchorX / anchorWeight, y: weightedAnchorY / anchorWeight }
+      : null,
+  };
 }
 
 function pointKey(point: Point) {
@@ -1061,6 +1231,136 @@ function buildFragmentGeometry(
   };
 }
 
+function buildEmitterSliceGeometry(
+  state: ProjectState,
+  source: TextGeometry,
+  prepared: PreparedGlyph[],
+  sourceTypographyKey: string,
+  displacementKey: string,
+  geometryKey: string,
+  sources: EmitterInfluenceSource[],
+  counters: BuildCounters,
+): { geometry: TextGeometry; fragments: DisplacedTypographyFragment[]; effectiveRegionSize: number } {
+  const planningAnchors: DisplacementAnchor[] = sources.map((source) => ({
+    id: source.id,
+    x: source.anchor.x,
+    y: source.anchor.y,
+    weight: source.weight,
+    radiusMultiplier: source.radiusMultiplier,
+  }));
+  const regionPlan = buildRegions(state, source.bounds!, planningAnchors);
+  if (regionPlan.limited) counters.budgetLimited = true;
+  const outputByGlyph = new Map<string, Point[][]>(source.glyphs.map((glyph) => [glyph.glyphId, []]));
+  const scopedSourcesByGlyph = new Map<string, EmitterInfluenceSource[]>();
+  for (const glyph of source.glyphs) {
+    const scopedSources = eligibleEmitterInfluenceSources(sources, glyph);
+    if (scopedSources.length === 0) continue;
+    scopedSourcesByGlyph.set(glyph.glyphId, scopedSources);
+  }
+  const changedGlyphIds = new Set<string>();
+  const fragments: DisplacedTypographyFragment[] = [];
+
+  buildLoop:
+  for (const region of regionPlan.regions) {
+    for (const preparedGlyph of prepared) {
+      const scopedSources = scopedSourcesByGlyph.get(preparedGlyph.glyph.glyphId);
+      if (!scopedSources) continue;
+      if (fragments.length >= GLYPH_DISPLACEMENT_BUDGETS.fragments) {
+        counters.budgetLimited = true;
+        break buildLoop;
+      }
+      const rawLoops = clipPreparedGlyph(preparedGlyph, region.polygon, counters);
+      if (rawLoops === null) break buildLoop;
+      if (rawLoops.length === 0) continue;
+      const envelope = sampleFragmentEnvelope(rawLoops, scopedSources, state, preparedGlyph.glyph);
+      const localizedClip = insetRegionPolygon(region, state.glyphDisplacement, envelope.influence);
+      const gapActive = localizedClip !== region.polygon;
+      const sourcePolygons = gapActive
+        ? clipPreparedGlyph(preparedGlyph, localizedClip, counters)
+        : rawLoops;
+      if (sourcePolygons === null) break buildLoop;
+      if (sourcePolygons.length === 0) continue;
+      const sourceFragmentBounds = polygonsBounds(sourcePolygons);
+      if (!sourceFragmentBounds) continue;
+      const fragmentCenter = centerOf(sourceFragmentBounds);
+      const resolvedAnchor = envelope.anchor ?? sources[0]?.anchor ?? fragmentCenter;
+      const anchor: DisplacementAnchor = {
+        id: sources[0]?.id ?? "influence-center",
+        x: resolvedAnchor.x,
+        y: resolvedAnchor.y,
+        weight: 1,
+        radiusMultiplier: 1,
+      };
+      const fragmentRegion: Region = {
+        ...region,
+        id: `${region.id}:${preparedGlyph.glyph.glyphId}`,
+        center: fragmentCenter,
+        bounds: sourceFragmentBounds,
+      };
+      const motion = resolveLocalizedSliceMotion(state, fragmentRegion, anchor, envelope.influence);
+      const transformChanged = Math.abs(motion.transform.a - 1) > EPSILON
+        || Math.abs(motion.transform.b) > EPSILON
+        || Math.abs(motion.transform.c) > EPSILON
+        || Math.abs(motion.transform.d - 1) > EPSILON
+        || Math.abs(motion.transform.e) > EPSILON
+        || Math.abs(motion.transform.f) > EPSILON;
+      if (envelope.influence > EPSILON && (transformChanged || state.glyphDisplacement.gap > EPSILON)) {
+        changedGlyphIds.add(preparedGlyph.glyph.glyphId);
+      }
+      const displacedPolygons = sourcePolygons.map((polygon) => polygon.map((point) => applyTransform(point, motion.transform)));
+      const displacedFragmentBounds = polygonsBounds(displacedPolygons);
+      if (!displacedFragmentBounds) continue;
+      outputByGlyph.get(preparedGlyph.glyph.glyphId)!.push(...displacedPolygons);
+      fragments.push({
+        id: fragmentRegion.id,
+        regionIndex: region.index,
+        row: region.row,
+        column: region.column,
+        sourceBounds: sourceFragmentBounds,
+        bounds: displacedFragmentBounds,
+        transform: motion.transform,
+        translation: motion.translation,
+        responseWeight: motion.weight,
+        sourcePointCount: sourcePolygons.reduce((sum, polygon) => sum + polygon.length, 0),
+        glyphIds: [preparedGlyph.glyph.glyphId],
+      });
+      counters.peakTemporaryArrays = Math.max(
+        counters.peakTemporaryArrays,
+        rawLoops.length + sourcePolygons.length + displacedPolygons.length,
+      );
+    }
+  }
+
+  const glyphs = source.glyphs.map((glyph) => changedGlyphIds.has(glyph.glyphId)
+    ? displacedGlyph(glyph, outputByGlyph.get(glyph.glyphId) ?? [])
+    : glyph);
+  const bounds = unionBounds(glyphs.map((glyph) => glyph.path.bounds));
+  const clippingStatus = counters.budgetLimited
+    ? "budget-limited"
+    : counters.triangulationFallback
+      ? "triangulation-fallback"
+      : "complete";
+  return {
+    geometry: {
+      ...source,
+      glyphs,
+      lines: resolveLines(source, glyphs),
+      bounds,
+      displacement: {
+        sourceTypographyKey,
+        displacementKey,
+        geometryKey,
+        mode: state.glyphDisplacement.mode,
+        fragmentCount: fragments.length,
+        fragmentBounds: fragments.map((fragment) => fragment.bounds),
+        clippingStatus,
+      },
+    },
+    fragments,
+    effectiveRegionSize: regionPlan.effectiveRegionSize,
+  };
+}
+
 function inactiveResult(
   sourceTypographyKey: string,
   displacementKey: string,
@@ -1083,12 +1383,14 @@ function inactiveResult(
     diagnostics: {
       sourceContourPoints: 0,
       fragmentCount: 0,
+      affectedFragmentCount: 0,
       clippingOperations: 0,
       buildDurationMs: Math.max(0, now() - started),
       peakTemporaryArrays: 0,
       clippingStatus: "complete",
       effectiveRegionSize: 0,
       anchorCount: 0,
+      maxDisplacement: 0,
       inactiveReason: reason,
     },
   };
@@ -1115,11 +1417,32 @@ export function deriveDisplacedTypographyGeometry(
     triangulationFallback: false,
   };
   const prepared = prepareGlyphs(source!, counters);
-  const anchors = resolveAnchors(state, source!);
+  const localizedSlice = (state.glyphDisplacement.mode === "horizontal-slices" || state.glyphDisplacement.mode === "vertical-slices")
+    && state.glyphDisplacement.sliceInfluence === "emitter-falloff";
+  const influenceSources = localizedSlice ? resolveEmitterInfluenceSources(state, source!) : [];
+  const anchors = localizedSlice
+    ? influenceSources.map((source) => ({
+        id: source.id,
+        x: source.anchor.x,
+        y: source.anchor.y,
+        weight: source.weight,
+        radiusMultiplier: source.radiusMultiplier,
+      }))
+    : resolveAnchors(state, source!);
   const built = state.glyphDisplacement.mode === "warp"
     ? { ...buildWarpGeometry(state, source!, prepared, sourceTypographyKey, identity.displacementKey, identity.geometryKey, counters), effectiveRegionSize: state.glyphDisplacement.fragmentSize }
-    : buildFragmentGeometry(state, source!, prepared, sourceTypographyKey, identity.displacementKey, identity.geometryKey, anchors, counters);
+    : localizedSlice
+      ? buildEmitterSliceGeometry(state, source!, prepared, sourceTypographyKey, identity.displacementKey, identity.geometryKey, influenceSources, counters)
+      : buildFragmentGeometry(state, source!, prepared, sourceTypographyKey, identity.displacementKey, identity.geometryKey, anchors, counters);
   const fragmentBounds = built.fragments.map((fragment) => fragment.bounds);
+  const affectedFragments = built.fragments.filter((fragment) => (
+    fragment.responseWeight > EPSILON
+    && (Math.hypot(fragment.translation.x, fragment.translation.y) > EPSILON || state.glyphDisplacement.gap > EPSILON)
+  ));
+  const maxDisplacement = built.fragments.reduce(
+    (maximum, fragment) => Math.max(maximum, Math.hypot(fragment.translation.x, fragment.translation.y)),
+    0,
+  );
   const clippingStatus = counters.budgetLimited
     ? "budget-limited"
     : counters.triangulationFallback
@@ -1140,12 +1463,14 @@ export function deriveDisplacedTypographyGeometry(
     diagnostics: {
       sourceContourPoints: counters.sourceContourPoints,
       fragmentCount: built.fragments.length,
+      affectedFragmentCount: affectedFragments.length,
       clippingOperations: counters.clippingOperations,
       buildDurationMs: Math.max(0, now() - started),
       peakTemporaryArrays: counters.peakTemporaryArrays,
       clippingStatus,
       effectiveRegionSize: built.effectiveRegionSize,
       anchorCount: anchors.length,
+      maxDisplacement,
     },
   };
 }

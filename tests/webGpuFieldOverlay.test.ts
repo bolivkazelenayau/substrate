@@ -495,7 +495,7 @@ describe("WebGpuFieldOverlay dev lifecycle", () => {
         emitterMode: "multiple",
         emitter: { ...baseState.emitter, enabled: true },
         emitters: [
-          { id: "a", glyphId: null, enabled: false, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "a" },
+          { id: "a", glyphId: null, enabled: false, weight: 1, phaseOffset: 0, radiusMultiplier: 1, influenceScope: "source-glyph", neighborhoodSize: 1, label: "a" },
         ],
       },
       bounds: { x: 0, y: 0, width: 1200, height: 720 },

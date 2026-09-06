@@ -1,4 +1,5 @@
 import { baseState } from "../../engine/presets";
+import { getControlActivity } from "../../engine/controlOwnership";
 import type { ProjectState } from "../../types";
 
 interface EmitterMicroResponseControlsProps {
@@ -31,30 +32,36 @@ export function EmitterMicroResponseControls({
   onToggle,
 }: EmitterMicroResponseControlsProps) {
   const response = state.emitterMicroResponse;
+  const activity = getControlActivity(state, true).emitterMicroResponseActivity;
   const patch = (next: Partial<ProjectState["emitterMicroResponse"]>) => setState({
     ...state,
     emitterMicroResponse: { ...response, ...next },
     preset: "Custom",
   });
-  const responseActive = response.enabled || response.occupancy !== "legacy";
+  const responseActive = activity.active;
   const unsupportedMessage = capability === "unaffected"
     ? "This renderer is intentionally unaffected; its existing geometry remains unchanged."
     : "This renderer has no compatible final-circle and authoritative-SDF contract.";
 
   return (
-    <div className={`control-group accordion-group emitter-micro-response${supported ? "" : " disabled-group"}`}>
+    <div className={`control-group accordion-group emitter-micro-response${activity.retained ? " retained-group" : !supported ? " disabled-group" : ""}`} data-testid="emitter-micro-response" data-owner="Emitter Micro Response">
       <button type="button" className="accordion-summary" onClick={onToggle} aria-expanded={open}>
         <span aria-hidden="true">{open ? "▼" : "▶"}</span>
-        Emitter Micro Response{supported ? "" : " · unavailable"}
+        {activity.retained ? "Emitter Micro Response · retained / inactive" : supported ? "Emitter Micro Response" : "Emitter Micro Response · unavailable"}
       </button>
       {open && (
         <div className="accordion-content">
-          <small className="inactive-hint">
-            {supported
-              ? "Fine mark response after the authoritative glyph SDF and any Display Dislocation transform."
-              : unsupportedMessage}
+          <small className={activity.retained || !supported ? "control-warning" : "inactive-hint"}>
+            {activity.retained
+              ? `Retained but inactive: ${activity.reason}.`
+              : supported
+                ? "Fine mark response after the authoritative glyph SDF and any Display Dislocation transform."
+                : unsupportedMessage}
           </small>
-          <fieldset disabled={!supported}>
+          {activity.retained && <small className="retained-state-summary">
+            Retained settings: Micro Response {response.enabled ? "on" : "off"} · Occupancy {response.occupancy === "disperse-exterior" ? "Disperse exterior" : response.occupancy === "exclude-interior" ? "Exclude interior" : "Legacy"}.
+          </small>}
+          {supported && <fieldset>
             <legend className="visually-hidden">Emitter Micro Response parameters</legend>
             <label className="debug-toggle">
               <input
@@ -64,17 +71,6 @@ export function EmitterMicroResponseControls({
                 onChange={(event) => patch({ enabled: event.target.checked })}
               />
               <span>Enable micro response</span>
-            </label>
-            <label className="debug-toggle">
-              <input
-                type="checkbox"
-                data-testid="emitter-micro-occupancy-enabled"
-                checked={response.occupancy !== "legacy"}
-                onChange={(event) => patch({
-                  occupancy: event.target.checked ? "exclude-interior" : "legacy",
-                })}
-              />
-              <span>Keep particles outside glyph</span>
             </label>
             <label className="field compact-field">
               <span>Occupancy</span>
@@ -190,7 +186,7 @@ export function EmitterMicroResponseControls({
                 />
               </>
             )}
-          </fieldset>
+          </fieldset>}
           {supported && !state.emitter.enabled && (
             <small className="emitter-inline-warning">Enable an emitter to activate this response.</small>
           )}
@@ -225,6 +221,7 @@ function Range({
     <label className="range">
       <span>{label}<output>{value}</output></span>
       <input
+        aria-label={label}
         type="range"
         value={value}
         min={min}

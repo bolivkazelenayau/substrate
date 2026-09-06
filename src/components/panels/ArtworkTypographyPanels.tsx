@@ -8,7 +8,6 @@ import {
 import type { TextGeometry } from "../../engine/glyphGeometry";
 import type { ProjectState } from "../../types";
 import type { SizeRangeHandlers } from "../../hooks/useSizeInteraction";
-import { ArtworkPanel, TypographyPanel } from "./PanelSection";
 
 interface ArtworkTypographyPanelsProps {
   state: ProjectState;
@@ -46,8 +45,7 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
 
   return (
     <>
-      <ArtworkPanel className="text-section">
-        <div className="section-heading"><span>01</span><h2>Artwork</h2></div>
+      <div className="control-group text-section pipeline-feature" data-owner="Typography source">
         <label className="field">
           <span>Text substrate</span>
           <textarea value={state.text} rows={3} maxLength={280} onChange={(event) => patch({ text: event.target.value })} />
@@ -75,9 +73,9 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
           </div>
           <input ref={fontFileRef} hidden type="file" accept=".ttf,.otf,font/ttf,font/otf" onChange={onFontUpload} />
         </div>
-      </ArtworkPanel>
+      </div>
 
-      <TypographyPanel className="advanced-disclosure-section">
+      <div className="control-group advanced-disclosure-section typography-detail pipeline-feature">
         <button type="button" className="accordion-summary" onClick={() => setTypographyOpen((open) => !open)} aria-expanded={typographyOpen}>
           <span>{typographyOpen ? "▼" : "▶"}</span> Advanced typography
         </button>
@@ -157,7 +155,7 @@ export function ArtworkTypographyPanels(props: ArtworkTypographyPanelsProps) {
             <Range label="Optical strength" value={state.opticalSpacingStrength} defaultValue={0} min={0} max={1} step={0.05} onChange={(opticalSpacingStrength) => patch({ opticalSpacingStrength })} />
           </div>
         )}
-      </TypographyPanel>
+      </div>
     </>
   );
 }
@@ -327,6 +325,7 @@ function SizeRange({ label, value, min, max, step = 1, defaultValue, hardMin, ha
       <input
         key={inputEpoch}
         data-testid="size-control"
+        aria-label="Type size"
         type="range"
         value={sliderValue}
         min={sliderMin}
@@ -428,6 +427,7 @@ function Range({
         />
       </span>
       <input
+        aria-label={label}
         type="range"
         value={sliderValue}
         min={sliderMin}

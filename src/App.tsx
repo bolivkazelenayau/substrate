@@ -32,6 +32,7 @@ import { usePreviewSettings } from "./hooks/usePreviewSettings";
 import { useDiagnosticsState } from "./hooks/useDiagnosticsState";
 import { useTypographyGeometry } from "./hooks/useTypographyGeometry";
 import { useGlyphMicroWarpGeometry } from "./hooks/useGlyphMicroWarpGeometry";
+import { useGlyphCalmWaterGeometry } from "./hooks/useGlyphCalmWaterGeometry";
 import { useDisplacedTypographyGeometry } from "./hooks/useDisplacedTypographyGeometry";
 import { useSubstratePipeline } from "./hooks/useSubstratePipeline";
 import { useExportController } from "./hooks/useExportController";
@@ -52,7 +53,6 @@ import {
 import { APP_VERSION } from "./engine/constants";
 import { resolveRendererRequirements } from "./engine/rendererRequirements";
 import { GLYPH_DISPLACEMENT_PARSED_FONT_WARNING } from "./engine/glyphDisplacement";
-import { isDisplayDislocationActive } from "./engine/displayDislocation";
 import { staticRenderContextStageKey } from "./engine/pipelineStageKeys";
 import { tracePipelineRequirements } from "./engine/pipelineTrace";
 
@@ -142,19 +142,20 @@ export default function App() {
     sourceTextGeometry,
     sourceTypographyOutputKey ?? `typography-pending:${activeTypographyInputKey}`,
   );
-  const displayDislocationActive = isDisplayDislocationActive(state);
-  // Display Dislocation samples the fine-warped glyph mask. Keep authored
-  // coarse-fragmentation settings intact, but do not build or consume polygon
-  // clips while the renderer-local display effect is the active authority.
-  const glyphDomainState = useMemo(() => (
-    displayDislocationActive && state.glyphDisplacement.enabled
-      ? { ...state, glyphDisplacement: { ...state.glyphDisplacement, enabled: false } }
-      : state
-  ), [displayDislocationActive, state]);
-  const displacedTypography = useDisplacedTypographyGeometry(
-    glyphDomainState,
+  // Calm Water deforms the already micro-warped outline. Fragmentation then
+  // cuts this liquid authority, keeping slice edges stable and predictable.
+  const glyphCalmWater = useGlyphCalmWaterGeometry(
+    state,
     glyphMicroWarp.geometry,
     glyphMicroWarp.geometryKey,
+  );
+  // Display Dislocation's incompatibility with Glyph Fragmentation is enforced
+  // by glyphDisplacementIdentity. The authored Fragmentation settings remain
+  // untouched so disabling the display authority restores them exactly.
+  const displacedTypography = useDisplacedTypographyGeometry(
+    state,
+    glyphCalmWater.geometry,
+    glyphCalmWater.geometryKey,
   );
   const textGeometry = displacedTypography.geometry;
   // The single production scene authority. Pure: no document writes back.
@@ -487,6 +488,7 @@ snapshot = captureExportSnapshot({
         typographyOutputKey: activeTypographyOutputKey!,
         typographySourceOutputKey: sourceTypographyOutputKey ?? activeTypographyOutputKey!,
         typographyMicroWarpKey: glyphMicroWarp.warpKey,
+        typographyCalmWaterKey: glyphCalmWater.waterKey,
         typographyDisplacementKey: displacedTypography.displacementKey,
         typographyGeometry: textGeometry,
         substrateInputKey: substrateBuild.inputKey,
@@ -637,13 +639,14 @@ snapshot = captureExportSnapshot({
               geometry={geometry}
               textGeometry={textGeometry}
               glyphMicroWarp={glyphMicroWarp}
+              glyphCalmWater={glyphCalmWater}
               displacedTypography={displacedTypography}
               rendererSemanticKey={activeRendererInputKey}
               sceneLayout={sceneLayout}
               exportDiagnostics={diagnostics}
               exportWarnings={exportWarnings}
               performanceWarnings={performanceWarnings}
-              glyphLayoutTimeMs={sourceTextGeometryBuild.durationMs + glyphMicroWarp.diagnostics.buildDurationMs + displacedTypography.diagnostics.buildDurationMs}
+              glyphLayoutTimeMs={sourceTextGeometryBuild.durationMs + glyphMicroWarp.diagnostics.buildDurationMs + glyphCalmWater.diagnostics.buildDurationMs + displacedTypography.diagnostics.buildDurationMs}
               substrateError={substrateBuild.error}
               substrateBackendStatus={substrateBuild.status}
               previewDiagnostics={previewDiagnostics}

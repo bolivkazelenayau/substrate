@@ -37,6 +37,7 @@ import { artboardBottom, artboardLeft, artboardRight, artboardTop, type Resolved
 import type { SizeInteractionState } from "../hooks/useSizeInteraction";
 import type { DisplacedTypographyGeometry } from "../engine/glyphDisplacement";
 import type { GlyphMicroWarpGeometry } from "../engine/glyphMicroWarp";
+import type { GlyphCalmWaterGeometry } from "../engine/glyphCalmWater";
 import { emitterDisplayGeometryKey } from "../engine/field/emitterDisplayResponse";
 import { emitterMicroResponseGeometryKey } from "../engine/field/emitterMicroResponse";
 import { glyphFalloffDisplacementGeometryKey } from "../engine/field/glyphFalloffDisplacement";
@@ -48,6 +49,7 @@ import { resolvePreviewStageScale } from "../engine/previewStageScale";
 interface ViewportProps {
   state: ProjectState; context: RenderContext; geometry: GeometryGroup; textGeometry: TextGeometry | null;
   glyphMicroWarp?: GlyphMicroWarpGeometry;
+  glyphCalmWater?: GlyphCalmWaterGeometry;
   displacedTypography?: DisplacedTypographyGeometry;
   rendererSemanticKey?: string;
   sceneLayout: ResolvedSceneLayout;
@@ -63,7 +65,7 @@ interface ViewportProps {
   sizeExactReady: boolean;
 }
 
-export function Viewport({ state, context, geometry, textGeometry, glyphMicroWarp, displacedTypography, rendererSemanticKey, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
+export function Viewport({ state, context, geometry, textGeometry, glyphMicroWarp, glyphCalmWater, displacedTypography, rendererSemanticKey, sceneLayout, exportDiagnostics, exportWarnings, performanceWarnings, glyphLayoutTimeMs, substrateError, substrateBackendStatus, previewDiagnostics, previewBackend, previewSettings, previewRunning, canvasSample, onCanvasSample, onCanvasFailure, diagnosticsMode, svgTraceConfig = DEFAULT_SVG_TRACE_CONFIG, sizeInteraction, sizeDraftSceneLayout, sizeExactReady }: ViewportProps) {
   recordViewportRender();
   const hudHost = useViewportHudHost();
   const diagnosticsVisible = diagnosticsMode !== "off";
@@ -97,12 +99,14 @@ export function Viewport({ state, context, geometry, textGeometry, glyphMicroWar
     diagnostics: {
       sourceContourPoints: 0,
       fragmentCount: 0,
+      affectedFragmentCount: 0,
       clippingOperations: 0,
       buildDurationMs: 0,
       peakTemporaryArrays: 0,
       clippingStatus: "complete",
       effectiveRegionSize: 0,
       anchorCount: 0,
+      maxDisplacement: 0,
       inactiveReason: "disabled",
     },
   };
@@ -370,10 +374,32 @@ const gradientVectors = useMemo(() => {
       data-glyph-micro-warp-safety={glyphMicroWarp?.diagnostics.safetyStatus ?? "complete"}
       data-glyph-micro-warp-build-ms={glyphMicroWarp?.diagnostics.buildDurationMs ?? 0}
       data-glyph-micro-warp-affected-bounds={JSON.stringify(glyphMicroWarp?.diagnostics.affectedBounds ?? null)}
+      data-glyph-calm-water-active={glyphCalmWater?.active ? "true" : "false"}
+      data-glyph-calm-water-key={glyphCalmWater?.waterKey ?? "glyph-calm-water:disabled"}
+      data-glyph-calm-water-geometry-key={glyphCalmWater?.geometryKey ?? glyphMicroWarp?.geometryKey ?? resolvedDisplacedTypography.sourceTypographyKey}
+      data-glyph-calm-water-source-points={glyphCalmWater?.diagnostics.sourcePointCount ?? 0}
+      data-glyph-calm-water-points={glyphCalmWater?.diagnostics.deformedPointCount ?? 0}
+      data-glyph-calm-water-affected={glyphCalmWater?.diagnostics.affectedPointCount ?? 0}
+      data-glyph-calm-water-emitters={glyphCalmWater?.diagnostics.emitterCount ?? 0}
+      data-glyph-calm-water-max-displacement={glyphCalmWater?.diagnostics.maxDisplacement ?? 0}
+      data-glyph-calm-water-safety={glyphCalmWater?.diagnostics.safetyStatus ?? "complete"}
+      data-glyph-calm-water-build-ms={glyphCalmWater?.diagnostics.buildDurationMs ?? 0}
+      data-glyph-calm-water-affected-bounds={JSON.stringify(glyphCalmWater?.diagnostics.affectedBounds ?? null)}
+      data-glyph-calm-water-changed-glyphs={JSON.stringify(glyphCalmWater?.diagnostics.changedGlyphs ?? [])}
+      data-glyph-influence-scope={state.emitter.sourceMode === "custom"
+        ? "all-typography"
+        : state.emitterMode === "single"
+          ? state.emitter.influenceScope
+          : "multiple"}
+      data-glyph-influence-scopes={JSON.stringify(state.emitterMode === "single"
+        ? [{ id: state.emitter.id, scope: state.emitter.influenceScope, neighborhoodSize: state.emitter.neighborhoodSize }]
+        : state.emitters.map((emitter) => ({ id: emitter.id, scope: emitter.influenceScope, neighborhoodSize: emitter.neighborhoodSize })))}
       data-glyph-displacement-key={resolvedDisplacedTypography.active ? resolvedDisplacedTypography.displacementKey : "disabled"}
       data-glyph-domain-key={resolvedDisplacedTypography.geometryKey}
       data-glyph-displacement-mode={resolvedDisplacedTypography.active ? state.glyphDisplacement.mode : "disabled"}
       data-glyph-fragment-count={resolvedDisplacedTypography.fragments.length}
+      data-glyph-affected-fragment-count={resolvedDisplacedTypography.diagnostics.affectedFragmentCount}
+      data-glyph-max-displacement={resolvedDisplacedTypography.diagnostics.maxDisplacement}
       data-glyph-distinct-transform-count={displacementMetrics.distinctTransforms}
       data-glyph-min-response={displacementMetrics.minResponse}
       data-glyph-max-response={displacementMetrics.maxResponse}
@@ -434,7 +460,13 @@ const gradientVectors = useMemo(() => {
         : "disabled"}
       data-substrate-key={context.substrateKey ?? "none"}
       data-substrate-phase={substrateBackendStatus.phase}
+      data-substrate-build-ms={substrateBackendStatus.timing?.totalMs ?? 0}
+      data-substrate-main-thread-ms={substrateBackendStatus.timing?.mainThreadMs ?? 0}
+      data-substrate-worker-ms={substrateBackendStatus.timing?.workerComputeMs ?? 0}
+      data-substrate-round-trip-ms={substrateBackendStatus.timing?.roundTripMs ?? 0}
       data-renderer-element-count={geometry.geometries.length}
+      data-renderer-build-ms={rendererTiming.durationMs}
+      data-renderer-build-cached={rendererTiming.cached ? "true" : "false"}
       data-size-interaction-phase={sizeInteraction.phase}
       data-size-presentation-kind={sizePresentation.kind}
       data-size-draft-active={sizePresentation.kind !== "exact" ? "true" : "false"}
@@ -490,8 +522,11 @@ const gradientVectors = useMemo(() => {
                 ? textGeometry!.glyphs.map((glyph) => glyph.path.d && (
                     <path
                       key={glyph.textIndex}
+                      data-glyph-id={glyph.glyphId}
                       data-character-index={glyph.textIndex}
                       data-glyph-index={glyph.glyphIndex}
+                      data-line-index={glyph.lineIndex ?? 0}
+                      data-glyph-index-in-line={glyph.glyphIndexInLine ?? glyph.globalGlyphIndex ?? glyph.textIndex}
                       d={glyph.path.d}
                       fill="white"
                     />

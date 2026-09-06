@@ -33,6 +33,7 @@ function fragmentationFixture(mode: GlyphDisplacementMode): ProjectState {
       ...baseState.glyphDisplacement,
       enabled: true,
       mode,
+      sliceInfluence: "legacy",
       strength: 68,
       responseRadius: 420,
       falloff: "smoothstep",

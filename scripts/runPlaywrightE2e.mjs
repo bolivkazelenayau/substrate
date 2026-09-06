@@ -80,5 +80,8 @@ try {
     },
   );
 } finally {
-  if (!preview.killed) preview.kill("SIGTERM");
+  if (!preview.killed) {
+    // Windows does not support SIGTERM; default kill signal works reliably.
+    preview.kill(process.platform === "win32" ? undefined : "SIGTERM");
+  }
 }

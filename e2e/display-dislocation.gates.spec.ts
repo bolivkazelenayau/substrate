@@ -8,6 +8,11 @@ async function openPanel(page: Page, name: string) {
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
 }
 
+async function openDisclosure(page: Page, name: string) {
+  const button = page.locator("button.accordion-summary").filter({ hasText: name });
+  if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+}
+
 async function waitForDisplay(page: Page, mode: string) {
   await expect(stage(page)).toHaveAttribute("data-substrate-phase", "ready", { timeout: 60_000 });
   await expect(stage(page)).toHaveAttribute("data-display-dislocation-active", "true", { timeout: 60_000 });
@@ -40,6 +45,7 @@ async function attachStage(page: Page, testInfo: TestInfo, name: string) {
 test("Display Dislocation visual, backend, export, and restoration gates", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByLabel("Preset").selectOption("Display Dislocation");
+  await openDisclosure(page, "Renderer-local controls");
   await openPanel(page, "Preview");
   await page.getByLabel("Preview Mode").selectOption("svg-dom");
   await expect(stage(page)).toHaveAttribute("data-preview-backend", "svg-dom");

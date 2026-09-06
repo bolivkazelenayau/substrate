@@ -120,6 +120,8 @@ function buildLegacyCompositeWaveField(state: ProjectState, context: RenderConte
     weight: 1,
     phaseOffset: 0,
     radiusMultiplier: 1,
+    influenceScope: state.emitter.influenceScope,
+    neighborhoodSize: state.emitter.neighborhoodSize,
   };
   return {
     width: substrate.width,

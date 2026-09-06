@@ -3,6 +3,15 @@ import { COLORS } from "./constants";
 
 type BuiltInPresetId = Exclude<PresetId, "Custom">;
 
+export type PresetScope =
+  | "renderer"
+  | "field"
+  | "emitter"
+  | "glyph-deformation"
+  | "mark-response"
+  | "appearance"
+  | "full-project";
+
 export type PresetFamily =
   | "trace"
   | "wave"
@@ -13,6 +22,7 @@ export type PresetFamily =
   | "diffuser"
   | "flow"
   | "warp"
+  | "water"
   | "resonance"
   | "custom";
 
@@ -46,7 +56,7 @@ export const defaultDebugSettings: ProjectState["debug"] = {
 };
 
 export const baseState: ProjectState = {
-  version: 13,
+  version: 15,
   artboard: { width: 1200, height: 720 },
   text: "SUBSTRATE",
   fontSize: 148,
@@ -80,6 +90,8 @@ export const baseState: ProjectState = {
     glyphId: null,
     enabled: false,
     sourceMode: "counter-center",
+    influenceScope: "source-glyph",
+    neighborhoodSize: 1,
     fieldType: "radial-wave",
     amplitude: 1,
     frequency: 0.09,
@@ -93,7 +105,17 @@ export const baseState: ProjectState = {
     customY: 360,
   },
   emitterMode: "single",
-  emitters: [{ id: "emitter-1", glyphId: null, enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Emitter 1" }],
+  emitters: [{
+    id: "emitter-1",
+    glyphId: null,
+    enabled: true,
+    weight: 1,
+    phaseOffset: 0,
+    radiusMultiplier: 1,
+    influenceScope: "source-glyph",
+    neighborhoodSize: 1,
+    label: "Emitter 1",
+  }],
   emitterDisplay: {
     mode: "field",
     distortionStrength: 58,
@@ -143,9 +165,26 @@ export const baseState: ProjectState = {
     preserveCounters: true,
     seedInfluence: 100,
   },
+  glyphInfluence: {
+    radius: 100,
+    edgeSoftness: 240,
+    falloff: "smoothstep",
+  },
+  glyphCalmWater: {
+    enabled: false,
+    strength: 10,
+    frequencyLinked: true,
+    frequencyMultiplier: 0.55,
+    wavelength: 140,
+    surfaceVariation: 36,
+    drift: 10,
+    detail: 14,
+    preserveCounters: true,
+  },
   glyphDisplacement: {
     enabled: false,
     mode: "horizontal-slices",
+    sliceInfluence: "emitter-falloff",
     strength: 56,
     responseRadius: 420,
     falloff: "smoothstep",
@@ -336,9 +375,9 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
     emitterMode: "multiple",
     fieldBlendMode: "add",
     emitters: [
-      { id: "se-1", glyphId: "auto-middle", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, label: "Middle" },
-      { id: "se-2", glyphId: "auto-first", enabled: true, weight: 0.68, phaseOffset: Math.PI, radiusMultiplier: 0.82, label: "First" },
-      { id: "se-3", glyphId: "auto-last", enabled: true, weight: 0.56, phaseOffset: Math.PI * 0.5, radiusMultiplier: 0.72, label: "Last" },
+      { id: "se-1", glyphId: "auto-middle", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Middle" },
+      { id: "se-2", glyphId: "auto-first", enabled: true, weight: 0.68, phaseOffset: Math.PI, radiusMultiplier: 0.82, influenceScope: "source-glyph", neighborhoodSize: 1, label: "First" },
+      { id: "se-3", glyphId: "auto-last", enabled: true, weight: 0.56, phaseOffset: Math.PI * 0.5, radiusMultiplier: 0.72, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Last" },
     ],
     emitter: { ...baseState.emitter, enabled: true, radius: 390, neighborInfluence: 0.72, falloff: "gaussian" },
   },
@@ -362,8 +401,8 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
     emitterMode: "multiple",
     fieldBlendMode: "add",
     emitters: [
-      { id: "cr-1", glyphId: "auto-counter", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 0.9, label: "Counter" },
-      { id: "cr-2", glyphId: "auto-middle", enabled: true, weight: 0.62, phaseOffset: Math.PI, radiusMultiplier: 0.68, label: "Middle response" },
+      { id: "cr-1", glyphId: "auto-counter", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 0.9, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Counter" },
+      { id: "cr-2", glyphId: "auto-middle", enabled: true, weight: 0.62, phaseOffset: Math.PI, radiusMultiplier: 0.68, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Middle response" },
     ],
     emitter: { ...baseState.emitter, enabled: true, radius: 360, neighborInfluence: 0.68, selfInfluence: 0.9, falloff: "gaussian" },
   },
@@ -379,8 +418,8 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
     emitterMode: "multiple",
     fieldBlendMode: "add",
     emitters: [
-      { id: "sf-1", glyphId: "auto-first", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1.12, label: "Leading field" },
-      { id: "sf-2", glyphId: "auto-last", enabled: true, weight: 0.58, phaseOffset: Math.PI * 0.72, radiusMultiplier: 0.74, label: "Trailing field" },
+      { id: "sf-1", glyphId: "auto-first", enabled: true, weight: 1, phaseOffset: 0, radiusMultiplier: 1.12, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Leading field" },
+      { id: "sf-2", glyphId: "auto-last", enabled: true, weight: 0.58, phaseOffset: Math.PI * 0.72, radiusMultiplier: 0.74, influenceScope: "source-glyph", neighborhoodSize: 1, label: "Trailing field" },
     ],
     emitter: { ...baseState.emitter, enabled: true, radius: 420, neighborInfluence: 0.76, falloff: "smoothstep" },
   },
@@ -407,6 +446,9 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
       fragmentRotation: 2.2,
     },
     dotGrid: { ...baseState.dotGrid, enabled: true, spacing: 12, radius: 2.15 },
+    // Fragment Matrix is an explicit fragmentation recipe; it hands the
+    // renderer-local dot domain back from Display Dislocation.
+    displayDislocation: { ...baseState.displayDislocation },
   },
   "Display Dislocation": {
     text: "DISPLAY",
@@ -424,6 +466,7 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
       enabled: true,
       glyphId: "auto-middle",
       sourceMode: "custom",
+      influenceScope: "all-typography",
       customX: 600,
       customY: 360,
       radius: 320,
@@ -456,6 +499,101 @@ export const presets: Record<Exclude<PresetId, "Custom">, Partial<ProjectState>>
     overlayMode: "hidden",
     textOverlayOpacity: 0,
   },
+  "Calm Current": {
+    renderer: "glyph-diffuser",
+    density: 58,
+    amplitude: 18,
+    turbulence: 0,
+    edgeInfluence: 28,
+    maxNodes: 4200,
+    emitterMode: "single",
+    emitter: { ...baseState.emitter, enabled: true, glyphId: "auto-middle", sourceMode: "center", frequency: 0.075 },
+    glyphInfluence: { ...baseState.glyphInfluence, radius: 75, edgeSoftness: 220 },
+    glyphCalmWater: {
+      ...baseState.glyphCalmWater,
+      enabled: true,
+      strength: 10,
+      frequencyMultiplier: 0.55,
+      surfaceVariation: 34,
+      drift: 8,
+      detail: 12,
+    },
+    dotGrid: { ...baseState.dotGrid, enabled: true, spacing: 11, radius: 2.05 },
+  },
+  "Tidal Slice": {
+    renderer: "glyph-diffuser",
+    density: 58,
+    amplitude: 18,
+    turbulence: 0,
+    edgeInfluence: 24,
+    maxNodes: 4400,
+    emitterMode: "single",
+    emitter: { ...baseState.emitter, enabled: true, glyphId: "auto-middle", sourceMode: "center", frequency: 0.07 },
+    glyphInfluence: { ...baseState.glyphInfluence, radius: 55, edgeSoftness: 160 },
+    glyphCalmWater: {
+      ...baseState.glyphCalmWater,
+      enabled: true,
+      strength: 7,
+      frequencyMultiplier: 0.55,
+      surfaceVariation: 30,
+      drift: 7,
+      detail: 10,
+    },
+    glyphDisplacement: {
+      ...baseState.glyphDisplacement,
+      enabled: true,
+      mode: "horizontal-slices",
+      sliceInfluence: "emitter-falloff",
+      strength: 32,
+      fragmentSize: 34,
+      gap: 3,
+      quantizationSteps: 6,
+      jitter: 10,
+      fragmentRotation: 0.5,
+    },
+    dotGrid: { ...baseState.dotGrid, enabled: true, spacing: 11, radius: 2.05 },
+    displayDislocation: { ...baseState.displayDislocation },
+  },
+};
+
+/**
+ * Preset scope is a product contract, not a reset list. Scoped presets apply
+ * only the fields present in their patch and retain authored state outside that
+ * patch. Display Dislocation is the one existing full-project showcase because
+ * it intentionally changes the sample text and typography as part of the study.
+ */
+export const presetScopes: Record<BuiltInPresetId, readonly PresetScope[]> = {
+  "Edge Current": ["renderer", "field", "emitter"],
+  "Sonic Ripple": ["renderer", "field", "emitter"],
+  "Signal Dust": ["renderer", "field", "emitter"],
+  "SDF Current": ["renderer", "field", "emitter"],
+  "Contour Thread": ["renderer", "field", "emitter"],
+  "Topographic Type": ["renderer", "field", "emitter"],
+  "Halftone Press": ["renderer", "field", "emitter"],
+  "Glyph Ripple": ["renderer", "field", "emitter"],
+  "Dotted Diffuser": ["renderer", "field", "emitter"],
+  "Sonic Halftone": ["renderer", "field", "emitter", "mark-response"],
+  "Sonic Contours": ["renderer", "field", "emitter", "mark-response"],
+  "Sonic Stream": ["renderer", "field", "emitter", "mark-response"],
+  "Sonic Diffuser": ["renderer", "field", "emitter", "appearance"],
+  "Sonic Warp": ["renderer", "field", "emitter", "appearance"],
+  "Sonic Interference": ["renderer", "field", "emitter", "appearance"],
+  "Counter Resonance": ["renderer", "field", "emitter", "appearance"],
+  "Split Field": ["renderer", "field", "emitter"],
+  "Fragment Matrix": ["renderer", "field", "emitter", "glyph-deformation", "mark-response"],
+  "Display Dislocation": ["full-project"],
+  "Calm Current": ["renderer", "field", "emitter", "glyph-deformation", "mark-response"],
+  "Tidal Slice": ["renderer", "field", "emitter", "glyph-deformation", "mark-response"],
+};
+
+const presetScopeLabels: Record<PresetScope, string> = {
+  renderer: "Renderer",
+  field: "Core field",
+  emitter: "Emitter",
+  "glyph-deformation": "Glyph deformation",
+  "mark-response": "Mark response",
+  appearance: "Appearance",
+  "full-project": "Full project snapshot",
 };
 
 // Presentation only: the legacy preset name remains the persisted compatibility
@@ -575,6 +713,18 @@ export const presetMetadata: Record<PresetId, PresetMetadata> = {
     family: "halftone",
     description: "A stable dot display with localized, emitter-driven band dislocation.",
   },
+  "Calm Current": {
+    studyCode: "WATER / 20",
+    legacyName: "Calm Current",
+    family: "water",
+    description: "Broad, coherent water-surface deformation localized around an emitter.",
+  },
+  "Tidal Slice": {
+    studyCode: "TIDAL / 21",
+    legacyName: "Tidal Slice",
+    family: "water",
+    description: "Liquid contours cut into coherent slices that settle outside the emitter field.",
+  },
   Custom: {
     legacyName: "Custom",
     family: "custom",
@@ -589,21 +739,24 @@ export function getPresetDisplayLabel(preset: PresetId) {
   return metadata.studyCode ? `${metadata.studyCode} — ${metadata.legacyName}` : metadata.legacyName;
 }
 
+export function getPresetScopeLabel(preset: PresetId) {
+  if (preset === "Custom") return "Custom project state";
+  return presetScopes[preset].map((scope) => presetScopeLabels[scope]).join(" · ");
+}
+
 export function applyPreset(state: ProjectState, preset: PresetId): ProjectState {
   if (preset === "Custom") return { ...state, preset };
-  // Legacy presets predate both independent display-response stages. Reset
-  // them before applying a preset so historical output cannot inherit a prior
-  // glyph-domain or mark-space configuration. New presets explicitly opt in.
+  const presetPatch = presets[preset];
+  if (presetScopes[preset].includes("full-project")) {
+    // Keep the loaded font resource context; it is not authored by a preset and
+    // clearing it would silently switch exact outline projects to native text.
+    return { ...baseState, font: state.font, ...presetPatch, preset };
+  }
+  // A scoped preset is a partial recipe. The patch itself is the owned scope;
+  // unrelated authored geometry, response, appearance, and export state stays.
   return {
     ...state,
-    emitterDisplay: baseState.emitterDisplay,
-    emitterMicroResponse: baseState.emitterMicroResponse,
-    glyphFalloffDisplacement: baseState.glyphFalloffDisplacement,
-    glyphMicroWarp: baseState.glyphMicroWarp,
-    glyphDisplacement: baseState.glyphDisplacement,
-    dotGrid: baseState.dotGrid,
-    displayDislocation: baseState.displayDislocation,
-    ...presets[preset],
+    ...presetPatch,
     preset,
   };
 }

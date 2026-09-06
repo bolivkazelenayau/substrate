@@ -74,6 +74,25 @@ export interface TextGeometry {
     affectedBounds: GlyphBounds | null;
     safetyStatus: "complete" | "displacement-clamped" | "topology-guarded" | "point-budget-limited";
   };
+  /** Present when parsed contours have passed through the Calm Water stage. */
+  calmWater?: {
+    sourceTypographyKey: string;
+    waterKey: string;
+    geometryKey: string;
+    sourcePointCount: number;
+    deformedPointCount: number;
+    affectedPointCount: number;
+    emitterCount: number;
+    maxDisplacement: number;
+    affectedBounds: GlyphBounds | null;
+    safetyStatus: "complete" | "displacement-clamped" | "topology-guarded" | "point-budget-limited";
+    changedGlyphs: Array<{
+      glyphId: string;
+      textIndex: number;
+      lineIndex: number;
+      changedPointCount: number;
+    }>;
+  };
   /** Present only when this geometry is the active derived glyph domain. */
   displacement?: {
     sourceTypographyKey: string;

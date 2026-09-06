@@ -42,6 +42,7 @@ async function loadScenario(page: Page) {
   await waitForReady(page);
   await setPreviewBackend(page, "svg-dom");
   await openAccordion(page, "Glyph Falloff Field");
+  await openAccordion(page, "Emitter Micro Response");
 }
 
 async function setRange(page: Page, testId: string, value: number) {

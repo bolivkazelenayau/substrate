@@ -7,3 +7,4 @@ test-results
 playwright-report
 e2e-artifacts
 terminals/
+audit-substrate

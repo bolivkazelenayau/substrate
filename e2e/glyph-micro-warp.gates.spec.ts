@@ -37,6 +37,7 @@ async function loadPrivateSonics(page: Page) {
   await expect(page.getByTestId("project-message")).toContainText("loaded", { timeout: 60_000 });
   await waitForReady(page);
   await pinSvgPreview(page);
+  await openDisclosure(page, "Glyph Micro Warp");
 }
 
 async function authoritativePaths(page: Page) {

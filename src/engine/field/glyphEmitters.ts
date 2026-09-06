@@ -7,6 +7,9 @@ export interface GlyphEmitterMetadata {
   glyphIndex: number;
   character: string;
   textIndex: number;
+  lineIndex: number;
+  glyphIndexInLine: number;
+  globalGlyphIndex: number;
   bounds: { x: number; y: number; width: number; height: number };
   center: { x: number; y: number };
   centroid: { x: number; y: number };
@@ -27,6 +30,8 @@ export interface ResolvedGlyphEmitterSource {
   weight: number;
   phaseOffset: number;
   radiusMultiplier: number;
+  influenceScope: ProjectState["emitter"]["influenceScope"];
+  neighborhoodSize: number;
   fallbackReason?: EmitterFallbackReason;
 }
 
@@ -127,6 +132,8 @@ export function resolveGlyphEmitterSources(
       weight: row.weight,
       phaseOffset: row.phaseOffset,
       radiusMultiplier: row.radiusMultiplier,
+      influenceScope: row.influenceScope,
+      neighborhoodSize: row.neighborhoodSize,
       fallbackReason: resolution.fallbackReason,
     });
   }
@@ -146,6 +153,9 @@ function fromPositioned(glyph: PositionedGlyph): GlyphEmitterMetadata | null {
     glyphIndex: glyph.glyphIndex,
     character: glyph.character,
     textIndex: glyph.textIndex,
+    lineIndex: glyph.lineIndex ?? 0,
+    glyphIndexInLine: glyph.glyphIndexInLine ?? glyph.globalGlyphIndex ?? glyph.textIndex,
+    globalGlyphIndex: glyph.globalGlyphIndex ?? glyph.textIndex,
     bounds,
     center: glyph.center,
     centroid: glyph.centroid,
@@ -160,14 +170,23 @@ export function getGlyphEmitterMetadata(state: ProjectState, textGeometry: TextG
   const characters = Array.from(state.text);
   const textBounds = getTextBounds(state);
   const cellWidth = characters.length > 0 ? textBounds.width / characters.length : 0;
+  let textIndex = 0;
+  let lineIndex = 0;
+  let glyphIndexInLine = 0;
   return characters.map((character, index) => {
+    const resolvedTextIndex = textIndex;
+    const resolvedLineIndex = lineIndex;
+    const resolvedGlyphIndexInLine = glyphIndexInLine;
     const bounds = { x: textBounds.x + index * cellWidth, y: textBounds.y, width: cellWidth, height: textBounds.height };
     const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
-    return {
-      glyphId: `native-${index}-${character.codePointAt(0) ?? 0}`,
+    const metadata = {
+      glyphId: `native-${resolvedTextIndex}-${character.codePointAt(0) ?? 0}`,
       glyphIndex: character.codePointAt(0) ?? 0,
       character,
-      textIndex: index,
+      textIndex: resolvedTextIndex,
+      lineIndex: resolvedLineIndex,
+      glyphIndexInLine: resolvedGlyphIndexInLine,
+      globalGlyphIndex: index,
       bounds,
       center,
       centroid: center,
@@ -175,5 +194,13 @@ export function getGlyphEmitterMetadata(state: ProjectState, textGeometry: TextG
       sourceAnchor: center,
       emitterEligible: !/\s/.test(character),
     };
+    textIndex += character.length;
+    if (character === "\n") {
+      lineIndex += 1;
+      glyphIndexInLine = 0;
+    } else {
+      glyphIndexInLine += 1;
+    }
+    return metadata;
   });
 }

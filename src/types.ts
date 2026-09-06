@@ -3,16 +3,18 @@ export type ExportMode = "artwork" | "editable";
 export type ExportFrameMode = "current" | "time-zero";
 export type ArtboardOverflowMode = "clip" | "auto-grow";
 export type SubstrateQuality = "low" | "medium" | "high" | "ultra";
-export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Fragment Matrix" | "Display Dislocation" | "Custom";
+export type PresetId = "Edge Current" | "Sonic Ripple" | "Signal Dust" | "SDF Current" | "Contour Thread" | "Topographic Type" | "Halftone Press" | "Glyph Ripple" | "Dotted Diffuser" | "Sonic Halftone" | "Sonic Contours" | "Sonic Stream" | "Sonic Diffuser" | "Sonic Warp" | "Sonic Interference" | "Counter Resonance" | "Split Field" | "Fragment Matrix" | "Display Dislocation" | "Calm Current" | "Tidal Slice" | "Custom";
 export type FieldControlId = "density" | "amplitude" | "frequency" | "turbulence" | "edgeInfluence" | "maxNodes";
 export type PreviewFpsCap = 24 | 30 | 60;
 export type GlyphEmitterSourceMode = "center" | "centroid" | "counter-center" | "custom";
 export type GlyphEmitterFalloff = "smoothstep" | "gaussian" | "linear";
 export type GlyphEmitterBlendMode = "add" | "max";
+export type EmitterInfluenceScope = "source-glyph" | "glyph-neighborhood" | "source-line" | "all-typography";
 export type EmitterDisplayMode = "field" | "distort" | "exclude" | "orbit";
 export type EmitterOccupancyMode = "legacy" | "exclude-interior" | "disperse-exterior";
 export type GlyphFalloffDisplacementMode = "off" | "contour-rings";
 export type GlyphDisplacementMode = "warp" | "horizontal-slices" | "vertical-slices" | "grid" | "radial-sectors";
+export type SliceInfluenceMode = "legacy" | "emitter-falloff";
 export type DisplayDislocationMode = "horizontal-bands" | "vertical-bands" | "blocks";
 export type WaveContourMode = "continuous" | "dotted";
 export type EmitterMode = "single" | "multiple";
@@ -29,6 +31,9 @@ export interface GlyphEmitter {
   glyphId: string | null;
   enabled: boolean;
   sourceMode: GlyphEmitterSourceMode;
+  influenceScope: EmitterInfluenceScope;
+  /** Number of eligible glyphs before and after the source within its line. */
+  neighborhoodSize: number;
   fieldType: "radial-wave";
   amplitude: number;
   frequency: number;
@@ -49,6 +54,9 @@ export interface GlyphEmitterInstance {
   weight: number;
   phaseOffset: number;
   radiusMultiplier: number;
+  influenceScope: EmitterInfluenceScope;
+  /** Number of eligible glyphs before and after the source within its line. */
+  neighborhoodSize: number;
   label: string;
 }
 
@@ -129,12 +137,47 @@ export interface GlyphMicroWarpSettings {
 }
 
 /**
+ * Shared normalized envelope for emitter-local glyph-domain effects. Radius is
+ * the full-strength core; edgeSoftness is the exterior distance over which the
+ * response returns smoothly to identity.
+ */
+export interface GlyphInfluenceSettings {
+  radius: number;
+  edgeSoftness: number;
+  falloff: GlyphEmitterFalloff;
+}
+
+/**
+ * Broad, coherent contour deformation that remains independent from the
+ * experimental Micro Warp and Fragmentation engines.
+ */
+export interface GlyphCalmWaterSettings {
+  enabled: boolean;
+  /** Maximum world-space contour displacement. */
+  strength: number;
+  frequencyLinked: boolean;
+  /** Multiplier applied to the emitter's parent spatial rhythm when linked. */
+  frequencyMultiplier: number;
+  /** Independent world-space wavelength used only when frequency is unlinked. */
+  wavelength: number;
+  /** Amount of the second broad, differently oriented surface wave. */
+  surfaceVariation: number;
+  /** Restrained tangential movement alongside dominant normal displacement. */
+  drift: number;
+  /** Low-amplitude coherent secondary detail. */
+  detail: number;
+  preserveCounters: boolean;
+}
+
+/**
  * Authoring controls for the vector glyph-domain stage. These values affect
  * derived typography geometry, never already-generated renderer marks.
  */
 export interface GlyphDisplacementSettings {
   enabled: boolean;
   mode: GlyphDisplacementMode;
+  /** Preserves the historical global transform or opts Slice into the shared envelope. */
+  sliceInfluence: SliceInfluenceMode;
   strength: number;
   responseRadius: number;
   falloff: GlyphEmitterFalloff;
@@ -222,7 +265,7 @@ export interface FontMetadata {
 }
 
 export interface ProjectState {
-  version: 13;
+  version: 15;
   artboard: {
     width: number;
     height: number;
@@ -261,6 +304,8 @@ export interface ProjectState {
   emitterMicroResponse: EmitterMicroResponseSettings;
   glyphFalloffDisplacement: GlyphFalloffDisplacementSettings;
   glyphMicroWarp: GlyphMicroWarpSettings;
+  glyphInfluence: GlyphInfluenceSettings;
+  glyphCalmWater: GlyphCalmWaterSettings;
   glyphDisplacement: GlyphDisplacementSettings;
   dotGrid: DotGridSettings;
   displayDislocation: DisplayDislocationSettings;
